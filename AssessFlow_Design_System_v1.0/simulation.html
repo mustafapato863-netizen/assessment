@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>AssessFlow Workflow Simulation</title>
+  <link rel="stylesheet" href="styles/tokens.css"/>
+  <link rel="stylesheet" href="styles/base.css"/>
+  <link rel="stylesheet" href="styles/sidebar.css"/>
+  <link rel="stylesheet" href="styles/components.css"/>
+  <link rel="stylesheet" href="styles/layout.css"/>
+  <link rel="stylesheet" href="styles/enhancements.css"/>
+  <link rel="stylesheet" href="styles/simulation.css"/>
+</head>
+<body class="simulation-page">
+  <a class="skip-link" href="#simulation">Skip to workflow simulation</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <div class="brand">
+        <img src="assets/logo.svg" alt="AssessFlow logo"/>
+        <div class="brand-copy"><div class="brand-name">AssessFlow</div><div class="brand-sub">Talent Assessment OS</div></div>
+        <button class="side-collapse" id="collapseSidebar" aria-label="Collapse sidebar"><svg><use href="assets/icons.svg#menu"/></svg></button>
+      </div>
+
+      <div class="workspace-switcher">
+        <div class="workspace-icon"><svg><use href="assets/icons.svg#assessment"/></svg></div>
+        <div class="workspace-text"><strong>Assessment Workspace</strong><span>FY26 Talent Cycle &middot; Egypt</span></div>
+        <span class="live-dot" title="Live"></span>
+      </div>
+
+      <div class="nav-scroll">
+        <nav class="nav-group">
+          <div class="nav-label">Workspace</div>
+          <a class="nav-item" href="index.html#overview"><span class="icon"><svg><use href="assets/icons.svg#home"/></svg></span><span>Overview</span></a>
+          <a class="nav-item" href="index.html#cases"><span class="icon"><svg><use href="assets/icons.svg#assessment"/></svg></span><span>Assessments</span><span class="nav-badge">12</span></a>
+          <a class="nav-item" href="index.html#profiles"><span class="icon"><svg><use href="assets/icons.svg#employees"/></svg></span><span>Employees</span></a>
+          <a class="nav-item" href="index.html#workflow"><span class="icon"><svg><use href="assets/icons.svg#calibration"/></svg></span><span>Calibration</span><span class="nav-badge">3</span></a>
+          <a class="nav-item" href="index.html#analytics"><span class="icon"><svg><use href="assets/icons.svg#report"/></svg></span><span>Insights</span></a>
+          <a class="nav-item" href="index.html#patterns"><span class="icon"><svg><use href="assets/icons.svg#task"/></svg></span><span>My Tasks</span><span class="nav-badge">6</span></a>
+        </nav>
+
+        <nav class="nav-group">
+          <div class="nav-label">System</div>
+          <a class="nav-item" href="index.html#design-system"><span class="icon"><svg><use href="assets/icons.svg#palette"/></svg></span><span>Design System</span><span class="nav-badge">DS</span></a>
+          <a class="nav-item active" href="simulation.html#simulation"><span class="icon"><svg><use href="assets/icons.svg#pattern"/></svg></span><span>Workflow simulation</span><span class="nav-badge">REF</span></a>
+          <a class="nav-item" href="index.html#components"><span class="icon"><svg><use href="assets/icons.svg#components"/></svg></span><span>Component Library</span></a>
+          <a class="nav-item" href="index.html#patterns"><span class="icon"><svg><use href="assets/icons.svg#pattern"/></svg></span><span>Patterns</span></a>
+          <a class="nav-item" href="index.html#loading"><span class="icon"><svg><use href="assets/icons.svg#task"/></svg></span><span>Loading states</span></a>
+        </nav>
+
+        <nav class="nav-group">
+          <div class="nav-label">Resources</div>
+          <a class="nav-item" href="docs/README.md"><span class="icon"><svg><use href="assets/icons.svg#docs"/></svg></span><span>Documentation</span></a>
+          <a class="nav-item" href="docs/sidebar-spec.md"><span class="icon"><svg><use href="assets/icons.svg#docs"/></svg></span><span>Sidebar Spec</span></a>
+        </nav>
+      </div>
+
+      <div class="sidebar-spotlight">
+        <div class="spot-top"><span>Simulation mode</span><i class="spot-chip">REF</i></div>
+        <div class="spot-title">Leadership Assessment</div>
+        <div class="spot-progress"><i></i></div>
+        <div class="spot-meta"><span>Prototype only</span><span>8 stages</span></div>
+      </div>
+
+      <div class="side-footer">
+        <div class="user-card">
+          <div class="avatar">SJ</div>
+          <div class="user-copy"><strong>Sarah Johnson</strong><span>HR Business Partner</span></div>
+          <svg style="width:14px;height:14px;color:var(--af-slate-400)"><use href="assets/icons.svg#chevron"/></svg>
+        </div>
+        <div class="env-row"><span class="env-pill"><i></i> Simulation</span><span>v1.0</span></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobileMenu" aria-label="Open menu"><svg><use href="assets/icons.svg#menu"/></svg></button>
+        <div class="top-search"><svg><use href="assets/icons.svg#search"/></svg><input id="searchInput" placeholder="Search simulation stages..."/><kbd>Ctrl K</kbd></div>
+        <div class="top-spacer"></div>
+        <button class="icon-btn" id="themeToggle" aria-label="Toggle theme"><svg><use id="themeUse" href="assets/icons.svg#moon"/></svg></button>
+        <button class="icon-btn" aria-label="Notifications"><svg><use href="assets/icons.svg#bell"/></svg><i class="notify-dot"></i></button>
+        <button class="icon-btn" aria-label="Help"><svg><use href="assets/icons.svg#help"/></svg></button>
+        <div class="top-user"><div class="avatar">SJ</div><div class="top-user-copy"><strong>Sarah Johnson</strong><span>HR Business Partner</span></div></div>
+      </header>
+
+      <div class="page" id="simulation">
+        <div class="sim-hero">
+          <div><div class="eyebrow">Reference workflow</div><h1 class="title">AssessFlow Workflow Simulation</h1><div class="muted">A clickable product reference for the MVP assessment journey. Every state is simulated locally.</div></div>
+          <div class="sim-hero-actions"><span class="sim-reference-pill"><i></i>Offline reference</span><a class="btn btn-secondary" href="index.html">Back to design system</a><button class="btn btn-secondary" id="resetSimulation" type="button">Reset simulation</button></div>
+        </div>
+        <div class="hero-note sim-note"><strong>Simulation rule:</strong> the server would control every transition. This reference keeps the same guardrails visually, with no real records, uploads, notifications, or backend calls.</div>
+
+        <section class="section surface sim-surface" aria-label="Assessment workflow reference">
+          <div class="sim-layout">
+            <aside class="sim-case-rail" aria-label="Assessment case summary">
+              <div class="sim-case-card">
+                <div class="sim-case-top"><span class="sim-case-kicker">Assessment case</span><span class="badge badge-info" id="caseStatus">Draft</span></div>
+                <div class="sim-person"><div class="sim-person-avatar">AC</div><div><strong id="caseEmployee">Anna Cooper</strong><span id="caseRole">Software Engineer &middot; L4</span></div></div>
+                <div class="sim-case-meta"><span>Case ID</span><strong>AF-2026-00428</strong></div>
+                <div class="sim-case-meta"><span>Reason</span><strong id="caseReason">Promotion</strong></div>
+                <div class="sim-progress-label"><span>Workflow progress</span><strong id="progressLabel">0%</strong></div>
+                <div class="sim-progress"><i id="progressBar"></i></div>
+              </div>
+              <div class="sim-side-card">
+                <div class="sim-side-head"><strong>Activity</strong><span id="activityCount">1 event</span></div>
+                <div class="sim-timeline" id="timeline" aria-live="polite"></div>
+              </div>
+              <div class="sim-side-card sim-guardrail"><span class="sim-guard-icon"><svg><use href="assets/icons.svg#check"/></svg></span><div><strong>Reference guardrail</strong><span>No numeric scoring is required for this MVP path.</span></div></div>
+            </aside>
+
+            <div class="sim-workspace">
+              <div class="sim-workflow-rail" id="stageRail" aria-label="Workflow stages"></div>
+              <div class="sim-workspace-card">
+                <div class="sim-workspace-head"><div><span class="sim-stage-kicker" id="stageKicker">Stage 1 of 8</span><h2 class="sim-stage-title" id="stageTitle">Request assessment</h2><p class="sim-stage-description" id="stageDescription">Capture the employee, reason, and target role before checking eligibility.</p></div><span class="badge badge-neutral" id="stageBadge">Not started</span></div>
+                <div id="stageContent" aria-live="polite"></div>
+              </div>
+              <div class="sim-inspector-grid" aria-label="Simulation system reference">
+                <article class="sim-inspector-card"><span class="sim-inspector-icon"><svg><use href="assets/icons.svg#calibration"/></svg></span><div><span class="sim-inspector-kicker">Transition contract</span><strong id="contractRule">Request data must be complete</strong><span id="contractHelp">The next state is only available after required fields are confirmed.</span></div></article>
+                <article class="sim-inspector-card"><span class="sim-inspector-icon"><svg><use href="assets/icons.svg#employees"/></svg></span><div><span class="sim-inspector-kicker">Permission context</span><strong id="contractOwner">Requester</strong><span id="contractNext">Allowed next: Eligibility review</span></div></article>
+                <article class="sim-inspector-card"><span class="sim-inspector-icon"><svg><use href="assets/icons.svg#database"/></svg></span><div><span class="sim-inspector-kicker">Audit event</span><strong id="contractAudit">assessment.requested</strong><span>Actor, timestamp, and revision are retained.</span></div></article>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script src="scripts/app.js"></script>
+  <script src="scripts/simulation.js"></script>
+</body>
+</html>

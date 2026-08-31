@@ -1,0 +1,846 @@
+openapi: 3.1.0
+info:
+  title: AssessFlow API
+  version: 1.0.0
+  description: Core REST contract for the AssessFlow employee assessment module. Numeric scoring is optional and disabled
+    by default in the MVP.
+servers:
+- url: /api/v1/assessflow
+security:
+- bearerAuth: []
+tags:
+- name: Cases
+- name: Eligibility
+- name: Planning
+- name: Events
+- name: Results
+- name: Recommendations
+- name: Approvals
+- name: Development
+paths:
+  /cases:
+    get:
+      tags:
+      - Cases
+      summary: List assessment cases
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - in: query
+        name: status
+        schema:
+          type: string
+      - in: query
+        name: assessmentReason
+        schema:
+          $ref: '#/components/schemas/AssessmentReason'
+      responses:
+        '200':
+          description: Paged case list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AssessmentCase'
+                  total:
+                    type: integer
+    post:
+      tags:
+      - Cases
+      summary: Create a draft assessment case
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCaseRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentCase'
+        '422':
+          $ref: '#/components/responses/BusinessRuleFailed'
+  /cases/{caseId}:
+    parameters:
+    - $ref: '#/components/parameters/CaseId'
+    get:
+      tags:
+      - Cases
+      summary: Get assessment case detail
+      responses:
+        '200':
+          description: Case detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AssessmentCase'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      tags:
+      - Cases
+      summary: Edit a draft or changes-requested case
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                targetPositionId:
+                  type: string
+                  format: uuid
+                targetLevelId:
+                  type:
+                  - string
+                  - 'null'
+                  format: uuid
+                justification:
+                  type: string
+                priority:
+                  type:
+                  - string
+                  - 'null'
+                requestedCompletionDate:
+                  type:
+                  - string
+                  - 'null'
+                  format: date
+                expectedVersion:
+                  type: integer
+      responses:
+        '200':
+          description: Updated
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /cases/{caseId}/submit:
+    post:
+      tags:
+      - Cases
+      summary: Submit case for eligibility review
+      parameters:
+      - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionCommand'
+      responses:
+        '200':
+          description: Submitted
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/BusinessRuleFailed'
+  /cases/{caseId}/eligibility:
+    get:
+      tags:
+      - Eligibility
+      summary: Get eligibility review
+      parameters:
+      - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: Eligibility review
+  /eligibility/{reviewId}/criteria/{criterionCode}:
+    put:
+      tags:
+      - Eligibility
+      summary: Update one eligibility criterion
+      parameters:
+      - in: path
+        name: reviewId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - in: path
+        name: criterionCode
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EligibilityCriterionInput'
+      responses:
+        '200':
+          description: Saved
+        '422':
+          $ref: '#/components/responses/BusinessRuleFailed'
+  /eligibility/{reviewId}/decision:
+    post:
+      tags:
+      - Eligibility
+      summary: Decide eligibility
+      parameters:
+      - in: path
+        name: reviewId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EligibilityDecisionInput'
+      responses:
+        '200':
+          description: Decision recorded
+        '422':
+          $ref: '#/components/responses/BusinessRuleFailed'
+  /cases/{caseId}/plans:
+    get:
+      tags:
+      - Planning
+      summary: List plan revisions
+      parameters:
+      - $ref: '#/components/parameters/CaseId'
+      responses:
+        '200':
+          description: Plan revisions
+    post:
+      tags:
+      - Planning
+      summary: Create plan revision
+      parameters:
+      - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePlanRequest'
+      responses:
+        '201':
+          description: Plan created
+  /plans/{planId}/finalize:
+    post:
+      tags:
+      - Planning
+      summary: Finalize assessment plan
+      parameters:
+      - in: path
+        name: planId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VersionCommand'
+      responses:
+        '200':
+          description: Finalized
+        '422':
+          $ref: '#/components/responses/BusinessRuleFailed'
+  /plans/{planId}/events:
+    post:
+      tags:
+      - Events
+      summary: Schedule assessment event
+      parameters:
+      - in: path
+        name: planId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEventRequest'
+      responses:
+        '201':
+          description: Event scheduled
+  /events/{eventId}/my-submission:
+    get:
+      tags:
+      - Events
+      summary: Get assigned assessor submission
+      parameters:
+      - in: path
+        name: eventId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: Assessor submission
+    put:
+      tags:
+      - Events
+      summary: Save assessor evidence draft
+      parameters:
+      - in: path
+        name: eventId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssessorEvidenceInput'
+      responses:
+        '200':
+          description: Saved
+  /events/{eventId}/my-submission/submit:
+    post:
+      tags:
+      - Events
+      summary: Submit independent assessor evidence
+      parameters:
+      - in: path
+        name: eventId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssessorEvidenceInput'
+      responses:
+        '200':
+          description: Submitted
+        '422':
+          $ref: '#/components/responses/BusinessRuleFailed'
+  /cases/{caseId}/results:
+    post:
+      tags:
+      - Results
+      summary: Create a result revision draft
+      parameters:
+      - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResultInput'
+      responses:
+        '201':
+          description: Result revision created
+  /results/{resultId}/finalize:
+    post:
+      tags:
+      - Results
+      summary: Finalize result revision
+      description: overallScore is optional and normally null when scoring is disabled.
+      parameters:
+      - in: path
+        name: resultId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResultInput'
+      responses:
+        '200':
+          description: Result finalized
+        '422':
+          $ref: '#/components/responses/BusinessRuleFailed'
+  /cases/{caseId}/recommendations:
+    post:
+      tags:
+      - Recommendations
+      summary: Create recommendation revision
+      parameters:
+      - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecommendationInput'
+      responses:
+        '201':
+          description: Recommendation created
+        '422':
+          $ref: '#/components/responses/BusinessRuleFailed'
+  /approval-steps/{stepId}/decision:
+    post:
+      tags:
+      - Approvals
+      summary: Decide approval step
+      parameters:
+      - in: path
+        name: stepId
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecisionInput'
+      responses:
+        '200':
+          description: Decision recorded
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /cases/{caseId}/development-plan:
+    post:
+      tags:
+      - Development
+      summary: Create development plan
+      parameters:
+      - $ref: '#/components/parameters/CaseId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateDevelopmentPlanRequest'
+      responses:
+        '201':
+          description: Created
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    CaseId:
+      in: path
+      name: caseId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Page:
+      in: query
+      name: page
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSize:
+      in: query
+      name: pageSize
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 25
+  schemas:
+    AssessmentReason:
+      type: string
+      enum:
+      - INTERNAL_MOBILITY
+      - PROMOTION
+      - ROLE_REALIGNMENT
+    ResultCode:
+      type: string
+      enum:
+      - READY_NOW
+      - READY_WITH_DEVELOPMENT
+      - NOT_READY
+      - INCOMPLETE
+    AssessmentCase:
+      type: object
+      required:
+      - id
+      - caseCode
+      - employeeId
+      - assessmentReason
+      - targetPositionId
+      - stage
+      - status
+      - scoringEnabled
+      - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        caseCode:
+          type: string
+        employeeId:
+          type: string
+          format: uuid
+        requesterUserId:
+          type: string
+          format: uuid
+        assessmentReason:
+          $ref: '#/components/schemas/AssessmentReason'
+        currentPositionId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        currentLevelId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        targetPositionId:
+          type: string
+          format: uuid
+        targetLevelId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        complexityBand:
+          type:
+          - string
+          - 'null'
+        justification:
+          type: string
+        stage:
+          type: string
+        status:
+          type: string
+        scoringEnabled:
+          type: boolean
+          default: false
+        version:
+          type: integer
+    CreateCaseRequest:
+      type: object
+      required:
+      - employeeId
+      - assessmentReason
+      - targetPositionId
+      - justification
+      properties:
+        employeeId:
+          type: string
+          format: uuid
+        assessmentReason:
+          $ref: '#/components/schemas/AssessmentReason'
+        targetPositionId:
+          type: string
+          format: uuid
+        targetLevelId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        justification:
+          type: string
+          minLength: 1
+        priority:
+          type:
+          - string
+          - 'null'
+        requestedCompletionDate:
+          type:
+          - string
+          - 'null'
+          format: date
+    VersionCommand:
+      type: object
+      required:
+      - expectedVersion
+      properties:
+        expectedVersion:
+          type: integer
+          minimum: 1
+    EligibilityCriterionInput:
+      type: object
+      required:
+      - result
+      properties:
+        result:
+          type: string
+          enum:
+          - MET
+          - NOT_MET
+          - NOT_APPLICABLE
+          - NOT_CHECKED
+        evidenceNote:
+          type:
+          - string
+          - 'null'
+        expectedVersion:
+          type: integer
+    EligibilityDecisionInput:
+      type: object
+      required:
+      - decision
+      - expectedVersion
+      properties:
+        decision:
+          type: string
+          enum:
+          - ELIGIBLE
+          - NOT_ELIGIBLE
+        decisionReason:
+          type:
+          - string
+          - 'null'
+        expectedVersion:
+          type: integer
+    CreatePlanRequest:
+      type: object
+      required:
+      - methods
+      - expectedVersion
+      properties:
+        methods:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+            - methodCode
+            - required
+            properties:
+              methodCode:
+                type: string
+                enum:
+                - CBI
+                - CASE_STUDY
+                - ROLEPLAY
+              required:
+                type: boolean
+              plannedDurationMinutes:
+                type:
+                - integer
+                - 'null'
+              instructions:
+                type:
+                - string
+                - 'null'
+        deviationReason:
+          type:
+          - string
+          - 'null'
+        expectedVersion:
+          type: integer
+    CreateEventRequest:
+      type: object
+      required:
+      - planMethodId
+      - scheduledStart
+      - scheduledEnd
+      - timezone
+      - assessors
+      properties:
+        planMethodId:
+          type: string
+          format: uuid
+        scheduledStart:
+          type: string
+          format: date-time
+        scheduledEnd:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+        locationText:
+          type:
+          - string
+          - 'null'
+        meetingUrl:
+          type:
+          - string
+          - 'null'
+          format: uri
+        assessors:
+          type: array
+          items:
+            type: object
+            required:
+            - userId
+            - role
+            properties:
+              userId:
+                type: string
+                format: uuid
+              role:
+                type: string
+                enum:
+                - LEAD
+                - PANEL_MEMBER
+                - OBSERVER
+              submissionRequired:
+                type: boolean
+                default: true
+    AssessorEvidenceInput:
+      type: object
+      properties:
+        evidenceSummary:
+          type:
+          - string
+          - 'null'
+        strengths:
+          type:
+          - string
+          - 'null'
+        gaps:
+          type:
+          - string
+          - 'null'
+        expectedVersion:
+          type: integer
+    ResultInput:
+      type: object
+      required:
+      - resultCode
+      - evidenceSummary
+      - expectedVersion
+      properties:
+        resultCode:
+          $ref: '#/components/schemas/ResultCode'
+        evidenceSummary:
+          type: string
+          minLength: 1
+        strengths:
+          type:
+          - string
+          - 'null'
+        gaps:
+          type:
+          - string
+          - 'null'
+        developmentFocus:
+          type:
+          - string
+          - 'null'
+        overallScore:
+          description: Optional. Normally null when scoringEnabled=false.
+          type:
+          - number
+          - 'null'
+        expectedVersion:
+          type: integer
+    RecommendationInput:
+      type: object
+      required:
+      - resultRevisionId
+      - recommendationCode
+      - rationale
+      - expectedVersion
+      properties:
+        resultRevisionId:
+          type: string
+          format: uuid
+        recommendationCode:
+          type: string
+        rationale:
+          type: string
+          minLength: 1
+        requiresDevelopment:
+          type: boolean
+          default: false
+        requiresReassessment:
+          type: boolean
+          default: false
+        reassessmentTargetDate:
+          type:
+          - string
+          - 'null'
+          format: date
+        expectedVersion:
+          type: integer
+    ApprovalDecisionInput:
+      type: object
+      required:
+      - decision
+      - expectedVersion
+      properties:
+        decision:
+          type: string
+          enum:
+          - APPROVE
+          - REJECT
+          - REQUEST_CHANGES
+        comment:
+          type:
+          - string
+          - 'null'
+        expectedVersion:
+          type: integer
+    CreateDevelopmentPlanRequest:
+      type: object
+      required:
+      - ownerUserId
+      properties:
+        ownerUserId:
+          type: string
+          format: uuid
+        startDate:
+          type:
+          - string
+          - 'null'
+          format: date
+        targetCompletionDate:
+          type:
+          - string
+          - 'null'
+          format: date
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            correlationId:
+              type:
+              - string
+              - 'null'
+            fieldErrors:
+              type: array
+              items:
+                type: object
+                properties:
+                  field:
+                    type: string
+                  message:
+                    type: string
+  responses:
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Conflict:
+      description: Invalid transition or version conflict
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    BusinessRuleFailed:
+      description: Business rule failed
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'

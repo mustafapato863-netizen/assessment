@@ -1,0 +1,29 @@
+{
+  "name": "@assessflow/web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @assessflow/contracts build && vite",
+    "build": "pnpm --filter @assessflow/contracts build && tsc -b && vite build",
+    "typecheck": "tsc -b --pretty false",
+    "lint": "prettier --check src",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@assessflow/contracts": "workspace:*",
+    "@tanstack/react-query": "^5.85.5",
+    "lucide-react": "^0.468.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.10",
+    "@types/react-dom": "^19.1.7",
+    "@vitejs/plugin-react": "^5.0.2",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3",
+    "vitest": "^3.2.4"
+  }
+}

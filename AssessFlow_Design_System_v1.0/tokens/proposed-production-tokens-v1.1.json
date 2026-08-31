@@ -1,0 +1,147 @@
+{
+  "meta": {
+    "name": "AssessFlow proposed production tokens",
+    "version": "1.1-proposed",
+    "date": "2026-08-18",
+    "status": "proposed-gate-6",
+    "source": "AssessFlow_Frontend_UI_UX_Spec_v1.1.md",
+    "note": "Design handoff only. Not approved for application development until Gate 6 and Gate 10 pass."
+  },
+  "color": {
+    "surface": {
+      "canvas": "#F8FAFC",
+      "default": "#FFFFFF",
+      "subtle": "#F1F5F9",
+      "brandSoft": "#EEF2FF"
+    },
+    "text": {
+      "primary": "#0F172A",
+      "secondary": "#475569",
+      "muted": "#64748B",
+      "inverse": "#FFFFFF"
+    },
+    "border": {
+      "default": "#E2E8F0",
+      "strong": "#CBD5E1"
+    },
+    "action": {
+      "primary": {
+        "rest": "#4F46E5",
+        "hover": "#4338CA",
+        "pressed": "#3730A3",
+        "text": "#FFFFFF"
+      },
+      "focusRing": "#0F766E"
+    },
+    "selection": {
+      "background": "#EEF2FF",
+      "border": "#A5B4FC",
+      "text": "#3730A3"
+    },
+    "status": {
+      "neutral": {
+        "background": "#F1F5F9",
+        "border": "#CBD5E1",
+        "text": "#334155",
+        "icon": "#475569"
+      },
+      "info": {
+        "background": "#EFF6FF",
+        "border": "#BFDBFE",
+        "text": "#1E40AF",
+        "icon": "#2563EB"
+      },
+      "success": {
+        "background": "#F0FDF4",
+        "border": "#BBF7D0",
+        "text": "#166534",
+        "icon": "#16A34A"
+      },
+      "warning": {
+        "background": "#FFFBEB",
+        "border": "#FDE68A",
+        "text": "#92400E",
+        "icon": "#D97706"
+      },
+      "danger": {
+        "background": "#FEF2F2",
+        "border": "#FECACA",
+        "text": "#991B1B",
+        "icon": "#DC2626"
+      },
+      "decision": {
+        "background": "#F5F3FF",
+        "border": "#DDD6FE",
+        "text": "#5B21B6",
+        "icon": "#7C3AED"
+      },
+      "followUp": {
+        "background": "#F0FDFA",
+        "border": "#99F6E4",
+        "text": "#115E59",
+        "icon": "#0F766E"
+      }
+    }
+  },
+  "gradient": {
+    "brand": "linear-gradient(135deg, #4F46E5 0%, #7C3AED 55%, #14B8A6 100%)",
+    "brandHorizontal": "linear-gradient(90deg, #4F46E5 0%, #7C3AED 52%, #14B8A6 100%)",
+    "brandSoft": "linear-gradient(135deg, #EEF2FF 0%, #F5F3FF 56%, #F0FDFA 100%)",
+    "successSoft": "linear-gradient(135deg, #F0FDF4 0%, #F0FDFA 100%)",
+    "dangerSoft": "linear-gradient(135deg, #FEF2F2 0%, #FFF7ED 100%)",
+    "skeleton": "linear-gradient(90deg, #F1F5F9 20%, #E0E7FF 50%, #F1F5F9 80%)"
+  },
+  "motion": {
+    "duration": {
+      "instant": "0ms",
+      "xxfast": "50ms",
+      "xfast": "100ms",
+      "fast": "150ms",
+      "standard": "200ms",
+      "deliberate": "250ms",
+      "route": "400ms"
+    },
+    "easing": {
+      "outPractical": "cubic-bezier(0.4, 1, 0.6, 1)",
+      "outBold": "cubic-bezier(0, 0.4, 0, 1)",
+      "inPractical": "cubic-bezier(0.6, 0, 0.8, 0.6)",
+      "inoutBold": "cubic-bezier(0.4, 0, 0, 1)"
+    },
+    "loading": {
+      "skeletonDuration": "1400ms",
+      "progressDuration": "1600ms",
+      "spinnerDuration": "900ms",
+      "buttonSweepDuration": "1200ms",
+      "backgroundSize": "200% 100%"
+    },
+    "reducedMotion": {
+      "durationMaximum": "100ms",
+      "allowedProperty": "opacity",
+      "stopLoops": true,
+      "disableTransform": true,
+      "preserveStatusText": true
+    }
+  },
+  "layout": {
+    "sidebar": {
+      "expanded": "264px",
+      "compact": "72px"
+    },
+    "topbar": {
+      "desktop": "64px",
+      "mobile": "56px"
+    },
+    "controlHeight": {
+      "small": "32px",
+      "standard": "40px",
+      "touch": "44px"
+    },
+    "breakpoint": {
+      "mobile": "360px",
+      "largeMobile": "480px",
+      "tablet": "768px",
+      "desktop": "1024px",
+      "wide": "1440px"
+    }
+  }
+}

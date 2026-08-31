@@ -1,0 +1,12 @@
+node_modules/
+dist/
+packages/database/generated/
+coverage/
+.env
+.env.*
+!.env.example
+.turbo/
+.vite/
+playwright-report/
+test-results/
+*.log

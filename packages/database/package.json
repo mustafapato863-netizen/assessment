@@ -1,0 +1,34 @@
+{
+  "name": "@assessflow/database",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "prisma generate",
+    "typecheck": "node scripts/validate-schema.mjs",
+    "lint": "prettier --check prisma",
+    "test": "echo database integration tests run with Testcontainers in the integration suite",
+    "db:push": "node scripts/prisma-command.mjs db push",
+    "db:migrate": "node scripts/prisma-command.mjs migrate dev",
+    "db:seed": "node scripts/prisma-command.mjs db seed"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "main": "generated/client/index.js",
+  "types": "generated/client/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./generated/client/index.d.ts",
+      "import": "./generated/client/index.js",
+      "require": "./generated/client/index.js"
+    }
+  },
+  "dependencies": {
+    "@prisma/client": "^6.15.0"
+  },
+  "devDependencies": {
+    "prettier": "^3.6.2",
+    "prisma": "^6.15.0",
+    "tsx": "^4.20.5"
+  }
+}

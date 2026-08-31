@@ -1,0 +1,528 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AssessmentReason {
+  PROMOTION
+  INTERNAL_MOBILITY
+  ROLE_REALIGNMENT
+}
+
+enum CaseStage {
+  REQUEST
+  ELIGIBILITY
+  PLANNING
+  ASSESSMENT
+  RESULT
+  RECOMMENDATION
+  APPROVAL
+  FOLLOW_UP
+  CLOSED
+}
+
+enum CaseStatus {
+  DRAFT
+  SUBMITTED
+  PENDING_ELIGIBILITY
+  NOT_ELIGIBLE
+  READY_FOR_PLANNING
+  PLANNING
+  SCHEDULED
+  IN_PROGRESS
+  PENDING_RESULT
+  RESULT_FINALIZED
+  PENDING_RECOMMENDATION
+  PENDING_APPROVAL
+  APPROVED
+  DEVELOPMENT_IN_PROGRESS
+  REASSESSMENT_DUE
+  CLOSED
+  CANCELLED
+}
+
+enum EligibilityDecision {
+  ELIGIBLE
+  NOT_ELIGIBLE
+  OVERRIDE_REQUESTED
+  OVERRIDE_APPROVED
+  OVERRIDE_REJECTED
+}
+
+enum CriterionResult {
+  MET
+  NOT_MET
+  NOT_CHECKED
+  NOT_APPLICABLE
+}
+
+enum EventStatus {
+  PLANNED
+  SCHEDULED
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  RESCHEDULED
+  CANCELLED
+  PARTICIPANT_NO_SHOW
+  ASSESSOR_NO_SHOW
+}
+
+enum ResultCode {
+  READY_NOW
+  READY_WITH_DEVELOPMENT
+  NOT_READY
+  INCOMPLETE
+}
+
+enum RecommendationStatus {
+  DRAFT
+  PENDING_APPROVAL
+  CHANGES_REQUESTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ApprovalDecision {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+  REJECTED
+}
+
+enum ScanStatus {
+  PENDING
+  SCANNING
+  CLEAN
+  REJECTED
+  FAILED
+}
+
+enum TaskStatus {
+  OPEN
+  COMPLETED
+  CANCELLED
+}
+
+model Organization {
+  id          String              @id @default(uuid()) @db.Uuid
+  code        String              @unique
+  name        String
+  employees   EmployeeReference[]
+  cases       AssessmentCase[]
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+}
+
+model EmployeeReference {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @db.Uuid
+  organization   Organization     @relation(fields: [organizationId], references: [id])
+  externalId     String
+  displayName    String
+  email          String?
+  department     String
+  managerName    String?
+  currentRole    String
+  currentLevel   String?
+  employmentState String          @default("ACTIVE")
+  sourceUpdatedAt DateTime?
+  cases          AssessmentCase[]
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@unique([organizationId, externalId])
+  @@index([organizationId, department])
+}
+
+model AssessmentCase {
+  id                    String                    @id @default(uuid()) @db.Uuid
+  caseCode              String                    @unique
+  organizationId        String                    @db.Uuid
+  organization          Organization              @relation(fields: [organizationId], references: [id])
+  employeeId            String                    @db.Uuid
+  employee              EmployeeReference         @relation(fields: [employeeId], references: [id])
+  assessmentReason      AssessmentReason
+  stage                 CaseStage
+  status                CaseStatus
+  version               Int                       @default(1)
+  ownerName             String
+  priority              String                    @default("NORMAL")
+  currentRoleSnapshot   String
+  targetRoleSnapshot    String
+  targetLevelSnapshot   String?
+  managerSnapshot       String?
+  departmentSnapshot    String
+  justification         String
+  requestedAt           DateTime                  @default(now())
+  closedAt              DateTime?
+  eligibility           EligibilityReview?
+  plan                  AssessmentPlan?
+  events                AssessmentEvent[]
+  evidence              EvidenceSubmission[]
+  attachments           Attachment[]
+  sourceReassessmentLinks ReassessmentLink[] @relation("sourceCase")
+  targetReassessmentLink ReassessmentLink? @relation("reassessmentCase")
+  resultRevisions       ResultRevision[]
+  recommendationRevisions RecommendationRevision[]
+  approvalSteps         ApprovalStep[]
+  developmentPlan       DevelopmentPlan?
+  tasks                 Task[]
+  auditEvents           AuditEvent[]
+  accessLogs            AccessLog[]
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
+
+  @@index([organizationId, status, stage])
+  @@index([organizationId, ownerName, status])
+  @@index([employeeId, requestedAt])
+  @@index([departmentSnapshot, assessmentReason])
+}
+
+model EligibilityReview {
+  id             String                    @id @default(uuid()) @db.Uuid
+  caseId         String                    @unique @db.Uuid
+  case           AssessmentCase            @relation(fields: [caseId], references: [id])
+  policyVersion  String
+  decision       EligibilityDecision?
+  decisionReason String?
+  decidedBy      String?
+  decidedAt      DateTime?
+  criteria       EligibilityCriterionResult[]
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+}
+
+model EligibilityCriterionResult {
+  id          String             @id @default(uuid()) @db.Uuid
+  reviewId    String             @db.Uuid
+  review      EligibilityReview @relation(fields: [reviewId], references: [id])
+  criterionCode String
+  label       String
+  blocking    Boolean            @default(false)
+  result      CriterionResult    @default(NOT_CHECKED)
+  sourceValue String?
+  evidenceNote String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@unique([reviewId, criterionCode])
+}
+
+model AssessmentPlan {
+  id             String                 @id @default(uuid()) @db.Uuid
+  caseId         String                 @unique @db.Uuid
+  case           AssessmentCase         @relation(fields: [caseId], references: [id])
+  complexityBand String?
+  leadAssessor   String?
+  deviationReason String?
+  version        Int                    @default(1)
+  methods        AssessmentPlanMethod[]
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+}
+
+model AssessmentPlanMethod {
+  id          String            @id @default(uuid()) @db.Uuid
+  planId      String            @db.Uuid
+  plan        AssessmentPlan    @relation(fields: [planId], references: [id])
+  methodCode  String
+  methodLabel String
+  required    Boolean           @default(true)
+  durationMin Int?
+  templateKey String?
+  events      AssessmentEvent[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+}
+
+model AssessmentEvent {
+  id             String                @id @default(uuid()) @db.Uuid
+  caseId         String                @db.Uuid
+  case           AssessmentCase        @relation(fields: [caseId], references: [id])
+  planMethodId   String?               @db.Uuid
+  planMethod     AssessmentPlanMethod? @relation(fields: [planMethodId], references: [id])
+  status         EventStatus
+  startsAt       DateTime?
+  endsAt         DateTime?
+  timezone       String?
+  location       String?
+  meetingLink    String?
+  cancellationReason String?
+  assessors      EventAssessor[]
+  evidence       EvidenceSubmission[]
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  @@index([caseId, status, startsAt])
+}
+
+model EventAssessor {
+  id          String          @id @default(uuid()) @db.Uuid
+  eventId     String          @db.Uuid
+  event       AssessmentEvent @relation(fields: [eventId], references: [id])
+  userId      String
+  displayName String
+  role        String
+  required    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+
+  @@unique([eventId, userId])
+}
+
+model EvidenceSubmission {
+  id          String          @id @default(uuid()) @db.Uuid
+  caseId      String          @db.Uuid
+  case        AssessmentCase  @relation(fields: [caseId], references: [id])
+  eventId     String          @db.Uuid
+  event       AssessmentEvent @relation(fields: [eventId], references: [id])
+  assessorId  String
+  assessorName String
+  summary     String
+  strengths   String?
+  gaps        String?
+  attachments Attachment[]
+  submittedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([eventId, assessorId])
+}
+
+model Attachment {
+  id             String             @id @default(uuid()) @db.Uuid
+  caseId         String             @db.Uuid
+  case           AssessmentCase    @relation(fields: [caseId], references: [id])
+  evidenceId     String?            @db.Uuid
+  evidence       EvidenceSubmission? @relation(fields: [evidenceId], references: [id])
+  classification String
+  fileName       String
+  contentType    String
+  sizeBytes      BigInt
+  storageKey     String
+  scanStatus     ScanStatus          @default(PENDING)
+  scanReason     String?
+  createdBy      String
+  createdAt      DateTime            @default(now())
+  scannedAt      DateTime?
+
+  @@index([caseId, scanStatus])
+}
+
+model ResultRevision {
+  id              String         @id @default(uuid()) @db.Uuid
+  caseId          String         @db.Uuid
+  case            AssessmentCase @relation(fields: [caseId], references: [id])
+  revision        Int
+  resultCode      ResultCode?
+  evidenceSummary String?
+  strengths       String?
+  gaps            String?
+  developmentFocus String?
+  finalizedAt     DateTime?
+  finalizedBy     String?
+  reopenedAt      DateTime?
+  reopenReason    String?
+  createdAt       DateTime       @default(now())
+
+  @@unique([caseId, revision])
+}
+
+model RecommendationRevision {
+  id             String               @id @default(uuid()) @db.Uuid
+  caseId         String               @db.Uuid
+  case           AssessmentCase       @relation(fields: [caseId], references: [id])
+  revision       Int
+  code           String
+  status         RecommendationStatus @default(DRAFT)
+  rationale      String
+  requiresDevelopment Boolean          @default(false)
+  requiresReassessment Boolean         @default(false)
+  targetDate     DateTime?
+  submittedAt    DateTime?
+  createdBy      String
+  createdAt      DateTime             @default(now())
+
+  @@unique([caseId, revision])
+}
+
+model ApprovalStep {
+  id               String           @id @default(uuid()) @db.Uuid
+  caseId           String           @db.Uuid
+  case             AssessmentCase   @relation(fields: [caseId], references: [id])
+  sequence         Int
+  role             String
+  approverId       String?
+  approverName     String?
+  decision         ApprovalDecision @default(PENDING)
+  comment          String?
+  decidedAt        DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  @@unique([caseId, sequence])
+}
+
+model DevelopmentPlan {
+  id             String             @id @default(uuid()) @db.Uuid
+  caseId         String             @unique @db.Uuid
+  case           AssessmentCase     @relation(fields: [caseId], references: [id])
+  ownerName      String
+  targetDate     DateTime?
+  status         String             @default("PLANNED")
+  actions        DevelopmentAction[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+}
+
+model DevelopmentAction {
+  id          String          @id @default(uuid()) @db.Uuid
+  planId      String          @db.Uuid
+  plan        DevelopmentPlan @relation(fields: [planId], references: [id])
+  title       String
+  ownerName   String
+  dueDate     DateTime?
+  status      String          @default("NOT_STARTED")
+  evidenceNote String?
+  completedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model ReassessmentLink {
+  id             String         @id @default(uuid()) @db.Uuid
+  sourceCaseId   String         @db.Uuid
+  sourceCase     AssessmentCase @relation(fields: [sourceCaseId], references: [id], name: "sourceCase")
+  reassessmentCaseId String      @unique @db.Uuid
+  reassessmentCase AssessmentCase @relation(fields: [reassessmentCaseId], references: [id], name: "reassessmentCase")
+  reason         String
+  targetDate     DateTime?
+  createdAt      DateTime       @default(now())
+}
+
+model Task {
+  id          String         @id @default(uuid()) @db.Uuid
+  caseId      String?        @db.Uuid
+  case        AssessmentCase? @relation(fields: [caseId], references: [id])
+  assigneeId  String
+  assigneeName String
+  taskType    String
+  status      TaskStatus     @default(OPEN)
+  dueAt       DateTime?
+  completedAt DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([assigneeId, status, dueAt])
+}
+
+model AuditEvent {
+  id          String         @id @default(uuid()) @db.Uuid
+  caseId      String?        @db.Uuid
+  case        AssessmentCase? @relation(fields: [caseId], references: [id])
+  actorId     String
+  actorName   String
+  action      String
+  entityType  String
+  entityId    String
+  reason      String?
+  previousData Json?
+  newData     Json?
+  correlationId String
+  createdAt   DateTime       @default(now())
+
+  @@index([caseId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+model AccessLog {
+  id            String         @id @default(uuid()) @db.Uuid
+  caseId        String?        @db.Uuid
+  case          AssessmentCase? @relation(fields: [caseId], references: [id])
+  actorId       String
+  action        String
+  resourceType  String
+  resourceId    String
+  outcome       String
+  correlationId String
+  createdAt     DateTime       @default(now())
+
+  @@index([resourceType, resourceId, createdAt])
+}
+
+model NotificationOutbox {
+  id            String    @id @default(uuid()) @db.Uuid
+  eventType     String
+  aggregateType String
+  aggregateId   String
+  payload       Json
+  occurredAt    DateTime  @default(now())
+  publishedAt   DateTime?
+  attemptCount  Int       @default(0)
+  lastError     String?
+  createdAt     DateTime  @default(now())
+
+  @@index([publishedAt, occurredAt])
+}
+
+model NotificationDelivery {
+  id           String    @id @default(uuid()) @db.Uuid
+  outboxId     String    @db.Uuid
+  channel      String
+  recipient    String
+  status       String
+  providerId   String?
+  attemptCount Int       @default(0)
+  lastError    String?
+  sentAt       DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@unique([outboxId, channel, recipient])
+}
+
+model IdempotencyKey {
+  id             String   @id @default(uuid()) @db.Uuid
+  key            String
+  actorId        String
+  command        String
+  resourceId     String?
+  requestHash    String
+  responseStatus Int
+  responseBody   Json
+  expiresAt      DateTime
+  createdAt      DateTime @default(now())
+
+  @@unique([key, actorId, command])
+  @@index([expiresAt])
+}
+
+model RetentionPolicy {
+  id              String   @id @default(uuid()) @db.Uuid
+  category        String   @unique
+  retentionDays   Int?
+  legalHoldEnabled Boolean @default(true)
+  active          Boolean @default(true)
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model HrSyncBatch {
+  id             String   @id @default(uuid()) @db.Uuid
+  source         String
+  syncType       String
+  status         String
+  sourceCursor   String?
+  recordsRead    Int      @default(0)
+  recordsApplied Int      @default(0)
+  recordsFailed  Int      @default(0)
+  errorSummary   String?
+  startedAt      DateTime @default(now())
+  completedAt    DateTime?
+}
