@@ -6,7 +6,7 @@ RUN apk add --no-cache openssl libc6-compat
 WORKDIR /app
 
 # Build arguments for frontend API URL
-ARG VITE_API_URL=https://bkassess.zainx.cloud/api/v1/assessflow
+ARG VITE_API_URL=https://endrec.zainx.cloud/api/v1/assessflow
 ARG VITE_FEATURE_CALIBRATION=true
 ENV VITE_API_URL=$VITE_API_URL
 ENV VITE_FEATURE_CALIBRATION=$VITE_FEATURE_CALIBRATION

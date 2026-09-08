@@ -7,15 +7,15 @@
   "rewrites": [
     {
       "source": "/api/v1/assessflow/:path*",
-      "destination": "https://bkassess.zainx.cloud/api/v1/assessflow/:path*"
+      "destination": "https://endrec.zainx.cloud/api/v1/assessflow/:path*"
     },
     {
       "source": "/health/:path*",
-      "destination": "https://bkassess.zainx.cloud/health/:path*"
+      "destination": "https://endrec.zainx.cloud/health/:path*"
     },
     {
       "source": "/health",
-      "destination": "https://bkassess.zainx.cloud/health"
+      "destination": "https://endrec.zainx.cloud/health"
     },
     {
       "source": "/(.*)",
