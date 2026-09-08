@@ -48,7 +48,21 @@ export interface RequestOptions {
   idempotencyKey?: string;
 }
 
-const baseUrl = import.meta.env.VITE_API_URL ?? '/api/v1/assessflow';
+function resolveBaseUrl(): string {
+  const envUrl = import.meta.env.VITE_API_URL;
+  if (typeof window !== 'undefined') {
+    const isLocalhost =
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1';
+    // When running on a remote cloud domain, never call localhost
+    if (!isLocalhost && (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
+      return 'https://bkassess.zainx.cloud/api/v1/assessflow';
+    }
+  }
+  return envUrl || '/api/v1/assessflow';
+}
+
+const baseUrl = resolveBaseUrl();
 
 export class ApiRequestError extends Error {
   constructor(
