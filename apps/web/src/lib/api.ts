@@ -61,7 +61,7 @@ function resolveBaseUrl(): string {
       window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     // When running on a remote cloud domain, never call localhost
     if (!isLocalhost && (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
-      return 'https://endrec.zainx.cloud/api/v1/assessflow';
+      return 'https://bkassess.zainx.cloud/api/v1/assessflow';
     }
   }
   return envUrl || '/api/v1/assessflow';
