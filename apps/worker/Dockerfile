@@ -8,6 +8,7 @@ WORKDIR /app
 # Step 1: Dependencies stage
 FROM base AS dependencies
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY tsconfig.base.json ./
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/database/package.json packages/database/
 COPY apps/worker/package.json apps/worker/
@@ -16,6 +17,7 @@ RUN pnpm install --frozen-lockfile
 
 # Step 2: Build contracts, prisma, and worker
 FROM dependencies AS builder
+COPY tsconfig.base.json ./
 COPY packages/contracts packages/contracts
 COPY packages/database packages/database
 COPY apps/worker apps/worker

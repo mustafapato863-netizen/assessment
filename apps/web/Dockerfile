@@ -13,6 +13,7 @@ ENV VITE_FEATURE_CALIBRATION=$VITE_FEATURE_CALIBRATION
 
 # Step 1: Dependencies stage
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY tsconfig.base.json ./
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/database/package.json packages/database/
 COPY apps/web/package.json apps/web/
@@ -20,6 +21,7 @@ COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile
 
 # Step 2: Build contracts and web client
+COPY tsconfig.base.json ./
 COPY packages/contracts packages/contracts
 COPY packages/database packages/database
 COPY apps/web apps/web
