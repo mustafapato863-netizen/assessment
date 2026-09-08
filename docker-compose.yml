@@ -5,9 +5,9 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "8080:8080"
     environment:
-      - PORT=3000
+      - PORT=8080
       - DATABASE_URL=${DATABASE_URL:-postgresql://assessflow:123456@postgres:5432/asses_db}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-*}

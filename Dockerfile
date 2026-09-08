@@ -28,7 +28,7 @@ RUN pnpm --filter @assessflow/api build
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=8080
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/contracts/package.json packages/contracts/
@@ -45,6 +45,6 @@ COPY --from=builder /app/packages/database/generated ./packages/database/generat
 COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 
-EXPOSE 3000
+EXPOSE 8080
 
 CMD ["node", "apps/api/dist/main.js"]
