@@ -10,7 +10,7 @@ import {
   Volume2,
   X,
 } from 'lucide-react';
-import { api } from '../lib/api';
+import { api, baseUrl } from '../lib/api';
 import { getSession } from '../lib/auth';
 import { useToast } from '../hooks/use-toast';
 
@@ -33,7 +33,7 @@ export function SettingsModal({ isOpen, onClose }: { isOpen: boolean; onClose: (
     queryKey: ['healthReady'],
     queryFn: async () => {
       try {
-        const res = await fetch('/api/v1/assessflow/health/ready');
+        const res = await fetch(`${baseUrl}/health/ready`);
         return await res.json();
       } catch {
         return { status: 'ok', dataStore: 'postgresql' };

@@ -3,7 +3,7 @@ import { PrismaService } from './database/prisma.service';
 import { Public } from './auth';
 
 @Public()
-@Controller('health')
+@Controller(['health', 'api/v1/assessflow/health'])
 export class HealthController {
   constructor(private readonly prisma: PrismaService) {}
 

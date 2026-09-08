@@ -495,13 +495,19 @@ export class PrismaCasesRepository {
   }
 
   private async organization() {
-    const organization = await this.prisma.organization.findFirst({
+    let organization = await this.prisma.organization.findFirst({
       orderBy: { createdAt: 'asc' },
     });
-    if (!organization)
-      throw new BadRequestException(
-        this.error('DATA_NOT_INITIALIZED', 'Seed the organization before using database mode.'),
-      );
+    if (!organization) {
+      organization = await this.prisma.organization.upsert({
+        where: { code: 'ASSESSFLOW-DEMO' },
+        update: {},
+        create: {
+          code: 'ASSESSFLOW-DEMO',
+          name: 'AssessFlow Demo Company',
+        },
+      });
+    }
     return organization;
   }
 

@@ -45,6 +45,7 @@ COPY --from=dependencies /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=builder /app/packages/contracts/dist ./packages/contracts/dist
 COPY --from=builder /app/packages/database/generated ./packages/database/generated
 COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
+COPY --from=builder /app/packages/database/scripts ./packages/database/scripts
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 
 EXPOSE 8080

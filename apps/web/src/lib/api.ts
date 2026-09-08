@@ -62,7 +62,7 @@ function resolveBaseUrl(): string {
   return envUrl || '/api/v1/assessflow';
 }
 
-const baseUrl = resolveBaseUrl();
+export const baseUrl = resolveBaseUrl();
 
 export class ApiRequestError extends Error {
   constructor(
