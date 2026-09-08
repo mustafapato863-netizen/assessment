@@ -50,10 +50,15 @@ export interface RequestOptions {
 
 function resolveBaseUrl(): string {
   const envUrl = import.meta.env.VITE_API_URL;
+  if (envUrl && envUrl.startsWith('/')) {
+    return envUrl;
+  }
+  if (import.meta.env.VITE_USE_API_PROXY === 'true') {
+    return '/api/v1/assessflow';
+  }
   if (typeof window !== 'undefined') {
     const isLocalhost =
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1';
+      window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     // When running on a remote cloud domain, never call localhost
     if (!isLocalhost && (!envUrl || envUrl.includes('localhost') || envUrl.includes('127.0.0.1'))) {
       return 'https://bkassess.zainx.cloud/api/v1/assessflow';
@@ -62,7 +67,12 @@ function resolveBaseUrl(): string {
   return envUrl || '/api/v1/assessflow';
 }
 
-export const baseUrl = resolveBaseUrl();
+let activeBaseUrl = resolveBaseUrl();
+
+export const baseUrl = activeBaseUrl;
+export function getBaseUrl(): string {
+  return activeBaseUrl;
+}
 
 export class ApiRequestError extends Error {
   constructor(
@@ -77,10 +87,39 @@ export class ApiRequestError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...init,
-    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
-  });
+  let response: Response;
+  const currentBase = activeBaseUrl;
+
+  try {
+    response = await fetch(`${currentBase}${path}`, {
+      ...init,
+      headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    });
+  } catch (err) {
+    // If direct request to remote host failed (e.g. Hostinger domain blocked by ISP/firewall/CORS),
+    // and we're not already on the relative proxy path, attempt fallback to relative /api/v1/assessflow
+    if (
+      typeof window !== 'undefined' &&
+      currentBase.startsWith('http') &&
+      currentBase !== '/api/v1/assessflow'
+    ) {
+      console.warn(
+        `[API] Direct request to ${currentBase}${path} failed (${err instanceof Error ? err.message : 'Network error'}). Attempting fallback to relative proxy /api/v1/assessflow...`,
+      );
+      try {
+        response = await fetch(`/api/v1/assessflow${path}`, {
+          ...init,
+          headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+        });
+        activeBaseUrl = '/api/v1/assessflow';
+      } catch {
+        throw err;
+      }
+    } else {
+      throw err;
+    }
+  }
+
   const payload = (await response.json()) as T & {
     error?: {
       code?: string;

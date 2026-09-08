@@ -37,6 +37,11 @@ function resolveCorrelationId(req: Request, res: Response): string {
  * - Attaches actor to req.actor and req.user
  */
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
+  // Preflight OPTIONS requests must bypass authentication to allow CORS handshake
+  if (req.method === 'OPTIONS') {
+    return next();
+  }
+
   // Public health endpoints bypass authentication
   const rawPath = req.path || req.originalUrl?.split('?')[0] || req.url?.split('?')[0] || '';
   const normalizedPath = rawPath.replace(/\/+/g, '/');

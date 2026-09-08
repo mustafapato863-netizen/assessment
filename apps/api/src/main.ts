@@ -19,40 +19,30 @@ import { AppModule } from './app.module';
 import { securityHeadersMiddleware, rateLimiterMiddleware } from './common/security.middleware';
 import { authMiddleware } from './auth';
 import { initObservability } from './common/observability';
+import {
+  createCorsOriginChecker,
+  CORS_ALLOWED_HEADERS,
+  CORS_EXPOSED_HEADERS,
+} from './common/cors.util';
 
 async function bootstrap() {
   initObservability();
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
 
+  const corsAllowed =
+    process.env.CORS_ALLOWED_ORIGINS || process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGINS;
+
+  app.enableCors({
+    origin: createCorsOriginChecker(corsAllowed),
+    credentials: true,
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+    allowedHeaders: CORS_ALLOWED_HEADERS,
+    exposedHeaders: CORS_EXPOSED_HEADERS,
+  });
+
   app.use(securityHeadersMiddleware);
   app.use(rateLimiterMiddleware);
   app.use(authMiddleware);
-
-  const corsAllowed = process.env.CORS_ALLOWED_ORIGINS;
-  let corsOrigin: boolean | ((origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => void) = true;
-
-  if (corsAllowed && corsAllowed.trim() !== '' && corsAllowed.trim() !== '*') {
-    const allowedList = corsAllowed.split(',').map((o) => o.trim().replace(/\/$/, '')).filter(Boolean);
-    corsOrigin = (origin, callback) => {
-      // Allow requests with no origin (such as server-to-server, curl, mobile apps)
-      if (!origin) {
-        return callback(null, true);
-      }
-      const normalizedOrigin = origin.trim().replace(/\/$/, '');
-      if (allowedList.includes(normalizedOrigin)) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS blocked for origin: ${origin}`));
-      }
-    };
-  }
-
-  app.enableCors({
-    origin: corsOrigin,
-    credentials: true,
-    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-correlation-id', 'idempotency-key'],
-  });
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
 
   const port = Number(process.env.PORT ?? 8080);
