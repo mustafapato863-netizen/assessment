@@ -2,15 +2,15 @@ services:
   postgres:
     image: postgres:18-alpine
     environment:
-      POSTGRES_DB: assessflow
+      POSTGRES_DB: asses_db
       POSTGRES_USER: assessflow
-      POSTGRES_PASSWORD: assessflow_local_only
+      POSTGRES_PASSWORD: 123456 # DEV-ONLY temporary; rotate before real deploy (docker alt user; real DB uses postgres superuser)
     ports:
-      - "5432:5432"
+      - "5433:5432" # host runs its own PostgreSQL on 5432; avoid conflict
     volumes:
-      - assessflow_pg_data:/var/lib/postgresql/data
+      - asses_db_pg_data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U assessflow -d assessflow"]
+      test: ["CMD-SHELL", "pg_isready -U assessflow -d asses_db"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -27,5 +27,5 @@ services:
       retries: 10
 
 volumes:
-  assessflow_pg_data:
+  asses_db_pg_data:
   assessflow_redis_data:

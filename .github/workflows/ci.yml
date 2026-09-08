@@ -27,3 +27,86 @@ jobs:
       - run: pnpm format:check
       - run: pnpm test
       - run: pnpm build
+
+  integration-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+      - name: Boot Docker Compose services (PostgreSQL & Redis)
+        run: docker compose up -d
+
+      - name: Wait for PostgreSQL and Redis readiness
+        run: |
+          for i in $(seq 1 30); do
+            echo "Checking database readiness ($i/30)..."
+            if docker compose exec -T postgres pg_isready -U assessflow -d asses_db && docker compose exec -T redis redis-cli ping; then
+              echo "PostgreSQL and Redis are ready!"
+              break
+            fi
+            sleep 2
+          done
+
+      - name: Push database schema
+        run: pnpm --filter @assessflow/database db:push
+        env:
+          DATABASE_URL: postgresql://assessflow:123456@localhost:5433/asses_db
+
+      - name: Start API service
+        run: |
+          node apps/api/dist/main.js &
+          echo "API_PID=$!" >> $GITHUB_ENV
+        env:
+          PORT: 3000
+          DATA_MODE: database
+          DATABASE_URL: postgresql://assessflow:123456@localhost:5433/asses_db
+          REDIS_URL: redis://localhost:6379
+
+      - name: Integration smoke - verify /health/ready
+        run: |
+          echo "Probing /health/ready endpoint..."
+          curl --fail --retry 15 --retry-delay 2 --retry-connrefused -s http://localhost:3000/health/ready | grep -q '"dataStore":"postgresql"'
+          echo "Integration readiness smoke PASSED: PostgreSQL dataStore verified."
+
+      - name: Cleanup services
+        if: always()
+        run: |
+          if [ -n "$API_PID" ]; then
+            kill $API_PID || true
+          fi
+          docker compose down -v
+
+  openapi-breaking-change:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.11.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @assessflow/contracts build
+      - run: pnpm --filter @assessflow/api build
+
+      - name: Verify OpenAPI v1.1 route parity
+        run: node scripts/check-openapi-routes.mjs

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "prisma generate",
+    "build": "node scripts/build.mjs",
     "typecheck": "node scripts/validate-schema.mjs",
     "lint": "prettier --check prisma",
     "test": "echo database integration tests run with Testcontainers in the integration suite",

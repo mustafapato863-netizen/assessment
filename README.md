@@ -9,8 +9,8 @@ The application currently includes:
 - React/Vite bilingual shell with English/Arabic LTR/RTL switching.
 - AssessFlow semantic design tokens, role-aware navigation, responsive cards, loading/error/empty states, and reduced-motion behavior.
 - NestJS API under `/api/v1/assessflow`.
-- First vertical slice: create draft → submit → eligibility decision → governance override request.
-- Version-checked commands and structured API errors.
+- Full workflow: create draft → submit → eligibility decision → governance override → plan finalize → event schedule → evidence draft/submit → result finalize/reopen → recommendation → sequential HR/Business approval → development → reassessment (linked draft) → closure.
+- Version-checked commands, PG-backed idempotency (`Idempotency-Key`), and structured API errors.
 - Prisma/PostgreSQL schema for the complete MVP domain, seed data, a reviewed baseline migration, and a database readiness endpoint.
 - Prisma-backed first-slice commands for cases, eligibility, tasks, audit events, outbox records, and optimistic version checks.
 - Worker boundary for outbox, reminders, HRIS sync, and export queues with BullMQ/Redis wiring and a no-infrastructure stub mode.
@@ -33,7 +33,9 @@ The demo defaults to `DATA_MODE=memory` so the UI can be reviewed without infras
    pnpm dev
    ```
 
-5. Open the Vite URL shown in the terminal. The API is available at `http://localhost:3000` and health checks are available at `/health` and `/health/ready`.
+5. Open the Vite URL shown in the terminal. `pnpm dev` starts with `PORT` from `.env` (otherwise 3001) for the API and `WEB_PORT` (otherwise 5174) for the web app. If either port is occupied, it automatically searches the next 100 ports and prints the selected URLs. The web app uses a same-origin proxy connected to the selected API port, overriding `VITE_API_URL` for this development session. Health checks are available at `/health` and `/health/ready` on either server.
+
+Set `WEB_PORT` and `PORT` in `.env` to prefer different ports. Set `DEV_AUTO_PORT=false` or run `pnpm dev --strict-ports` to fail when a preferred port is unavailable. Existing servers are left running. These options apply to the root `pnpm dev` command; production startup is unchanged. Port checks happen before startup; if another process takes the API port during startup, rerun `pnpm dev`.
 
 ## PostgreSQL mode
 

@@ -4,8 +4,9 @@
   "version": "0.1.0",
   "packageManager": "pnpm@10.11.0",
   "scripts": {
-    "dev": "pnpm --parallel --filter @assessflow/api --filter @assessflow/web --filter @assessflow/worker dev",
-    "build": "pnpm -r build",
+    "dev": "node scripts/dev.mjs",
+    "test:dev-ports": "node --test scripts/dev-ports.test.mjs",
+    "build": "pnpm -r --workspace-concurrency 1 build",
     "typecheck": "pnpm --filter @assessflow/contracts build && pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "pnpm -r test",

@@ -3,7 +3,7 @@
 ## Requirements
 
 - User wants the project taken from the current baseline to a complete 0–10 pre-development readiness state.
-- Development must not begin until scope, policy, architecture, data, API, UX, security, testing, and operations are approved.
+- Dual-track execution (clarified 2026-09-03): Track A readiness (Gates 0–10) is authoritative for pilot release. Track B early implementation (owner-authorized 18 August 2026) is demo/development only against proposed defaults and must expect rework when P0 policies are approved. Track B does not close any gate.
 - The MVP is an employee assessment workflow covering promotion, internal mobility, and role realignment.
 
 ## Research Findings

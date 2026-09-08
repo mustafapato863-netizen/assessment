@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+export type { z } from 'zod';
+
 export const assessmentReasons = ['PROMOTION', 'INTERNAL_MOBILITY', 'ROLE_REALIGNMENT'] as const;
 export type AssessmentReason = (typeof assessmentReasons)[number];
 
@@ -67,6 +69,110 @@ export const eligibilityDecisionSchema = z.object({
   expectedVersion: z.number().int().positive(),
 });
 export type EligibilityDecisionInput = z.infer<typeof eligibilityDecisionSchema>;
+
+export const planMethodSchema = z.object({
+  methodCode: z.string().min(1).max(40),
+  methodLabel: z.string().min(1).max(120).optional(),
+  required: z.boolean().default(true),
+  durationMin: z.number().int().positive().max(1440).optional(),
+});
+
+export const finalizePlanSchema = z.object({
+  methods: z.array(planMethodSchema).min(1).max(10),
+  leadAssessor: z.string().min(2).max(120).optional(),
+  complexityBand: z.string().min(1).max(40).optional(),
+  deviationReason: z.string().max(2000).optional(),
+  expectedVersion: z.number().int().positive(),
+});
+export type FinalizePlanInput = z.infer<typeof finalizePlanSchema>;
+
+export const scheduleEventSchema = z.object({
+  planMethodId: z.string().uuid().optional(),
+  startsAt: z.string().datetime(),
+  endsAt: z.string().datetime().optional(),
+  timezone: z.string().min(1).max(80).optional(),
+  location: z.string().max(200).optional(),
+  meetingLink: z.string().max(500).optional(),
+  assessors: z
+    .array(z.object({ userId: z.string().min(1), displayName: z.string().min(1).max(120) }))
+    .max(20)
+    .optional(),
+  expectedVersion: z.number().int().positive(),
+});
+export type ScheduleEventInput = z.infer<typeof scheduleEventSchema>;
+
+export const saveEvidenceSchema = z.object({
+  summary: z.string().min(20).max(8000),
+  strengths: z.string().max(4000).optional(),
+  gaps: z.string().max(4000).optional(),
+  expectedVersion: z.number().int().positive().optional(),
+});
+export type SaveEvidenceInput = z.infer<typeof saveEvidenceSchema>;
+
+export const finalizeResultSchema = z.object({
+  resultCode: z.enum(resultCodes),
+  evidenceSummary: z.string().max(4000).optional(),
+  strengths: z.string().max(4000).optional(),
+  gaps: z.string().max(4000).optional(),
+  developmentFocus: z.string().max(4000).optional(),
+  expectedVersion: z.number().int().positive(),
+});
+export type FinalizeResultInput = z.infer<typeof finalizeResultSchema>;
+
+export const reopenResultSchema = z.object({
+  reason: z.string().min(10).max(2000),
+  expectedVersion: z.number().int().positive(),
+});
+export type ReopenResultInput = z.infer<typeof reopenResultSchema>;
+
+export const submitRecommendationSchema = z.object({
+  code: z.string().min(1).max(40),
+  rationale: z.string().min(20).max(8000),
+  requiresDevelopment: z.boolean().default(false),
+  requiresReassessment: z.boolean().default(false),
+  targetDate: z.string().datetime().optional(),
+  expectedVersion: z.number().int().positive(),
+});
+export type SubmitRecommendationInput = z.infer<typeof submitRecommendationSchema>;
+
+export const approvalDecisions = ['APPROVED', 'CHANGES_REQUESTED', 'REJECTED'] as const;
+
+export const decideApprovalSchema = z.object({
+  decision: z.enum(approvalDecisions),
+  comment: z.string().max(4000).optional(),
+  expectedVersion: z.number().int().positive().optional(),
+});
+export type DecideApprovalInput = z.infer<typeof decideApprovalSchema>;
+
+export const updateDevelopmentSchema = z.object({
+  actions: z
+    .array(
+      z.object({
+        title: z.string().min(3).max(200),
+        ownerName: z.string().min(2).max(120),
+        dueDate: z.string().datetime().optional(),
+        status: z.enum(['NOT_STARTED', 'IN_PROGRESS', 'COMPLETED']).default('NOT_STARTED'),
+        evidenceNote: z.string().max(2000).optional(),
+      }),
+    )
+    .max(30)
+    .optional(),
+  targetDate: z.string().datetime().optional(),
+  expectedVersion: z.number().int().positive(),
+});
+export type UpdateDevelopmentInput = z.infer<typeof updateDevelopmentSchema>;
+
+export const scheduleReassessmentSchema = z.object({
+  reason: z.string().min(10).max(2000),
+  targetDate: z.string().datetime().optional(),
+  expectedVersion: z.number().int().positive(),
+});
+export type ScheduleReassessmentInput = z.infer<typeof scheduleReassessmentSchema>;
+
+export const closeCaseSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+});
+export type CloseCaseInput = z.infer<typeof closeCaseSchema>;
 
 export interface AvailableAction {
   code: string;
@@ -152,3 +258,214 @@ export interface ApiErrorShape {
     correlationId: string;
   };
 }
+
+export const ALLOWED_ATTACHMENT_MIME_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'image/jpeg',
+  'image/png',
+] as const;
+
+export const ALLOWED_ATTACHMENT_EXTENSIONS = [
+  '.pdf',
+  '.doc',
+  '.docx',
+  '.jpg',
+  '.jpeg',
+  '.png',
+] as const;
+
+export const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024; // 10MB (10,485,760 bytes)
+
+export const attachmentScanStatuses = [
+  'PENDING',
+  'SCANNING',
+  'CLEAN',
+  'REJECTED',
+  'FAILED',
+] as const;
+export type AttachmentScanStatus = (typeof attachmentScanStatuses)[number];
+
+export function isAllowedAttachmentType(fileName: string, contentType: string): boolean {
+  const normalizedMime = contentType.toLowerCase().trim();
+  const hasAllowedMime =
+    ALLOWED_ATTACHMENT_MIME_TYPES.includes(
+      normalizedMime as (typeof ALLOWED_ATTACHMENT_MIME_TYPES)[number],
+    ) ||
+    normalizedMime === 'image/jpg' ||
+    normalizedMime === 'image/pjpeg';
+
+  const lastDot = fileName.lastIndexOf('.');
+  if (lastDot === -1) return false;
+  const ext = fileName.slice(lastDot).toLowerCase().trim();
+  const hasAllowedExt = ALLOWED_ATTACHMENT_EXTENSIONS.includes(
+    ext as (typeof ALLOWED_ATTACHMENT_EXTENSIONS)[number],
+  );
+
+  return hasAllowedMime && hasAllowedExt;
+}
+
+export const createAttachmentSchema = z.object({
+  caseId: z.string().uuid(),
+  evidenceId: z.string().uuid().optional(),
+  fileName: z.string().min(1).max(255),
+  contentType: z.string().min(1).max(120),
+  sizeBytes: z
+    .number()
+    .int()
+    .positive('File size must be greater than 0 bytes')
+    .max(MAX_ATTACHMENT_SIZE_BYTES, 'File size exceeds 10MB maximum limit'),
+  classification: z.string().min(1, 'Classification is required').max(80),
+  storageKey: z.string().min(1).max(500).optional(),
+});
+export type CreateAttachmentInput = z.infer<typeof createAttachmentSchema>;
+
+export interface AttachmentSummary {
+  id: string;
+  caseId: string;
+  evidenceId?: string | null;
+  classification: string;
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  storageKey: string;
+  scanStatus: AttachmentScanStatus;
+  scanReason?: string | null;
+  createdBy: string;
+  createdAt: string;
+  scannedAt?: string | null;
+  downloadUrl?: string | null;
+  previewUrl?: string | null;
+}
+
+// ==========================================
+// Talent Calibration & 9-Box Matrix Contracts (UX-18)
+// ==========================================
+
+export const calibrationPerformanceLevels = ['LOW', 'MEDIUM', 'HIGH'] as const;
+export type CalibrationPerformanceLevel = (typeof calibrationPerformanceLevels)[number];
+
+export const calibrationPotentialLevels = ['LOW', 'MEDIUM', 'HIGH'] as const;
+export type CalibrationPotentialLevel = (typeof calibrationPotentialLevels)[number];
+
+export interface CalibrationCandidate {
+  id: string;
+  caseId: string;
+  caseCode: string;
+  employeeId: string;
+  displayName: string;
+  department: string;
+  currentRole: string;
+  currentLevel: string;
+  targetRole: string;
+  targetLevel: string;
+  status: CaseStatus;
+  stage: CaseStage;
+  resultCode?: ResultCode | null;
+  recommendationCode?: string | null;
+  performanceBand: CalibrationPerformanceLevel;
+  potentialBand: CalibrationPotentialLevel;
+  boxIndex: number; // 1 to 9 (1 = Underperformer, 9 = Top Talent/Star)
+  boxLabel: string;
+  readinessLabel: string;
+  tenureMonths: number;
+}
+
+export interface CalibrationCell {
+  boxIndex: number;
+  label: string;
+  description: string;
+  targetPercentage: number;
+  actualPercentage: number;
+  candidates: CalibrationCandidate[];
+}
+
+export interface CalibrationMatrixResponse {
+  cohortName: string;
+  evaluatedAt: string;
+  totalCandidates: number;
+  distributionSummary: {
+    readyNowCount: number;
+    readyWithDevelopmentCount: number;
+    notReadyCount: number;
+    pendingCount: number;
+  };
+  departmentBreakdown: Array<{
+    department: string;
+    total: number;
+    readyNow: number;
+    readyWithDevelopment: number;
+    notReady: number;
+  }>;
+  grid: CalibrationCell[];
+}
+
+// ==========================================
+// AI Assessor Copilot Contracts
+// ==========================================
+
+export const copilotSynthesizeSchema = z.object({
+  targetCompetencies: z.array(z.string()).optional(),
+  includeQuotes: z.boolean().optional(),
+});
+export type CopilotSynthesizeInput = z.infer<typeof copilotSynthesizeSchema>;
+
+export interface CopilotSynthesizeResponse {
+  caseId: string;
+  executiveSummary: string;
+  demonstratedStrengths: Array<{
+    competency: string;
+    evidenceExcerpt: string;
+    confidenceScore: number;
+  }>;
+  identifiedGaps: Array<{
+    competency: string;
+    observation: string;
+    severity: 'CRITICAL' | 'MODERATE' | 'MINOR';
+  }>;
+  suggestedOutcome: ResultCode;
+  suggestedOutcomeRationale: string;
+  generatedAt: string;
+}
+
+export const copilotBiasCheckSchema = z.object({
+  text: z.string().min(1).max(10000),
+});
+export type CopilotBiasCheckInput = z.infer<typeof copilotBiasCheckSchema>;
+
+export interface BiasWarning {
+  phrase: string;
+  category: 'GENDER_CODED' | 'AGE_BIAS' | 'SUBJECTIVE_PERSONALITY' | 'VAGUE_ATTRIBUTION';
+  explanation: string;
+  objectiveAlternative: string;
+}
+
+export interface CopilotBiasCheckResponse {
+  clean: boolean;
+  riskScore: 'LOW' | 'MEDIUM' | 'HIGH';
+  findingsCount: number;
+  warnings: BiasWarning[];
+  sanitizedSuggestion?: string;
+}
+
+export const copilotSuggestActionsSchema = z.object({
+  gapTags: z.array(z.string()).optional(),
+  limit: z.number().int().min(1).max(10).optional(),
+});
+export type CopilotSuggestActionsInput = z.infer<typeof copilotSuggestActionsSchema>;
+
+export interface SuggestedAction {
+  title: string;
+  description: string;
+  targetWeeks: number;
+  category: 'EXPERIENCE' | 'MENTORSHIP' | 'TRAINING' | 'PROJECT_DELIVERY';
+  suggestedEvidence: string;
+}
+
+export interface CopilotSuggestActionsResponse {
+  caseId: string;
+  actions: SuggestedAction[];
+  generatedAt: string;
+}
+

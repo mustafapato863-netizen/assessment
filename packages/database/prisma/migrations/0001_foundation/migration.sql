@@ -1,3 +1,6 @@
+-- AssessFlow foundation migration (Prisma-canonical, regenerated 2026-09-05 from schema.prisma).
+-- Applied once via the _prisma_migrations ledger; re-application uses migrate resolve, not re-running this file.
+
 -- CreateSchema
 CREATE SCHEMA IF NOT EXISTS "public";
 
@@ -598,3 +601,4 @@ ALTER TABLE "AuditEvent" ADD CONSTRAINT "AuditEvent_caseId_fkey" FOREIGN KEY ("c
 
 -- AddForeignKey
 ALTER TABLE "AccessLog" ADD CONSTRAINT "AccessLog_caseId_fkey" FOREIGN KEY ("caseId") REFERENCES "AssessmentCase"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+
