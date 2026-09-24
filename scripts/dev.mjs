@@ -20,31 +20,39 @@ try {
   console.info(`API: http://localhost:${apiPort} (health: /health)`);
 
   if (!process.env.npm_execpath) throw new Error('Run this launcher with pnpm dev.');
-  const child = spawn(
-    process.execPath,
-    [
-      process.env.npm_execpath,
-      '--parallel',
-      '--filter',
-      '@assessflow/api',
-      '--filter',
-      '@assessflow/web',
-      '--filter',
-      '@assessflow/worker',
-      'dev',
-    ],
-    {
-      stdio: 'inherit',
-      env: {
-        ...process.env,
-        PORT: String(apiPort),
-        WEB_PORT: String(webPort),
-        DEV_AUTO_PORT: String(auto),
-        DEV_API_TARGET: `http://localhost:${apiPort}`,
-        VITE_API_URL: '/api/v1/assessflow',
-      },
+  const workspaceArgs = [
+    '--parallel',
+    '--filter',
+    '@assessflow/api',
+    '--filter',
+    '@assessflow/web',
+    '--filter',
+    '@assessflow/worker',
+    'dev',
+  ];
+  // pnpm's Windows executable cannot be passed to Node as if it were a JS file.
+  // The fallback runtime exposes a JS entrypoint, while an installed pnpm exposes
+  // pnpm.exe; invoke each form with the appropriate launcher.
+  const packageManager = process.env.npm_execpath;
+  const invokeExecutable =
+    process.platform === 'win32' && /\.(?:cmd|exe)$/i.test(packageManager)
+      ? packageManager
+      : process.execPath;
+  const invokeArgs = invokeExecutable === packageManager
+    ? workspaceArgs
+    : [packageManager, ...workspaceArgs];
+  const child = spawn(invokeExecutable, invokeArgs, {
+    stdio: 'inherit',
+    shell: process.platform === 'win32' && /\.cmd$/i.test(invokeExecutable),
+    env: {
+      ...process.env,
+      PORT: String(apiPort),
+      WEB_PORT: String(webPort),
+      DEV_AUTO_PORT: String(auto),
+      DEV_API_TARGET: `http://localhost:${apiPort}`,
+      VITE_API_URL: '/api/v1/assessflow',
     },
-  );
+  });
   child.on('error', (error) => {
     console.error(error.message);
     process.exitCode = 1;
