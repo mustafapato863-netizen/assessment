@@ -745,6 +745,116 @@ export async function seedDatabase(client = prisma) {
         ],
       },
     },
+    {
+      caseCode: 'AF-2026-00132',
+      employee: employees[7],
+      assessmentReason: 'INTERNAL_MOBILITY',
+      stage: 'RECOMMENDATION',
+      status: 'PENDING_RECOMMENDATION',
+      ownerName: 'HR / Talent',
+      priority: 'NORMAL',
+      currentRoleSnapshot: 'Customer Experience Specialist',
+      targetRoleSnapshot: 'Customer Experience Lead',
+      targetLevelSnapshot: 'L4',
+      managerSnapshot: 'Mariam Saad',
+      departmentSnapshot: 'Customer Experience',
+      justification: 'Internal mobility review for customer journey leadership responsibilities.',
+      eligibility: {
+        create: {
+          policyVersion: 'v2026.1',
+          decision: 'ELIGIBLE',
+          decidedBy: 'Demo HR',
+          decidedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
+          decisionReason: 'All prerequisite criteria fulfilled.',
+        },
+      },
+      resultRevisions: {
+        create: {
+          revision: 1,
+          resultCode: 'READY_WITH_DEVELOPMENT',
+          evidenceSummary: 'Strong customer advocacy and coaching, with a development focus on workforce planning.',
+          strengths: 'Customer advocacy and team coaching',
+          gaps: 'Workforce planning and capacity forecasting',
+          finalizedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
+          finalizedBy: 'assessor-nadia',
+        },
+      },
+      recommendationRevisions: {
+        create: {
+          revision: 1,
+          code: 'READY_WITH_DEVELOPMENT',
+          status: 'DRAFT',
+          rationale: 'Recommend promotion after a focused workforce planning development assignment.',
+          requiresDevelopment: true,
+          requiresReassessment: false,
+          createdBy: 'hr-demo',
+        },
+      },
+      tasks: {
+        create: [
+          {
+            taskType: 'SUBMIT_RECOMMENDATION',
+            assigneeId: 'hr-demo',
+            assigneeName: 'HR / Talent',
+            status: 'OPEN',
+            dueAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+          },
+        ],
+      },
+    },
+    {
+      caseCode: 'AF-2026-00133',
+      employee: employees[6],
+      assessmentReason: 'PROMOTION',
+      stage: 'ELIGIBILITY',
+      status: 'PENDING_ELIGIBILITY',
+      ownerName: 'HR / Talent',
+      priority: 'NORMAL',
+      currentRoleSnapshot: 'Clinical Coordinator',
+      targetRoleSnapshot: 'Clinical Operations Lead',
+      targetLevelSnapshot: 'L5',
+      managerSnapshot: 'Dr. Reem Hassan',
+      departmentSnapshot: 'Clinical Operations',
+      justification: 'Promotion request submitted for review of clinical operations leadership readiness.',
+      eligibility: {
+        create: {
+          policyVersion: 'v2026.1',
+          criteria: {
+            create: [
+              {
+                criterionCode: 'TENURE',
+                label: 'Minimum time in current role',
+                blocking: true,
+                result: 'NOT_CHECKED',
+              },
+              {
+                criterionCode: 'TRAINING',
+                label: 'Mandatory clinical certification',
+                blocking: true,
+                result: 'NOT_CHECKED',
+              },
+              {
+                criterionCode: 'POSITION',
+                label: 'Target position approved',
+                blocking: true,
+                result: 'NOT_CHECKED',
+              },
+            ],
+          },
+        },
+      },
+      tasks: {
+        create: [
+          {
+            taskType: 'REVIEW_ELIGIBILITY',
+            assigneeId: 'hr-demo',
+            assigneeName: 'HR / Talent',
+            status: 'OPEN',
+            dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+          },
+        ],
+      },
+    },
   ];
 
   for (const extraCase of extraCases) {
