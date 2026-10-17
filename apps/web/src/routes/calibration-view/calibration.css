@@ -567,3 +567,27 @@
     gap: 10px;
   }
 }
+
+/* Case code, scores and result flags under each candidate */
+.cb-cand__facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.cb-flag {
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.cb-flag--ko {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.cb-flag--warn {
+  background: #fef3c7;
+  color: #92400e;
+}

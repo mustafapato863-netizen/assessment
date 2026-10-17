@@ -33,6 +33,12 @@ export interface CalibrationCandidate {
   performance?: string | null;
   potential?: string | null;
   href?: string;
+  caseCode?: string;
+  technicalScore?: number | null;
+  behavioralScore?: number | null;
+  /** Readiness the current scorecards give, when it differs from the finalized result. */
+  scoredReadiness?: string | null;
+  knockout?: boolean;
 }
 
 export interface CalibrationState {

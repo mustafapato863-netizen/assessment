@@ -84,8 +84,44 @@ function CandidateRow({ c }: { c: CalibrationCandidate }) {
             {[levelMove(c), c.department].filter(Boolean).join(' · ')}
           </span>
         </div>
+        <CandidateFacts c={c} />
       </div>
     </li>
+  );
+}
+
+/** Case code and scores, so two cases for the same person are easy to tell apart,
+ *  plus why the finalized result may not match the box. */
+function CandidateFacts({ c }: { c: CalibrationCandidate }) {
+  const scoreText =
+    typeof c.technicalScore === 'number' && typeof c.behavioralScore === 'number'
+      ? `Technical ${c.technicalScore.toFixed(2)} · Behavioral ${c.behavioralScore.toFixed(2)}`
+      : '';
+  const mismatch =
+    c.scoredReadiness &&
+    normalizeReadiness(c.scoredReadiness) !== normalizeReadiness(c.readiness) &&
+    !c.knockout;
+  if (!c.caseCode && !scoreText && !c.knockout && !mismatch) return null;
+  return (
+    <div className="cb-cand__facts">
+      <span className="cb-sub">{[c.caseCode, scoreText].filter(Boolean).join(' · ')}</span>
+      {c.knockout && (
+        <span
+          className="cb-flag cb-flag--ko"
+          title="An assessor flagged a knockout, which forces Not ready whatever the scores."
+        >
+          Knockout
+        </span>
+      )}
+      {mismatch && (
+        <span
+          className="cb-flag cb-flag--warn"
+          title="The result was finalized before the current scoring. Reopen and finalize it again to align it."
+        >
+          Scores now say: {readinessMeta(normalizeReadiness(c.scoredReadiness)).label}
+        </span>
+      )}
+    </div>
   );
 }
 

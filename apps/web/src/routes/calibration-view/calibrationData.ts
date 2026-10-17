@@ -19,6 +19,13 @@ function mapCandidate(candidate: ApiCalibrationCandidate): CalibrationCandidate 
     currentRole: candidate.currentRole,
     targetRole: candidate.targetRole,
     readiness: candidate.readinessLabel,
+    caseCode: candidate.caseCode,
+    technicalScore: candidate.technicalScore ?? null,
+    behavioralScore: candidate.behavioralScore ?? null,
+    scoredReadiness: candidate.scoredResultCode
+      ? candidate.scoredResultCode.replace(/_/g, ' ')
+      : null,
+    knockout: Boolean(candidate.knockout),
     box: placed ? candidate.boxIndex : null,
     performance: placed ? (candidate.performanceBand?.toLowerCase() ?? null) : null,
     potential: placed ? (candidate.potentialBand?.toLowerCase() ?? null) : null,

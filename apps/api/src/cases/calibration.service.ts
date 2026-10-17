@@ -244,6 +244,8 @@ export class CalibrationService {
     const submissions = (c.scorecards ?? []) as Array<{ ratings: unknown }>;
     let technicalScore: number | null = null;
     let behavioralScore: number | null = null;
+    let scoredResultCode: ResultCode | null = null;
+    let knockout = false;
     if (resultIsEffective && submissions.length) {
       const config = c.plan?.scorecardConfig
         ? scorecardConfigSchema.parse(c.plan.scorecardConfig)
@@ -258,6 +260,8 @@ export class CalibrationService {
       if (scored.completeCount > 0) {
         technicalScore = round2(scored.technical ?? 0);
         behavioralScore = round2(scored.behavioral ?? 0);
+        scoredResultCode = scored.resultCode;
+        knockout = scored.knockout;
       }
     }
 
@@ -297,6 +301,8 @@ export class CalibrationService {
       boxIndex,
       boxLabel: boxDef?.label ?? null,
       readinessLabel: resultCode ? resultCode.replace(/_/g, ' ') : 'PENDING EVALUATION',
+      scoredResultCode,
+      knockout,
       unplacedReason,
       tenureMonths: null,
     };

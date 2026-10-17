@@ -533,6 +533,10 @@ export interface CalibrationCandidate {
   boxIndex: number | null; // 1 to 9 (1 = Underperformer, 9 = Star) when placed
   boxLabel: string | null;
   readinessLabel: string;
+  /** Result the current scorecards give (may differ from the finalized result above). */
+  scoredResultCode?: ResultCode | null;
+  /** True when any assessor flagged a knockout on a submitted scorecard. */
+  knockout?: boolean;
   /** Reason a candidate is not on the grid (e.g. result not finalized). */
   unplacedReason?: string | null;
   /** Not tracked yet; kept for compatibility and always null. */
