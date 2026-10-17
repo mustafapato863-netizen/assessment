@@ -2545,13 +2545,11 @@ function AssessorScorecard({
     let target = 0;
     let actual = 0;
     let answered = 0;
-    let ratedWeight = 0;
     for (const criterion of dimension.criteria) {
       const value = ratings[scorecardRatingKey(dimension, criterion)]?.score;
       target += criterion.weight;
       if (isValidQuestionScore(value, criterion.weight)) {
         actual += value;
-        ratedWeight += criterion.weight;
         answered += 1;
       }
     }
@@ -2560,7 +2558,6 @@ function AssessorScorecard({
       actual,
       answered,
       pct: target ? actual / target : 0,
-      runningPct: ratedWeight ? actual / ratedWeight : 0,
       complete: answered === dimension.criteria.length,
     };
   };
@@ -2575,21 +2572,24 @@ function AssessorScorecard({
       answered += stats.answered;
       total += dimension.criteria.length;
       if (!stats.complete) complete = false;
-      if (stats.answered) {
-        weighted += stats.runningPct * 5 * dimension.weight;
-        totalWeight += dimension.weight;
-      }
+      // Every issue counts with its full weight; unanswered questions count as 0 points,
+      // so the score reflects only what has actually been earned so far.
+      weighted += stats.pct * 5 * dimension.weight;
+      totalWeight += dimension.weight;
     }
-    return { score: totalWeight ? weighted / totalWeight : undefined, answered, total, complete };
+    return {
+      score: answered && totalWeight ? weighted / totalWeight : undefined,
+      answered,
+      total,
+      complete,
+    };
   };
   const technicalStats = sectionStats('technical');
   const behavioralStats = sectionStats('behavioral');
   const runningOverall =
-    technicalStats.score !== undefined &&
-    behavioralStats.score !== undefined &&
-    sectionSplitTotal > 0
-      ? (technicalStats.score * config.technicalWeight +
-          behavioralStats.score * config.behavioralWeight) /
+    (technicalStats.answered || behavioralStats.answered) && sectionSplitTotal > 0
+      ? ((technicalStats.score ?? 0) * config.technicalWeight +
+          (behavioralStats.score ?? 0) * config.behavioralWeight) /
         sectionSplitTotal
       : undefined;
   const runningResult: ResultCode | null = knockoutTriggered
@@ -2649,7 +2649,7 @@ function AssessorScorecard({
       const stats = issueStats(dimension);
       const issueKey = `${section}-${index}`;
       const open = openIssues.has(issueKey);
-      const tone = bandTone(stats.runningPct, stats.answered);
+      const tone = bandTone(stats.pct, stats.answered);
       const hasKnockoutFlag = dimension.criteria.some(
         (criterion) => ratings[scorecardRatingKey(dimension, criterion)]?.knockout,
       );
@@ -2721,7 +2721,7 @@ function AssessorScorecard({
                 </span>
                 <span className="sc2-num sc2-issue-total-sub">
                   {Math.round(stats.pct * 100)}% ·{' '}
-                  {stats.answered ? formatCategoryScore(stats.runningPct * 5) : '—'}/5
+                  {stats.answered ? formatCategoryScore(stats.pct * 5) : '—'}/5
                 </span>
               </span>
             </div>
@@ -2946,7 +2946,7 @@ function AssessorScorecard({
                   entered (<span className="sc2-num">{formatScore(stats.actual)}</span>).
                 </span>
                 <span className="sc2-num sc2-strong">
-                  Issue score {stats.answered ? formatCategoryScore(stats.runningPct * 5) : '—'} / 5
+                  Issue score {stats.answered ? formatCategoryScore(stats.pct * 5) : '—'} / 5
                 </span>
               </div>
             </div>
@@ -2962,8 +2962,9 @@ function AssessorScorecard({
           <span className="sc2-kicker">ASSESSOR SCORECARD</span>
           <h2 className="sc2-title">Assessment scorecard</h2>
           <span className="sc2-sub">
-            Each question scores 0 to 1. An issue&apos;s target is its number of questions; its
-            actual is the sum of your scores.
+            Enter the points earned on each question (0 up to its weight). An issue&apos;s target is
+            the sum of its question weights; its actual is the sum of your points. Unscored
+            questions count as 0.
           </span>
         </div>
         <div className="sc2-header-side">
