@@ -66,15 +66,17 @@ export const ROUTE_PERMISSIONS = {
   ],
 
   // Case Lifecycle: Create & Submit
-  CASE_CREATE: ['Requester', 'HR', 'Assessor', 'Admin'],
-  CASE_SUBMIT: ['Requester', 'HR', 'Assessor', 'Admin'],
+  // Access model (2026-10-17): Assessor and Admin run the case workflow; managers
+  // (Requester) may raise requests for their own team; everyone else reads in scope.
+  CASE_CREATE: ['Requester', 'Assessor', 'Admin'],
+  CASE_SUBMIT: ['Requester', 'Assessor', 'Admin'],
 
   // Eligibility
-  ELIGIBILITY_DECIDE: ['HR', 'Assessor', 'Admin'],
-  ELIGIBILITY_OVERRIDE: ['Requester', 'HR', 'Assessor', 'Admin'],
+  ELIGIBILITY_DECIDE: ['Assessor', 'Admin'],
+  ELIGIBILITY_OVERRIDE: ['Assessor', 'Admin'],
 
   // Planning
-  PLAN_FINALIZE: ['Coordinator', 'HR', 'Assessor', 'Admin'],
+  PLAN_FINALIZE: ['Assessor', 'Admin'],
   PLAN_GET: [
     'Coordinator',
     'Assessor',
@@ -88,7 +90,7 @@ export const ROUTE_PERMISSIONS = {
   ],
 
   // Events
-  EVENT_SCHEDULE: ['Coordinator', 'HR', 'Assessor', 'Admin', 'Requester'],
+  EVENT_SCHEDULE: ['Assessor', 'Admin'],
   EVENT_LIST: [
     'Coordinator',
     'Assessor',
@@ -102,12 +104,14 @@ export const ROUTE_PERMISSIONS = {
   ],
 
   // Evidence
-  EVIDENCE_SAVE: ['Assessor', 'PanelLead', 'HR', 'Admin'],
-  EVIDENCE_SUBMIT: ['Assessor', 'PanelLead', 'HR', 'Admin'],
+  // Panel leads may record evidence only for sessions they are assigned to.
+  EVIDENCE_SAVE: ['Assessor', 'PanelLead', 'Admin'],
+  EVIDENCE_SUBMIT: ['Assessor', 'PanelLead', 'Admin'],
 
   // Result
-  RESULT_FINALIZE: ['PanelLead', 'HR', 'Assessor', 'Admin'],
-  RESULT_REOPEN: ['Admin'],
+  RESULT_FINALIZE: ['Assessor', 'Admin'],
+  // Reopening requires a written reason and is audited.
+  RESULT_REOPEN: ['Assessor', 'Admin'],
   RESULT_GET: [
     'Manager',
     'EmployeeManager',
@@ -123,7 +127,7 @@ export const ROUTE_PERMISSIONS = {
   ],
 
   // Recommendation
-  RECOMMENDATION_SUBMIT: ['HR', 'Requester', 'Assessor', 'Admin'],
+  RECOMMENDATION_SUBMIT: ['Assessor', 'Admin'],
   RECOMMENDATION_GET: [
     'Assessor',
     'HR',
@@ -152,7 +156,7 @@ export const ROUTE_PERMISSIONS = {
   ],
 
   // Development
-  DEVELOPMENT_UPDATE: ['Requester', 'HR', 'Assessor', 'Admin'],
+  DEVELOPMENT_UPDATE: ['Assessor', 'Admin'],
   DEVELOPMENT_GET: [
     'Assessor',
     'Requester',
@@ -167,11 +171,11 @@ export const ROUTE_PERMISSIONS = {
   ],
 
   // Reassessment & Closure
-  REASSESSMENT_SCHEDULE: ['HR', 'Assessor', 'Admin'],
-  CASE_CLOSE: ['HR', 'Assessor', 'Admin'],
+  REASSESSMENT_SCHEDULE: ['Assessor', 'Admin'],
+  CASE_CLOSE: ['Assessor', 'Admin'],
 
   // Attachments (Gate 7 must M3)
-  ATTACHMENT_UPLOAD: ['Requester', 'HR', 'Coordinator', 'Assessor', 'PanelLead', 'Admin'],
+  ATTACHMENT_UPLOAD: ['Requester', 'Assessor', 'PanelLead', 'Admin'],
   ATTACHMENT_READ: [
     'Requester',
     'HR',

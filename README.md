@@ -32,6 +32,9 @@ A **knockout** criterion rated below **2** by any assessor forces NOT_READY. Fin
 
 ### Access and approvals
 
+- **Access model:** Admin changes everything; Assessor runs all case work but manages no accounts and never approves; HR and Business Approvers decide their own approval step; managers raise requests for their own team; everyone else is read-only within their scope. Full matrix: `docs/role-access-model.md`.
+- **Results** reach the employee and their managers only after final approval and feedback release.
+
 - **Sign-in:** company email and password (`@saudigerman.com` by default; see `ACCESS_ALLOWED_EMAIL_DOMAIN`). An Admin creates accounts and sets roles and data scope.
 - **Lockout:** an account is locked for 15 minutes after 5 failed sign-ins, and an IP after 20.
 - **Changing a password** requires the current password.

@@ -417,6 +417,18 @@ export class CasesService {
     actor?: AuthActor,
   ): AssessmentCaseDetail | Promise<AssessmentCaseDetail> {
     const currentActor = actor ?? getActorContext();
+    // Managers (Requester) may only raise requests for people in their own team scope.
+    if (
+      !currentActor.roles.some((role) => ['Assessor', 'Admin'].includes(role)) &&
+      input.candidateType !== 'NEW_CANDIDATE' &&
+      !['DIRECT_REPORTS', 'DEPARTMENTS', 'ORGANIZATION'].includes(
+        currentActor.scopeType ?? 'ORGANIZATION',
+      )
+    ) {
+      throw new ForbiddenException(
+        'Your account has no team assigned. Ask an administrator to set your direct reports or departments.',
+      );
+    }
     if (
       currentActor.scopeType === 'DIRECT_REPORTS' &&
       input.candidateType !== 'NEW_CANDIDATE' &&

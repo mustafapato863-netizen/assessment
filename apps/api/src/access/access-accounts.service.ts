@@ -52,6 +52,18 @@ const SCOPES: AccessScope[] = [
 ];
 
 /**
+ * Case statuses after final approval. Results and feedback reach the employee and
+ * their managers only in these states, so nobody sees an outcome that approval
+ * could still change.
+ */
+export const RESULT_RELEASE_STATUSES = [
+  'APPROVED',
+  'DEVELOPMENT_IN_PROGRESS',
+  'REASSESSMENT_DUE',
+  'CLOSED',
+] as const;
+
+/**
  * Workflow tasks are created for role queues (e.g. 'hr-approver') rather than
  * named people. A user works a queue when they hold the matching role; the
  * case scope still limits which of those cases they can see.
@@ -97,7 +109,9 @@ export function caseScopeWhere(actor: AuthActor): Record<string, unknown> {
     case 'DEPARTMENTS':
       return {
         departmentSnapshot: { in: values },
-        ...(actor.roles.includes('EmployeeManager') ? { feedbackReleasedAt: { not: null } } : {}),
+        ...(actor.roles.includes('EmployeeManager')
+          ? { feedbackReleasedAt: { not: null }, status: { in: [...RESULT_RELEASE_STATUSES] } }
+          : {}),
       };
     case 'DIRECT_REPORTS':
       return { employee: { externalId: { in: values } } };

@@ -411,3 +411,13 @@
 - Workflow tasks keep role-queue assignees (hr-talent, hr-approver, assessment-coordinator, panel-lead, business-approver, business-owner, manager); `taskAssigneeIdsFor` maps an actor's roles to queues so scoped users now see their tasks. ASSIGNED scope additionally shows cases with a PENDING approval step for the actor's approver role (BusinessApprover -> BUSINESS).
 - Memory/demo mode is unchanged (single demo actor). In DB mode, a full journey now needs at least: one assessor/finalizer, a different HR approver, and a different Business approver. The Playwright smoke journey approves both steps as one user and must be updated before it can pass in DB mode.
 - Tests: `apps/api/src/cases/domain/approvals.domain.spec.ts`; roles.guard.spec updated (Assessor denied APPROVAL_DECIDE).
+
+## Session: 2026-10-17 - Calibration, login hardening, access model
+
+- Local git repository created; snapshot commit before changes (`git log` to roll back).
+- Calibration phase A: 9-box axes from Technical (performance, proxy) and Behavioral (potential) scorecard scores with result cut-offs; unplaced list with reasons instead of box 5; fabricated tenure (18) and level (L3) removed; external candidates excluded; case scope applied; route limited to HR, Admin, Assessor, Panel Lead, Manager, Auditor; nav hidden for others.
+- Login hardening: account lockout (5 failures / 15 min) and IP lockout (20), rate limiter uses trusted req.ip (TRUST_PROXY), change-password requires the current password (UI updated).
+- Access model (owner-approved): Admin everything; Assessor all case work, no account management, never approves; HR/Business Approver decide own step only; Requester creates/submits for own team only (scope NONE blocked); Panel Lead scores only assigned sessions; everyone else read-only. Result reopen allowed for Assessor (reason required). Feedback release blocked until APPROVED+; employee/manager result reads gated on release + approved status. availableActions filtered by role (`actionsForActor`); scorecard canEditWeights only for Assessor/Admin.
+- Tests: roles.guard.spec rewritten as a full role x permission matrix; workflow-actions.spec (action filtering, manager request scope); calibration.service.spec; login-throttle.spec; security middleware XFF spoof test.
+- Docs: README rewritten; docs/role-access-model.md updated to the new model.
+- Pending: owner runs `pnpm validate`; Playwright E2E not re-run (smoke journey needs separate assessor / HR / Business accounts).

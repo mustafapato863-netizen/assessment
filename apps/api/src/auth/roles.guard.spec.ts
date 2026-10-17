@@ -3,7 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { RolesGuard } from './roles.guard';
 import { ROUTE_PERMISSIONS } from './permissions.map';
-import { AppRole, AuthActor } from './auth.types';
+import { APP_ROLES, AppRole, AuthActor } from './auth.types';
 import { IS_PUBLIC_KEY, ROLES_KEY } from './roles.decorator';
 
 function createMockExecutionContext(options: {
@@ -98,167 +98,53 @@ describe('RolesGuard & RACI Matrix', () => {
   });
 
   describe('RACI Matrix allow/deny verification per route', () => {
-    // 1. Planning Finalization (Coordinator, HR, Admin)
-    it('PLAN_FINALIZE: allows Coordinator, HR, Assessor; denies Requester, BusinessApprover, Auditor', () => {
-      const guard = createGuardWithReflector({
-        requiredRoles: [...ROUTE_PERMISSIONS.PLAN_FINALIZE],
+    // Access model agreed 2026-10-17: Assessor and Admin run the workflow,
+    // managers (Requester) raise requests for their team, HR and Business
+    // approvers decide their own step, everyone else reads in scope.
+    const EXPECTED: Record<string, AppRole[]> = {
+      CASE_CREATE: ['Requester', 'Assessor', 'Admin'],
+      CASE_SUBMIT: ['Requester', 'Assessor', 'Admin'],
+      ELIGIBILITY_DECIDE: ['Assessor', 'Admin'],
+      ELIGIBILITY_OVERRIDE: ['Assessor', 'Admin'],
+      PLAN_FINALIZE: ['Assessor', 'Admin'],
+      EVENT_SCHEDULE: ['Assessor', 'Admin'],
+      EVIDENCE_SAVE: ['Assessor', 'PanelLead', 'Admin'],
+      EVIDENCE_SUBMIT: ['Assessor', 'PanelLead', 'Admin'],
+      RESULT_FINALIZE: ['Assessor', 'Admin'],
+      RESULT_REOPEN: ['Assessor', 'Admin'],
+      RECOMMENDATION_SUBMIT: ['Assessor', 'Admin'],
+      APPROVAL_DECIDE: ['HR', 'BusinessApprover', 'Admin'],
+      DEVELOPMENT_UPDATE: ['Assessor', 'Admin'],
+      REASSESSMENT_SCHEDULE: ['Assessor', 'Admin'],
+      CASE_CLOSE: ['Assessor', 'Admin'],
+      ATTACHMENT_UPLOAD: ['Requester', 'Assessor', 'PanelLead', 'Admin'],
+    };
+
+    for (const [permission, allowed] of Object.entries(EXPECTED)) {
+      it(`${permission}: allows only ${allowed.join(', ')}`, () => {
+        const guard = createGuardWithReflector({
+          requiredRoles: [...ROUTE_PERMISSIONS[permission as keyof typeof ROUTE_PERMISSIONS]],
+        });
+        for (const role of APP_ROLES) {
+          const run = () =>
+            guard.canActivate(
+              createMockExecutionContext({ actor: { id: 'u', name: 'U', roles: [role] } }),
+            );
+          if (allowed.includes(role)) expect(run()).toBe(true);
+          else expect(run).toThrow(ForbiddenException);
+        }
       });
+    }
 
-      // Allowed
-      expect(
-        guard.canActivate(
-          createMockExecutionContext({ actor: { id: 'u1', name: 'U1', roles: ['Coordinator'] } }),
-        ),
-      ).toBe(true);
-      expect(
-        guard.canActivate(
-          createMockExecutionContext({ actor: { id: 'u2', name: 'U2', roles: ['HR'] } }),
-        ),
-      ).toBe(true);
-      expect(
-        guard.canActivate(
-          createMockExecutionContext({ actor: { id: 'u3', name: 'U3', roles: ['Admin'] } }),
-        ),
-      ).toBe(true);
-
-      // Denied
-      for (const role of ['Requester', 'PanelLead', 'BusinessApprover', 'Auditor'] as AppRole[]) {
-        expect(() =>
-          guard.canActivate(
-            createMockExecutionContext({ actor: { id: 'u', name: 'U', roles: [role] } }),
-          ),
-        ).toThrow(ForbiddenException);
-      }
+    it('Assessor can never approve (segregation of duties)', () => {
+      expect(ROUTE_PERMISSIONS.APPROVAL_DECIDE).not.toContain('Assessor');
     });
 
-    // 2. Eligibility Decision (HR, Admin)
-    it('ELIGIBILITY_DECIDE: allows HR, Assessor, Admin; denies Requester, Coordinator, BusinessApprover, Auditor', () => {
-      const guard = createGuardWithReflector({
-        requiredRoles: [...ROUTE_PERMISSIONS.ELIGIBILITY_DECIDE],
-      });
-
-      // Allowed
-      expect(
-        guard.canActivate(
-          createMockExecutionContext({ actor: { id: 'u1', name: 'U1', roles: ['HR'] } }),
-        ),
-      ).toBe(true);
-      expect(
-        guard.canActivate(
-          createMockExecutionContext({ actor: { id: 'u2', name: 'U2', roles: ['Admin'] } }),
-        ),
-      ).toBe(true);
-
-      // Denied
-      for (const role of [
-        'Requester',
-        'Coordinator',
-        'PanelLead',
-        'BusinessApprover',
-        'Auditor',
-      ] as AppRole[]) {
-        expect(() =>
-          guard.canActivate(
-            createMockExecutionContext({ actor: { id: 'u', name: 'U', roles: [role] } }),
-          ),
-        ).toThrow(ForbiddenException);
-      }
-    });
-
-    // 3. Evidence Submission (Assessor, PanelLead, HR, Admin)
-    it('EVIDENCE_SUBMIT: allows Assessor, PanelLead, HR, Admin; denies Requester, Coordinator, BusinessApprover, Auditor', () => {
-      const guard = createGuardWithReflector({
-        requiredRoles: [...ROUTE_PERMISSIONS.EVIDENCE_SUBMIT],
-      });
-
-      // Allowed
-      expect(
-        guard.canActivate(
-          createMockExecutionContext({ actor: { id: 'u1', name: 'U1', roles: ['Assessor'] } }),
-        ),
-      ).toBe(true);
-      expect(
-        guard.canActivate(
-          createMockExecutionContext({ actor: { id: 'u2', name: 'U2', roles: ['PanelLead'] } }),
-        ),
-      ).toBe(true);
-      expect(
-        guard.canActivate(
-          createMockExecutionContext({ actor: { id: 'u3', name: 'U3', roles: ['HR'] } }),
-        ),
-      ).toBe(true);
-
-      // Denied
-      for (const role of ['Requester', 'Coordinator', 'BusinessApprover', 'Auditor'] as AppRole[]) {
-        expect(() =>
-          guard.canActivate(
-            createMockExecutionContext({ actor: { id: 'u', name: 'U', roles: [role] } }),
-          ),
-        ).toThrow(ForbiddenException);
-      }
-    });
-
-    // 4. Result Finalization (PanelLead, HR, Admin)
-    it('RESULT_FINALIZE: allows PanelLead, HR, Assessor, Admin; denies Requester, Coordinator, BusinessApprover, Auditor', () => {
-      const guard = createGuardWithReflector({
-        requiredRoles: [...ROUTE_PERMISSIONS.RESULT_FINALIZE],
-      });
-
-      // Allowed
-      expect(
-        guard.canActivate(
-          createMockExecutionContext({ actor: { id: 'u1', name: 'U1', roles: ['PanelLead'] } }),
-        ),
-      ).toBe(true);
-      expect(
-        guard.canActivate(
-          createMockExecutionContext({ actor: { id: 'u2', name: 'U2', roles: ['HR'] } }),
-        ),
-      ).toBe(true);
-
-      // Denied
-      for (const role of ['Requester', 'Coordinator', 'BusinessApprover', 'Auditor'] as AppRole[]) {
-        expect(() =>
-          guard.canActivate(
-            createMockExecutionContext({ actor: { id: 'u', name: 'U', roles: [role] } }),
-          ),
-        ).toThrow(ForbiddenException);
-      }
-    });
-
-    // 5. Approval Decision (BusinessApprover, HR, Admin)
-    it('APPROVAL_DECIDE: allows BusinessApprover, HR, Admin; denies Assessor (segregation of duties), Requester, Coordinator, PanelLead, Auditor', () => {
-      const guard = createGuardWithReflector({
-        requiredRoles: [...ROUTE_PERMISSIONS.APPROVAL_DECIDE],
-      });
-
-      // Allowed
-      expect(
-        guard.canActivate(
-          createMockExecutionContext({
-            actor: { id: 'u1', name: 'U1', roles: ['BusinessApprover'] },
-          }),
-        ),
-      ).toBe(true);
-      expect(
-        guard.canActivate(
-          createMockExecutionContext({ actor: { id: 'u2', name: 'U2', roles: ['HR'] } }),
-        ),
-      ).toBe(true);
-
-      // Denied
-      for (const role of [
-        'Requester',
-        'Coordinator',
-        'Assessor',
-        'PanelLead',
-        'Auditor',
-      ] as AppRole[]) {
-        expect(() =>
-          guard.canActivate(
-            createMockExecutionContext({ actor: { id: 'u', name: 'U', roles: [role] } }),
-          ),
-        ).toThrow(ForbiddenException);
+    it('HR and Business approvers have no write access besides approval', () => {
+      for (const [permission, roles] of Object.entries(EXPECTED)) {
+        if (permission === 'APPROVAL_DECIDE') continue;
+        expect(roles).not.toContain('HR');
+        expect(roles).not.toContain('BusinessApprover');
       }
     });
 

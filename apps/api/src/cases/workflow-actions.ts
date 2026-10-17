@@ -1,4 +1,6 @@
 import type { AvailableAction, CaseStatus } from '@assessflow/contracts';
+import { ROUTE_PERMISSIONS } from '../auth/permissions.map';
+import type { AppRole } from '../auth/auth.types';
 
 export function actionsForStatus(status: CaseStatus): AvailableAction[] {
   if (status === 'DRAFT') {
@@ -250,4 +252,35 @@ export function actionsForStatus(status: CaseStatus): AvailableAction[] {
     ];
   }
   return [{ code: 'OPEN_CASE', label: 'Open case', kind: 'secondary', enabled: true }];
+}
+
+/** Route permission that governs each workflow action shown in the UI. */
+const ACTION_PERMISSIONS: Record<string, keyof typeof ROUTE_PERMISSIONS> = {
+  SUBMIT: 'CASE_SUBMIT',
+  DECIDE_ELIGIBILITY: 'ELIGIBILITY_DECIDE',
+  REQUEST_OVERRIDE: 'ELIGIBILITY_OVERRIDE',
+  FINALIZE_PLAN: 'PLAN_FINALIZE',
+  SCHEDULE_EVENT: 'EVENT_SCHEDULE',
+  SUBMIT_EVIDENCE: 'EVIDENCE_SUBMIT',
+  FINALIZE_RESULT: 'RESULT_FINALIZE',
+  REOPEN_RESULT: 'RESULT_REOPEN',
+  SUBMIT_RECOMMENDATION: 'RECOMMENDATION_SUBMIT',
+  DECIDE_APPROVAL: 'APPROVAL_DECIDE',
+  UPDATE_DEVELOPMENT: 'DEVELOPMENT_UPDATE',
+  SCHEDULE_REASSESSMENT: 'REASSESSMENT_SCHEDULE',
+  CLOSE_CASE: 'CASE_CLOSE',
+};
+
+/**
+ * Actions for a status, limited to what the viewer's roles may run. Read-only
+ * viewers get only navigation actions, so the UI shows no buttons that would
+ * fail with 403. The server still enforces every command independently.
+ */
+export function actionsForActor(status: CaseStatus, roles: readonly AppRole[]): AvailableAction[] {
+  return actionsForStatus(status).filter((action) => {
+    const permission = ACTION_PERMISSIONS[action.code];
+    if (!permission) return true;
+    const allowed = ROUTE_PERMISSIONS[permission] as readonly AppRole[];
+    return allowed.some((role) => roles.includes(role));
+  });
 }

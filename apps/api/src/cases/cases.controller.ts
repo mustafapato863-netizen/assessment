@@ -238,7 +238,7 @@ export class CasesController {
   }
 
   @Patch('cases/:caseId/scorecard/config')
-  @Roles('Assessor', 'HR', 'Admin')
+  @Roles('Assessor', 'Admin')
   updateScorecardConfig(
     @Param('caseId') caseId: string,
     @Body() input: unknown,
@@ -250,7 +250,8 @@ export class CasesController {
   }
 
   @Post('cases/:caseId/scorecard')
-  @Roles('Assessor', 'PanelLead', 'HR', 'Admin')
+  // Panel leads must be assigned to a session on the case (checked in the repository).
+  @Roles('Assessor', 'PanelLead', 'Admin')
   saveScorecard(
     @Param('caseId') caseId: string,
     @Body() input: unknown,
@@ -262,7 +263,7 @@ export class CasesController {
   }
 
   @Post('cases/:caseId/scorecard/revise')
-  @Roles('Assessor', 'PanelLead', 'HR', 'Admin')
+  @Roles('Assessor', 'PanelLead', 'Admin')
   reviseScorecard(
     @Param('caseId') caseId: string,
     @Body() input: unknown,
@@ -365,7 +366,7 @@ export class CasesController {
   }
 
   @Patch('cases/:caseId/result/assessor-recommendation')
-  @Roles('Assessor', 'PanelLead', 'HR', 'Admin')
+  @Roles('Assessor', 'Admin')
   updateAssessorRecommendation(
     @Param('caseId') caseId: string,
     @Body() input: unknown,
@@ -384,7 +385,7 @@ export class CasesController {
   }
 
   @Post('cases/:caseId/feedback-visibility')
-  @Roles('Assessor', 'PanelLead', 'Admin')
+  @Roles('Assessor', 'Admin')
   setFeedbackVisibility(
     @Param('caseId') caseId: string,
     @Body('visible') visible: boolean,

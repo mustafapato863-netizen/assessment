@@ -63,9 +63,13 @@ import {
   ScanStatus as PrismaScanStatus,
 } from '@assessflow/database';
 import { PrismaService } from '../database/prisma.service';
-import { actionsForStatus } from './workflow-actions';
+import { actionsForActor } from './workflow-actions';
 import { getActorContext, type AuthActor } from '../auth';
-import { caseScopeWhere, taskAssigneeIdsFor } from '../access/access-accounts.service';
+import {
+  caseScopeWhere,
+  RESULT_RELEASE_STATUSES,
+  taskAssigneeIdsFor,
+} from '../access/access-accounts.service';
 import { ApprovalsDomain } from './domain/approvals.domain';
 
 const caseInclude = {
@@ -2276,7 +2280,9 @@ export class PrismaCasesRepository {
         submittedAt: submission.submittedAt?.toISOString() ?? null,
       })),
       canEditWeights:
-        !priorSubmission && ['PLANNING', 'SCHEDULED', 'IN_PROGRESS'].includes(record.status),
+        actor.roles.some((role) => ['Assessor', 'Admin'].includes(role)) &&
+        !priorSubmission &&
+        ['PLANNING', 'SCHEDULED', 'IN_PROGRESS'].includes(record.status),
       canReviseSubmission:
         Boolean(mySubmission?.submittedAt) &&
         ['SCHEDULED', 'IN_PROGRESS', 'PENDING_RESULT'].includes(record.status),
@@ -2329,11 +2335,28 @@ export class PrismaCasesRepository {
     return this.prisma.$transaction(async (tx) => {
       const record = await tx.assessmentCase.findUnique({
         where: { id: caseId },
-        include: { plan: true, scorecards: true },
+        include: { plan: true, scorecards: true, events: { include: { assessors: true } } },
       });
       if (!record?.plan)
         throw new NotFoundException(
           this.error('PLAN_NOT_FOUND', 'Finalize the assessment plan first.'),
+        );
+      // Panel leads (and any non-assessor scorer) may only score sessions they are assigned to.
+      if (
+        !actor.roles.some((role) => ['Assessor', 'Admin'].includes(role)) &&
+        !record.events.some((event) =>
+          event.assessors.some(
+            (assignment) =>
+              assignment.userId === actor.id ||
+              Boolean(actor.email && assignment.userId.toLowerCase() === actor.email.toLowerCase()),
+          ),
+        )
+      )
+        throw new ForbiddenException(
+          this.error(
+            'ASSESSOR_NOT_ASSIGNED',
+            'You are not assigned to an assessment session on this case.',
+          ),
         );
       if (!['SCHEDULED', 'IN_PROGRESS', 'PENDING_RESULT'].includes(record.status))
         throw new BadRequestException('Scorecards can only be entered during assessment.');
@@ -2553,17 +2576,18 @@ export class PrismaCasesRepository {
       throw new NotFoundException(
         this.error('CASE_NOT_FOUND', 'This assessment case could not be found.'),
       );
-    if (
-      actor.roles.some((role) => ['Assessor', 'PanelLead'].includes(role)) &&
-      !record.events.some((event) =>
-        event.assessors.some((assessor) => assessor.userId === actor.id),
-      )
-    ) {
-      throw new ForbiddenException('Only an assigned assessor can change feedback visibility.');
-    }
     const latestResult = record.resultRevisions[0];
     if (visible && (!latestResult?.finalizedAt || latestResult.reopenedAt)) {
       throw new BadRequestException('Finalize the assessment result before sharing feedback.');
+    }
+    // Feedback is shared only after final approval, so it cannot change afterwards.
+    if (visible && !(RESULT_RELEASE_STATUSES as readonly string[]).includes(record.status)) {
+      throw new BadRequestException(
+        this.error(
+          'RESULT_NOT_APPROVED',
+          'Feedback can be shared after the recommendation is approved.',
+        ),
+      );
     }
     if (Boolean(record.feedbackReleasedAt) === visible) {
       return {
@@ -2601,6 +2625,7 @@ export class PrismaCasesRepository {
       where: {
         organizationId: organization.id,
         feedbackReleasedAt: { not: null },
+        status: { in: [...RESULT_RELEASE_STATUSES] },
         ...caseScopeWhere(actor),
       },
       include: {
@@ -2642,8 +2667,12 @@ export class PrismaCasesRepository {
       where: {
         id: caseId,
         ...caseScopeWhere(actor),
-        ...(actor.roles.some((role) => ['Employee', 'EmployeeManager'].includes(role))
-          ? { feedbackReleasedAt: { not: null } }
+        // Employees and their managers see a result only once it is approved and shared.
+        ...(actor.roles.some((role) =>
+          ['Employee', 'EmployeeManager', 'Requester'].includes(role),
+        ) &&
+        !actor.roles.some((role) => ['Assessor', 'Admin', 'HR', 'BusinessApprover'].includes(role))
+          ? { feedbackReleasedAt: { not: null }, status: { in: [...RESULT_RELEASE_STATUSES] } }
           : {}),
       },
       select: { id: true },
@@ -2779,7 +2808,7 @@ export class PrismaCasesRepository {
       version: record.version,
       adminEditStage: record.adminEditStage as CaseStage | null,
       scoringEnabled: false,
-      availableActions: actionsForStatus(record.status as CaseStatus),
+      availableActions: actionsForActor(record.status as CaseStatus, getActorContext().roles),
       justification: record.justification,
       feedbackReleasedAt: record.feedbackReleasedAt?.toISOString() ?? null,
       eligibility,
