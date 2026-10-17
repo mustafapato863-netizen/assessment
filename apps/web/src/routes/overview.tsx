@@ -123,6 +123,14 @@ export function OverviewPage({
 
   const [activeUser, setActiveUser] = useState<AppUser | null>(getSession);
   const [showAllAttentionTasks, setShowAllAttentionTasks] = useState(false);
+  // Which attention card is selected: the list below shows that category's cases.
+  const [attentionFilter, setAttentionFilter] = useState<
+    'all' | 'decisions' | 'bottleneck' | 'sla'
+  >('all');
+  const toggleAttentionFilter = (next: 'decisions' | 'bottleneck' | 'sla') => {
+    setAttentionFilter((current) => (current === next ? 'all' : next));
+    setShowAllAttentionTasks(false);
+  };
 
   useEffect(() => {
     return subscribeToAuth((u) => setActiveUser(u));
@@ -321,11 +329,7 @@ export function OverviewPage({
       }
 
       const { daysRemaining, label: remainingLabel } = getRemainingTime(slaTargetDays, days);
-      const slaBreachRisk = exceedsSlaWindow(
-        c.stage,
-        c.stageEnteredAt ?? c.requestedAt,
-        slaPolicy,
-      );
+      const slaBreachRisk = exceedsSlaWindow(c.stage, c.stageEnteredAt ?? c.requestedAt, slaPolicy);
       const actionUrgent = slaBreachRisk;
 
       if (slaBreachRisk) {
@@ -366,6 +370,46 @@ export function OverviewPage({
       })),
     );
   }, [openCases, pendingActionCases, slaPolicy]);
+  const attentionRows = useMemo(() => {
+    if (attentionFilter === 'all') return priorityActionCases;
+    const pipelineStageOf = (stage: string) =>
+      stage === 'RECOMMENDATION' || stage === 'APPROVAL'
+        ? 'Decision'
+        : (stageDisplayMap[stage] ?? stage);
+    const source =
+      attentionFilter === 'decisions'
+        ? pendingDecisionCases
+        : attentionFilter === 'sla'
+          ? slaBreachCases
+          : openCases.filter(
+              (c) =>
+                bottleneck && c.stage !== 'CLOSED' && pipelineStageOf(c.stage) === bottleneck.stage,
+            );
+    const withAction = new Map(priorityActionCases.map((c) => [c.id, c]));
+    const slaIds = new Set(slaBreachCases.map((c) => c.id));
+    return source.map(
+      (c) =>
+        withAction.get(c.id) ?? {
+          ...c,
+          actionName: `View case · ${stageDisplayMap[c.stage] ?? c.stage}`,
+          slaBreachRisk: slaIds.has(c.id),
+        },
+    );
+  }, [
+    attentionFilter,
+    priorityActionCases,
+    pendingDecisionCases,
+    slaBreachCases,
+    openCases,
+    bottleneck,
+  ]);
+  const attentionFilterLabel = {
+    all: '',
+    decisions: 'Decisions waiting on you',
+    bottleneck: bottleneck ? `${bottleneck.stage} stage` : 'Stage bottleneck',
+    sla: 'Past their review SLA window',
+  }[attentionFilter];
+
   const priorityQueueCases = priorityActionCases.slice(0, 6);
 
   const dynamicSubtitle = useMemo(() => {
@@ -652,8 +696,9 @@ export function OverviewPage({
             <div className="attention-summary-list" aria-label="Attention summary">
               <button
                 type="button"
-                className="attention-summary-card decisions"
-                onClick={() => navigate('/cases?stage=DECISION')}
+                className={`attention-summary-card decisions${attentionFilter === 'decisions' ? ' selected' : ''}`}
+                aria-pressed={attentionFilter === 'decisions'}
+                onClick={() => toggleAttentionFilter('decisions')}
               >
                 <span className="attention-summary-copy">
                   <span>Decisions waiting on you</span>
@@ -663,12 +708,9 @@ export function OverviewPage({
               </button>
               <button
                 type="button"
-                className="attention-summary-card bottleneck"
-                onClick={() =>
-                  navigate(
-                    `/cases?stage=${encodeURIComponent(pipelineStageFilterMap[bottleneck?.stage ?? ''] ?? bottleneck?.stage ?? '')}`,
-                  )
-                }
+                className={`attention-summary-card bottleneck${attentionFilter === 'bottleneck' ? ' selected' : ''}`}
+                aria-pressed={attentionFilter === 'bottleneck'}
+                onClick={() => toggleAttentionFilter('bottleneck')}
               >
                 <span>
                   {bottleneck ? `${bottleneck.stage} stage bottleneck` : 'Stage bottleneck'}
@@ -677,10 +719,9 @@ export function OverviewPage({
               </button>
               <button
                 type="button"
-                className={`attention-summary-card ${slaBreachCases.length > 0 ? 'risk' : 'sla'}`}
-                onClick={() =>
-                  slaBreachCases[0] ? onOpenCase(slaBreachCases[0].id) : navigate('/cases')
-                }
+                className={`attention-summary-card ${slaBreachCases.length > 0 ? 'risk' : 'sla'}${attentionFilter === 'sla' ? ' selected' : ''}`}
+                aria-pressed={attentionFilter === 'sla'}
+                onClick={() => toggleAttentionFilter('sla')}
                 title="Cases that have passed their configured review SLA window"
               >
                 <span>Cases past their review SLA window</span>
@@ -689,6 +730,20 @@ export function OverviewPage({
             </div>
           )}
 
+          {attentionFilter !== 'all' && (
+            <div className="attention-filter-bar">
+              <span>
+                Showing <strong>{attentionRows.length}</strong> · {attentionFilterLabel}
+              </span>
+              <button
+                type="button"
+                className="link-button"
+                onClick={() => setAttentionFilter('all')}
+              >
+                Show all actions
+              </button>
+            </div>
+          )}
           <div className="task-list">
             {casesLoading ? (
               <div
@@ -701,15 +756,24 @@ export function OverviewPage({
                 <strong>Pending actions could not be loaded</strong>
                 <span>Retry to refresh the case list and action queue.</span>
               </div>
-            ) : pendingActionCases.length === 0 ? (
+            ) : attentionRows.length === 0 ? (
               <EmptyState
                 icon={<CheckCircle2 size={17} />}
-                title="No pending actions"
-                description="Your queue is clear. No open workflow actions need attention."
+                title={
+                  attentionFilter === 'all' ? 'No pending actions' : 'Nothing in this category'
+                }
+                description={
+                  attentionFilter === 'all'
+                    ? 'Your queue is clear. No open workflow actions need attention.'
+                    : 'No cases match this card right now.'
+                }
               />
             ) : (
-              priorityActionCases
-                .slice(0, showAllAttentionTasks ? priorityActionCases.length : 5)
+              attentionRows
+                .slice(
+                  0,
+                  showAllAttentionTasks || attentionFilter !== 'all' ? attentionRows.length : 5,
+                )
                 .map((caseItem) => (
                   <button
                     className="task-row"
