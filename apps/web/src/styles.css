@@ -9662,3 +9662,25 @@ td span + small {
   color: #3730a3;
   font-size: 13px;
 }
+
+/* Overview: long attention lists scroll inside the panel instead of stretching the page */
+.overview-page .task-panel .task-list {
+  max-height: 420px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #c7d2fe transparent;
+  border-radius: 10px;
+}
+.overview-page .task-panel .task-list::-webkit-scrollbar {
+  width: 8px;
+}
+.overview-page .task-panel .task-list::-webkit-scrollbar-thumb {
+  background: #c7d2fe;
+  border-radius: 999px;
+}
+@media (max-width: 720px) {
+  .overview-page .task-panel .task-list {
+    max-height: 360px;
+  }
+}

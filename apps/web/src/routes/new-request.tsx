@@ -35,7 +35,8 @@ const targetLevelOptions = levelOptions;
 function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestFormProps) {
   const [form, setForm] = useState<CreateCaseInput>({
     candidateType: 'INTERNAL_EMPLOYEE',
-    employeeId: 'emp-new',
+    // Left blank, the API creates a separate employee record for this request.
+    employeeId: '',
     employeeName: '',
     department: '',
     currentRole: '',
@@ -48,7 +49,10 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
     priority: 'NORMAL',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const mutation = useMutation({ mutationFn: () => api.createCase(form), onSuccess: onCreated });
+  const mutation = useMutation({
+    mutationFn: () => api.createCase({ ...form, employeeId: form.employeeId?.trim() || 'emp-new' }),
+    onSuccess: onCreated,
+  });
   const update = (key: keyof CreateCaseInput, value: string) =>
     setForm((current) => ({ ...current, [key]: value }) as CreateCaseInput);
   const submit = (event: React.FormEvent) => {
@@ -57,7 +61,10 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
       setErrors({ currentLevel: 'Choose the employee’s current level' });
       return;
     }
-    const parsed = createCaseSchema.safeParse(form);
+    const parsed = createCaseSchema.safeParse({
+      ...form,
+      employeeId: form.employeeId?.trim() || 'emp-new',
+    });
     if (!parsed.success) {
       setErrors(
         Object.fromEntries(
@@ -147,6 +154,15 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
             error={errors.department}
             placeholder="e.g. Product"
           />
+          {form.candidateType === 'INTERNAL_EMPLOYEE' && (
+            <Field
+              label="Employee ID (staff number)"
+              value={form.employeeId ?? ''}
+              onChange={(value) => update('employeeId', value)}
+              error={errors.employeeId}
+              placeholder="Links repeat assessments of the same person"
+            />
+          )}
           {form.candidateType === 'INTERNAL_EMPLOYEE' && (
             <Field
               label="Current role"

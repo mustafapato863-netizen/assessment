@@ -682,8 +682,16 @@ export class PrismaCasesRepository {
       );
     const data = parsed.data;
     const organization = await this.organization();
+    // Without a real staff number every request used to share the placeholder
+    // "emp-new", so all of them pointed at ONE employee record whose name was
+    // overwritten by the latest request. Each request without an ID now gets its own.
+    const providedEmployeeId = data.employeeId?.trim();
     const employeeExternalId =
-      data.candidateType === 'NEW_CANDIDATE' ? `candidate-${randomUUID()}` : data.employeeId;
+      data.candidateType === 'NEW_CANDIDATE'
+        ? `candidate-${randomUUID()}`
+        : providedEmployeeId && providedEmployeeId.toLowerCase() !== 'emp-new'
+          ? providedEmployeeId
+          : `emp-${randomUUID()}`;
     const currentRole = data.currentRole?.trim() || 'External candidate';
     const employee = await this.prisma.employeeReference.upsert({
       where: {
