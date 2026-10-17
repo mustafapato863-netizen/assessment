@@ -101,10 +101,18 @@ function CandidateFacts({ c }: { c: CalibrationCandidate }) {
     c.scoredReadiness &&
     normalizeReadiness(c.scoredReadiness) !== normalizeReadiness(c.readiness) &&
     !c.knockout;
-  if (!c.caseCode && !scoreText && !c.knockout && !mismatch) return null;
+  if (!c.caseCode && !scoreText && !c.knockout && !mismatch && !c.imported) return null;
   return (
     <div className="cb-cand__facts">
       <span className="cb-sub">{[c.caseCode, scoreText].filter(Boolean).join(' · ')}</span>
+      {c.imported && (
+        <span
+          className="cb-flag cb-flag--info"
+          title="Placed from the scores stored on an imported result; this case has no scorecard."
+        >
+          Imported result
+        </span>
+      )}
       {c.knockout && (
         <span
           className="cb-flag cb-flag--ko"

@@ -535,6 +535,8 @@ export interface CalibrationCandidate {
   readinessLabel: string;
   /** Result the current scorecards give (may differ from the finalized result above). */
   scoredResultCode?: ResultCode | null;
+  /** Where the placement scores came from: re-scored scorecards, or the scores stored on an imported result. */
+  scoreSource?: 'SCORECARD' | 'RESULT_SUMMARY' | null;
   /** True when any assessor flagged a knockout on a submitted scorecard. */
   knockout?: boolean;
   /** Reason a candidate is not on the grid (e.g. result not finalized). */

@@ -25,6 +25,7 @@ function makeCase(
     resultCode?: string;
     finalized?: boolean;
     reopened?: boolean;
+    storedSummary?: Record<string, unknown>;
   } = {},
 ) {
   const finalized = opts.finalized ?? true;
@@ -46,6 +47,7 @@ function makeCase(
         resultCode: opts.resultCode ?? 'READY_WITH_DEVELOPMENT',
         finalizedAt: finalized ? new Date('2026-10-01') : null,
         reopenedAt: opts.reopened ? new Date('2026-10-02') : null,
+        scorecardSummary: opts.storedSummary ?? null,
       },
     ],
     recommendationRevisions: [],
@@ -120,10 +122,29 @@ describe('CalibrationService', () => {
     const reasons = Object.fromEntries(
       (matrix.unplaced ?? []).map((c) => [c.caseId, c.unplacedReason]),
     );
-    expect(reasons.imported).toMatch(/No complete scorecard/);
+    expect(reasons.imported).toMatch(/No scorecard/);
     expect(reasons.pending).toMatch(/not finalized/);
     expect(reasons.reopened).toMatch(/reopened/);
     for (const c of matrix.unplaced ?? []) expect(c.boxIndex).toBeNull();
+  });
+
+  it('places an imported result from its stored Technical and Behavioral scores', async () => {
+    const matrix = await serviceWith([
+      makeCase('imported', 'Engineering', {
+        resultCode: 'READY_NOW',
+        storedSummary: { technical: 4.4, behavioral: 3.2, knockout: false },
+      }),
+      makeCase('bad', 'Engineering', { storedSummary: { technical: 9, behavioral: 2 } }),
+    ]).getMatrix();
+    const placed = matrix.grid.flatMap((cell) => cell.candidates);
+    expect(placed.map((c) => c.caseId)).toEqual(['imported']);
+    expect(placed[0]).toMatchObject({
+      boxIndex: 6,
+      technicalScore: 4.4,
+      behavioralScore: 3.2,
+      scoreSource: 'RESULT_SUMMARY',
+    });
+    expect(matrix.unplaced?.map((c) => c.caseId)).toEqual(['bad']);
   });
 
   it('computes cell percentages against placed candidates only', async () => {

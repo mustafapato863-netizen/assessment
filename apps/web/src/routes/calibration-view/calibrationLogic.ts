@@ -39,6 +39,8 @@ export interface CalibrationCandidate {
   /** Readiness the current scorecards give, when it differs from the finalized result. */
   scoredReadiness?: string | null;
   knockout?: boolean;
+  /** True when placed from scores stored on an imported result, not from scorecards. */
+  imported?: boolean;
 }
 
 export interface CalibrationState {

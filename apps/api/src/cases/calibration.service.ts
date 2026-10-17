@@ -246,6 +246,7 @@ export class CalibrationService {
     let behavioralScore: number | null = null;
     let scoredResultCode: ResultCode | null = null;
     let knockout = false;
+    let scoreSource: 'SCORECARD' | 'RESULT_SUMMARY' | null = null;
     if (resultIsEffective && submissions.length) {
       const config = c.plan?.scorecardConfig
         ? scorecardConfigSchema.parse(c.plan.scorecardConfig)
@@ -262,6 +263,24 @@ export class CalibrationService {
         behavioralScore = round2(scored.behavioral ?? 0);
         scoredResultCode = scored.resultCode;
         knockout = scored.knockout;
+        scoreSource = 'SCORECARD';
+      }
+    }
+    // Results imported or entered without a scorecard: use the Technical and
+    // Behavioral scores stored on the finalized result, when it has them.
+    if (resultIsEffective && scoreSource === null) {
+      const stored = (latestRevision.scorecardSummary ?? {}) as {
+        technical?: unknown;
+        behavioral?: unknown;
+        knockout?: unknown;
+      };
+      const valid = (value: unknown): value is number =>
+        typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 5;
+      if (valid(stored.technical) && valid(stored.behavioral)) {
+        technicalScore = round2(stored.technical);
+        behavioralScore = round2(stored.behavioral);
+        knockout = stored.knockout === true;
+        scoreSource = 'RESULT_SUMMARY';
       }
     }
 
@@ -277,7 +296,7 @@ export class CalibrationService {
         ? 'Result not finalized yet'
         : latestRevision.reopenedAt
           ? 'Result reopened'
-          : 'No complete scorecard (result entered or imported directly)';
+          : 'No scorecard and no Technical/Behavioral scores on the result (entered or imported directly)';
 
     return {
       id: c.id,
@@ -303,6 +322,7 @@ export class CalibrationService {
       readinessLabel: resultCode ? resultCode.replace(/_/g, ' ') : 'PENDING EVALUATION',
       scoredResultCode,
       knockout,
+      scoreSource,
       unplacedReason,
       tenureMonths: null,
     };

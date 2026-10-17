@@ -26,6 +26,7 @@ function mapCandidate(candidate: ApiCalibrationCandidate): CalibrationCandidate 
       ? candidate.scoredResultCode.replace(/_/g, ' ')
       : null,
     knockout: Boolean(candidate.knockout),
+    imported: candidate.scoreSource === 'RESULT_SUMMARY',
     box: placed ? candidate.boxIndex : null,
     performance: placed ? (candidate.performanceBand?.toLowerCase() ?? null) : null,
     potential: placed ? (candidate.potentialBand?.toLowerCase() ?? null) : null,
