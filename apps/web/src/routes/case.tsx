@@ -212,7 +212,6 @@ export function CasePage({
           urgent: true,
         };
       case 'READY_FOR_PLANNING':
-      case 'PLANNING':
         return {
           title: 'Action Required: Finalize Assessment Plan',
           subtitle: 'Select evaluation methods, duration, and assign lead assessor',
@@ -221,19 +220,29 @@ export function CasePage({
           sla: '4 days remaining',
           urgent: false,
         };
+      // The plan is finalized in PLANNING; the next step is scheduling sessions.
+      case 'PLANNING':
+        return {
+          title: 'Action Required: Schedule Assessment Session',
+          subtitle: 'Plan is finalized. Book the session and assign the assessors',
+          buttonLabel: 'Schedule Event',
+          stageTarget: 'Assessment',
+          sla: '5 days remaining',
+          urgent: false,
+        };
       case 'SCHEDULED':
         return {
-          title: 'Action Required: Assessment Event Scheduling',
-          subtitle: 'Confirm schedule and panel participation with candidate',
-          buttonLabel: 'Schedule Event',
+          title: 'Action Required: Record Evidence & Scorecards',
+          subtitle: 'Session is scheduled. Assessors enter evidence and score each criterion',
+          buttonLabel: 'Submit Evidence',
           stageTarget: 'Assessment',
           sla: '5 days remaining',
           urgent: false,
         };
       case 'IN_PROGRESS':
         return {
-          title: 'Action Required: Evidence & Competency Rubrics',
-          subtitle: 'Assessors must log qualitative notes and ratings',
+          title: 'Action Required: Complete Scorecards',
+          subtitle: 'Collect every assessor scorecard, then finalize the result',
           buttonLabel: 'Submit Evidence',
           stageTarget: 'Assessment',
           sla: '3 days remaining',
@@ -393,14 +402,16 @@ export function CasePage({
       case 'NOT_ELIGIBLE':
         return 1;
       case 'READY_FOR_PLANNING':
-      case 'PLANNING':
         return 2;
+      // Plan finalized: the next work happens in Assessment.
+      case 'PLANNING':
       case 'SCHEDULED':
       case 'IN_PROGRESS':
         return 3;
       case 'PENDING_RESULT':
-      case 'RESULT_FINALIZED':
         return 4;
+      // Result finalized: the next work is the recommendation (Decision).
+      case 'RESULT_FINALIZED':
       case 'PENDING_RECOMMENDATION':
       case 'PENDING_APPROVAL':
         return 5;
