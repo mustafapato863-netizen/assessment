@@ -424,3 +424,11 @@
 - ALLOW_ADMIN_SELF_APPROVAL (owner request, build/test phase): when true, a System Admin may decide approval steps despite segregation-of-duties conflicts; each bypass writes an ADMIN_SELF_APPROVAL audit event. Non-admin rules unchanged. Laptop .env = true; .env.example = false. Turn off before real use.
 - Added `Start AssessFlow.bat` (one-click: Docker, postgres/redis, pnpm dev, opens browser).
 - 2026-10-17: `pnpm validate` green on the laptop after all of the above (typecheck, all unit tests, production build).
+
+## Session: 2026-10-17 - Scorecard v2 (owner-approved design)
+
+- Correction of the 2026-10-16 change: the intended scale is 0-1 per question (target 1), not 0-5. SCORECARD_MAX_RATING = SCORECARD_QUESTION_TARGET = 1; scores limited to SCORECARD_SCORE_OPTIONS (0, 0.25, 0.5, 0.75, 1). Issue target = sum of question weights (default 1 each = number of questions); actual = sum(score x weight); issue score = actual/target x 5. Bands unchanged (4 / 3).
+- Knockout is now an assessor flag per question (rating.knockout), independent of the score; any flag forces NOT_READY. Config-level criterion.knockout no longer drives the result.
+- Weights: issue weights per section and the Technical/Behavioral split must each total 100% (scorecardWeightProblems); enforced in the API on save and in the UI (budget bar, save disabled).
+- UI: segmented score buttons, Flag knockout toggle, issue total shows actual/target plus % and /5, weight budget indicator. Old 0-5 drafts count as unanswered.
+- Design proposal artifact: 'Scorecard redesign'.
