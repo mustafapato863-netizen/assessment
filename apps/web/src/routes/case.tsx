@@ -2253,6 +2253,10 @@ function AssessorScorecard({
     'technical',
   );
   const [expandedComments, setExpandedComments] = useState<Set<string>>(() => new Set());
+  const [openIssues, setOpenIssues] = useState<Set<string>>(
+    () => new Set(['technical-0', 'behavioral-0']),
+  );
+  const [editStructure, setEditStructure] = useState(false);
   const [numericDrafts, setNumericDrafts] = useState<
     Record<string, { value: string; valid: boolean }>
   >({});
@@ -2519,528 +2523,626 @@ function AssessorScorecard({
       return next;
     });
 
-  const dimensionRows = (section: 'technical' | 'behavioral', dimensions: ScorecardDimension[]) =>
-    dimensions.map((dimension, index) => {
-      const ratedCriteria = dimension.criteria.flatMap((criterion) => {
-        const score = ratings[scorecardRatingKey(dimension, criterion)]?.score;
-        return score === undefined ? [] : [{ score, weight: criterion.weight }];
-      });
-      const totalWeight = dimension.criteria.reduce(
-        (total, criterion) => total + criterion.weight,
-        0,
-      );
-      const actualWeightedScore = ratedCriteria.reduce(
-        (total, item) => total + item.score * item.weight,
-        0,
-      );
-      // Each question scores 0-1 and its target is its weight (default 1), so the
-      // issue target is the number of questions when weights are untouched.
-      const targetTotal = totalWeight * SCORECARD_QUESTION_TARGET;
-      const hasScoredCriteria = ratedCriteria.length > 0;
-      const ratedWeight = ratedCriteria.reduce((total, item) => total + item.weight, 0);
-      // Running 0-5 score over the questions scored so far.
-      const issueScore = ratedWeight ? (actualWeightedScore / ratedWeight) * 5 : 0;
-      const issuePercent = targetTotal ? Math.round((actualWeightedScore / targetTotal) * 100) : 0;
-      const totalColor = !hasScoredCriteria
-        ? 'var(--muted)'
-        : issueScore >= SCORECARD_READY_NOW_THRESHOLD
-          ? 'var(--success)'
-          : issueScore >= SCORECARD_READY_WITH_DEVELOPMENT_THRESHOLD
-            ? 'var(--warning)'
-            : 'var(--danger)';
+  const toggleIssue = (key: string) =>
+    setOpenIssues((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  // ---- Scorecard v2 view: mirrors the approved "Scorecard redesign" mockup ----
+  const scoreOptions = SCORECARD_SCORE_OPTIONS as readonly number[];
+  const issueStats = (dimension: ScorecardDimension) => {
+    let target = 0;
+    let actual = 0;
+    let answered = 0;
+    let ratedWeight = 0;
+    for (const criterion of dimension.criteria) {
+      const value = ratings[scorecardRatingKey(dimension, criterion)]?.score;
+      target += criterion.weight;
+      if (value !== undefined && scoreOptions.includes(value)) {
+        actual += value * criterion.weight;
+        ratedWeight += criterion.weight;
+        answered += 1;
+      }
+    }
+    return {
+      target,
+      actual,
+      answered,
+      pct: target ? actual / target : 0,
+      runningPct: ratedWeight ? actual / ratedWeight : 0,
+      complete: answered === dimension.criteria.length,
+    };
+  };
+  const sectionStats = (section: 'technical' | 'behavioral') => {
+    let weighted = 0;
+    let totalWeight = 0;
+    let answered = 0;
+    let total = 0;
+    let complete = true;
+    for (const dimension of config[section]) {
+      const stats = issueStats(dimension);
+      answered += stats.answered;
+      total += dimension.criteria.length;
+      if (!stats.complete) complete = false;
+      if (stats.answered) {
+        weighted += stats.runningPct * 5 * dimension.weight;
+        totalWeight += dimension.weight;
+      }
+    }
+    return { score: totalWeight ? weighted / totalWeight : undefined, answered, total, complete };
+  };
+  const technicalStats = sectionStats('technical');
+  const behavioralStats = sectionStats('behavioral');
+  const runningOverall =
+    technicalStats.score !== undefined &&
+    behavioralStats.score !== undefined &&
+    sectionSplitTotal > 0
+      ? (technicalStats.score * config.technicalWeight +
+          behavioralStats.score * config.behavioralWeight) /
+        sectionSplitTotal
+      : undefined;
+  const runningResult: ResultCode | null = knockoutTriggered
+    ? 'NOT_READY'
+    : runningOverall === undefined
+      ? null
+      : runningOverall >= SCORECARD_READY_NOW_THRESHOLD
+        ? 'READY_NOW'
+        : runningOverall >= SCORECARD_READY_WITH_DEVELOPMENT_THRESHOLD
+          ? 'READY_WITH_DEVELOPMENT'
+          : 'NOT_READY';
+  const sectionStatus = (stats: ReturnType<typeof sectionStats>) =>
+    stats.complete
+      ? 'Complete'
+      : stats.answered
+        ? `Provisional · ${stats.answered} of ${stats.total} scored`
+        : 'Not started';
+  const bandTone = (pct: number, answered: number) =>
+    !answered ? 'none' : pct >= 0.8 ? 'good' : pct >= 0.6 ? 'mid' : 'low';
+  const optionLabel = (option: number) =>
+    option === 0.25 ? '¼' : option === 0.5 ? '½' : option === 0.75 ? '¾' : String(option);
+  const canEditStructure = data.canEditWeights && !locked;
+  const sectionLabel = (section: 'technical' | 'behavioral') =>
+    section === 'technical'
+      ? (config.technicalLabel ?? 'Technical')
+      : (config.behavioralLabel ?? 'Behavioral');
+  const footerMessage =
+    dirtyConfig && weightProblems.length
+      ? { tone: 'error', text: weightProblems.join(' ') }
+      : dirtyConfig
+        ? { tone: 'muted', text: 'Save the scorecard settings before saving or submitting scores.' }
+        : locked
+          ? { tone: 'muted', text: 'Your scores are submitted and locked.' }
+          : completedQuestionCount === totalQuestionCount
+            ? { tone: 'ok', text: 'All questions scored and weights balanced. Ready to submit.' }
+            : {
+                tone: 'muted',
+                text: `${completedQuestionCount} of ${totalQuestionCount} questions scored. Save a draft anytime; submit when every question has a score.`,
+              };
 
-      const progressPercent = targetTotal
-        ? Math.max(0, Math.min((actualWeightedScore / targetTotal) * 100, 100))
-        : 0;
-
+  const issueCards = (section: 'technical' | 'behavioral') =>
+    config[section].map((dimension, index) => {
+      const stats = issueStats(dimension);
+      const issueKey = `${section}-${index}`;
+      const open = openIssues.has(issueKey);
+      const tone = bandTone(stats.runningPct, stats.answered);
+      const hasKnockoutFlag = dimension.criteria.some(
+        (criterion) => ratings[scorecardRatingKey(dimension, criterion)]?.knockout,
+      );
       return (
-        <details key={`${section}-${dimension.code}`} className="scorecard-issue">
-          <summary className="scorecard-issue-summary">
-            <input
-              aria-label={`${dimension.name} dimension name`}
-              className="scorecard-issue-name"
-              value={dimension.name}
-              disabled={!data.canEditWeights || locked}
-              onClick={(event) => event.stopPropagation()}
-              onChange={(event) => setDimensionName(section, index, event.target.value)}
-            />
-            <span className="scorecard-issue-meta">
-              <label
-                className="scorecard-issue-weight"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <span>Weight</span>
-                <input
-                  aria-label={`${dimension.name} dimension weight`}
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  max="100"
-                  step="1"
-                  value={numericInputValue(
-                    `dimension-weight:${section}:${index}`,
-                    dimension.weight,
-                  )}
-                  disabled={!data.canEditWeights || locked}
-                  onChange={(event) =>
-                    setNumericDraft(
-                      `dimension-weight:${section}:${index}`,
-                      event.target.value,
-                      0,
-                      100,
-                      false,
-                      (value) => {
-                        if (value !== undefined) setWeight(section, index, value);
-                      },
-                    )
-                  }
-                  onBlur={() => clearNumericDraft(`dimension-weight:${section}:${index}`)}
-                />
-                <span>%</span>
-              </label>
-              <strong className="scorecard-issue-total" style={{ color: totalColor }}>
-                <span>Issue total</span>
-                {`${hasScoredCriteria ? formatScore(actualWeightedScore) : '—'} / ${formatScore(targetTotal)}`}
-                <small className="scorecard-issue-percent">
-                  {hasScoredCriteria
-                    ? `${issuePercent}% · ${formatCategoryScore(issueScore)}/5`
-                    : `${dimension.criteria.length} questions`}
-                </small>
-              </strong>
-              <span className="scorecard-issue-chevron" aria-hidden="true" />
-            </span>
-          </summary>
-          <div
-            className="scorecard-issue-progress"
-            role="progressbar"
-            aria-label={`${dimension.name} score progress`}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={progressPercent}
-          >
-            <span style={{ width: `${progressPercent}%`, background: totalColor }} />
-          </div>
-          <div className="scorecard-questions">
-            {dimension.criteria.map((criterion) => {
-              const ratingKey = scorecardRatingKey(dimension, criterion);
-              return (
-                <div key={ratingKey} className="scorecard-question-card">
-                  <div className="scorecard-question-content">
-                    <div className="scorecard-question-heading">
-                      <strong className="scorecard-question-code">{criterion.code}</strong>
-                      <input
-                        aria-label={`${criterion.code} criterion name`}
-                        value={criterion.name}
-                        disabled={!data.canEditWeights || locked}
-                        onChange={(event) =>
-                          setCriterionText(section, index, ratingKey, 'name', event.target.value)
-                        }
-                        className="scorecard-question-name"
-                      />
-                      <button
-                        type="button"
-                        className="row-action"
-                        title="Remove criterion"
-                        aria-label={`Remove ${criterion.name}`}
-                        disabled={!data.canEditWeights || locked || dimension.criteria.length <= 1}
-                        onClick={() => removeCriterion(section, index, ratingKey)}
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
-                    <textarea
-                      className="scorecard-question-standard"
-                      aria-label={`${criterion.name} question or standard`}
-                      rows={2}
-                      value={criterion.standard}
-                      disabled={!data.canEditWeights || locked}
-                      onChange={(event) =>
-                        setCriterionText(section, index, ratingKey, 'standard', event.target.value)
-                      }
-                    />
-                  </div>
-                  <div className="scorecard-question-controls">
-                    <div className="scorecard-question-control">
-                      <span id={`score-label-${ratingKey}`}>Score</span>
-                      <div
-                        className="scorecard-score-options"
-                        role="group"
-                        aria-labelledby={`score-label-${ratingKey}`}
-                      >
-                        {SCORECARD_SCORE_OPTIONS.map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            className="scorecard-score-option"
-                            aria-pressed={ratings[ratingKey]?.score === option}
-                            aria-label={`${criterion.name}: score ${option}`}
-                            disabled={locked}
-                            onClick={() => setScore(ratingKey, option)}
-                          >
-                            {option === 0.25
-                              ? '¼'
-                              : option === 0.5
-                                ? '½'
-                                : option === 0.75
-                                  ? '¾'
-                                  : option}
-                          </button>
-                        ))}
-                      </div>
-                      <span className="scorecard-question-target">0 = not met · 1 = fully met</span>
-                    </div>
-                    <label className="scorecard-question-control">
-                      <span>Question weight</span>
-                      <input
-                        aria-label={`${criterion.name} question weight`}
-                        type="number"
-                        inputMode="decimal"
-                        min="0"
-                        max="1000"
-                        step="0.1"
-                        value={numericInputValue(`criterion-weight:${ratingKey}`, criterion.weight)}
-                        disabled={!data.canEditWeights || locked}
-                        onChange={(event) =>
-                          setNumericDraft(
-                            `criterion-weight:${ratingKey}`,
-                            event.target.value,
-                            0,
-                            1000,
-                            false,
-                            (value) => {
-                              if (value !== undefined)
-                                setCriterionWeight(section, index, ratingKey, value);
-                            },
-                          )
-                        }
-                        onBlur={() => clearNumericDraft(`criterion-weight:${ratingKey}`)}
-                      />
-                    </label>
-                  </div>
-                  <div className="scorecard-question-footer">
-                    <button
-                      type="button"
-                      className={`scorecard-knockout-toggle${ratings[ratingKey]?.knockout ? ' active' : ''}`}
-                      aria-pressed={Boolean(ratings[ratingKey]?.knockout)}
-                      disabled={locked}
-                      onClick={() => toggleKnockout(ratingKey)}
-                    >
-                      {ratings[ratingKey]?.knockout ? 'Knockout flagged' : 'Flag knockout'}
-                    </button>
-                    <div className="scorecard-question-comment">
-                      <button
-                        type="button"
-                        className="scorecard-comment-toggle"
-                        aria-expanded={expandedComments.has(ratingKey)}
-                        aria-controls={`scorecard-comment-${ratingKey}`}
-                        onClick={() => toggleComment(ratingKey)}
-                      >
-                        <span className="scorecard-comment-icon" aria-hidden="true">
-                          {expandedComments.has(ratingKey) ? '−' : '+'}
-                        </span>
-                        {expandedComments.has(ratingKey) ? 'Hide Comment' : 'Add Comment'}
-                        {!expandedComments.has(ratingKey) &&
-                          ratings[ratingKey]?.evidence?.trim() && (
-                            <span className="scorecard-comment-saved">Comment saved</span>
-                          )}
-                      </button>
-                      {expandedComments.has(ratingKey) && (
-                        <label className="field scorecard-evidence-field">
-                          <span>Assessor note</span>
-                          <textarea
-                            id={`scorecard-comment-${ratingKey}`}
-                            aria-label={`Assessor note for ${criterion.name}`}
-                            rows={3}
-                            value={ratings[ratingKey]?.evidence ?? ''}
-                            onChange={(event) =>
-                              setRating(ratingKey, 'evidence', event.target.value)
-                            }
-                            placeholder="Write an optional comment or evidence…"
-                            disabled={locked}
-                          />
-                        </label>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+        <div key={issueKey} className="sc2-issue">
+          <div className="sc2-issue-head">
             <button
               type="button"
-              className="secondary-button"
-              disabled={!data.canEditWeights || locked}
-              onClick={() => addCriterion(section, index)}
+              className="sc2-issue-toggle"
+              aria-expanded={open}
+              onClick={() => toggleIssue(issueKey)}
             >
-              Add question / criterion
+              <span className="sc2-code-badge" aria-hidden="true">
+                {dimension.code}
+              </span>
+              <span className="sc2-issue-title">
+                <span className="sc2-issue-name">{dimension.name}</span>
+                <span className="sc2-issue-meta">
+                  {dimension.criteria.length} questions · {stats.answered} scored
+                  {hasKnockoutFlag ? ' · knockout flagged' : ''}
+                </span>
+              </span>
             </button>
-            <div
-              style={{
-                borderTop: '1px solid var(--border)',
-                padding: '11px 4px 2px',
-                display: 'grid',
-                gap: '5px',
-                color: 'var(--muted)',
-                fontSize: '12px',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px' }}>
-                <span>
-                  Questions scored: {ratedCriteria.length} / {dimension.criteria.length}
-                </span>
-                <span>Target (sum of question weights): {formatScore(targetTotal)}</span>
-                <span>Actual (score × question weight): {formatScore(actualWeightedScore)}</span>
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  fontWeight: 700,
-                  color: totalColor,
-                }}
-              >
-                <span>Issue score (actual / target × 5)</span>
-                <span>
-                  {hasScoredCriteria
-                    ? `${formatCategoryScore(issueScore)} / 5`
-                    : 'Score the questions'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </details>
-      );
-    });
-
-  return (
-    <section className="panel assessment-scorecard" style={{ marginTop: '22px' }}>
-      <PanelHeader
-        icon={<ClipboardCheck size={17} />}
-        title="Assessment scorecard"
-        action={<StatusBadge status={locked ? 'COMPLETED' : 'IN_PROGRESS'} />}
-      />
-      <p className="panel-intro">
-        Score each question 0 (not met) to 1 (fully met). An issue&apos;s target is its number of
-        questions (or the sum of question weights). Flag a knockout on any question that rules the
-        candidate out; any knockout makes the result Not ready, whatever the scores.
-      </p>
-      <div className="scorecard-weight-grid">
-        {(['technicalWeight', 'behavioralWeight'] as const).map((field) => (
-          <label className="field scorecard-weight-card" key={field}>
-            <span>
-              {field === 'technicalWeight'
-                ? 'Technical overall weight'
-                : 'Behavioral overall weight'}
-            </span>
-            <div className="scorecard-weight-input">
+            <label className="sc2-weight-field">
+              Weight
               <input
+                className="sc2-input"
                 type="number"
-                inputMode="decimal"
+                inputMode="numeric"
                 min="0"
                 max="100"
                 step="1"
-                value={numericInputValue(`section-weight:${field}`, config[field])}
-                disabled={!data.canEditWeights || locked}
+                aria-label={`${dimension.name} weight in percent`}
+                value={numericInputValue(`dimension-weight:${section}:${index}`, dimension.weight)}
+                disabled={!canEditStructure}
                 onChange={(event) =>
                   setNumericDraft(
-                    `section-weight:${field}`,
+                    `dimension-weight:${section}:${index}`,
                     event.target.value,
                     0,
                     100,
                     false,
                     (value) => {
-                      if (value !== undefined) {
-                        setConfig({ ...config, [field]: value });
-                        setDirtyConfig(true);
-                      }
+                      if (value !== undefined) setWeight(section, index, value);
                     },
                   )
                 }
-                onBlur={() => clearNumericDraft(`section-weight:${field}`)}
+                onBlur={() => clearNumericDraft(`dimension-weight:${section}:${index}`)}
               />
               <span>%</span>
+            </label>
+            <div className="sc2-issue-progress">
+              <div
+                className="sc2-bar"
+                role="progressbar"
+                aria-label={`${dimension.name} progress`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(stats.pct * 100)}
+              >
+                <span
+                  className={`sc2-bar-fill tone-${tone}`}
+                  style={{ width: `${Math.round(stats.pct * 100)}%` }}
+                />
+              </div>
+              <span className="sc2-issue-total">
+                <span className={`sc2-num sc2-issue-total-main tone-text-${tone}`}>
+                  {formatScore(stats.actual)} / {formatScore(stats.target)}
+                </span>
+                <span className="sc2-num sc2-issue-total-sub">
+                  {Math.round(stats.pct * 100)}% ·{' '}
+                  {stats.answered ? formatCategoryScore(stats.runningPct * 5) : '—'}/5
+                </span>
+              </span>
             </div>
-          </label>
-        ))}
-      </div>
-      {dirtyConfig && (
-        <p className="scorecard-settings-hint">
-          Save the scorecard settings before saving or submitting scores.
-        </p>
-      )}
-      <div className="scorecard-live-metrics">
-        <div className="scorecard-metric-card">
-          <span>Completed</span>
-          <strong>
-            {completedQuestionCount} / {totalQuestionCount}
-          </strong>
-        </div>
-        <div className="scorecard-metric-card scorecard-score-summary">
-          <div className="scorecard-category-score-summary">
-            <span>{activeCategoryLabel} score</span>
-            <strong>
-              {activeCategoryScore === undefined
-                ? '— / 5'
-                : `${formatCategoryScore(activeCategoryScore)} / 5`}
-            </strong>
           </div>
-          <div className="scorecard-overall-score-summary">
-            <span>Overall score</span>
-            <strong>
-              {preview.overall === undefined
-                ? '— / 5'
-                : `${formatRoundedScore(preview.overall)} / 5`}
-            </strong>
-          </div>
-          <small>
-            {preview.completeCount
-              ? resultCodeLabel(preview.resultCode)
-              : 'Complete all scores to calculate'}
-          </small>
-        </div>
-        <div className={`scorecard-metric-card ${knockoutTriggered ? 'danger' : 'success'}`}>
-          <span>Knockout</span>
-          <strong>{knockoutTriggered ? 'Triggered' : 'Clear'}</strong>
-          {knockoutTriggered && (
-            <small>Flagged on {knockoutFlags.map((criterion) => criterion.code).join(', ')}</small>
+
+          {open && (
+            <div className="sc2-issue-body">
+              {editStructure && canEditStructure && (
+                <label className="sc2-edit-row">
+                  Issue name
+                  <input
+                    className="sc2-text-input"
+                    value={dimension.name}
+                    onChange={(event) => setDimensionName(section, index, event.target.value)}
+                  />
+                </label>
+              )}
+              <div className="sc2-grid sc2-col-head">
+                <span>QUESTION</span>
+                <span>SCORE (0 = NOT MET · 1 = FULLY MET)</span>
+                <span className="sc2-right">Q. WEIGHT</span>
+              </div>
+              {dimension.criteria.map((criterion) => {
+                const ratingKey = scorecardRatingKey(dimension, criterion);
+                const rating = ratings[ratingKey];
+                const noteOpen = expandedComments.has(ratingKey);
+                return (
+                  <div key={ratingKey} className="sc2-question">
+                    <div className="sc2-grid sc2-question-row">
+                      <div className="sc2-question-text">
+                        <span className="sc2-question-heading">
+                          <span className="sc2-num sc2-question-code">{criterion.code}</span>
+                          {editStructure && canEditStructure ? (
+                            <input
+                              className="sc2-text-input"
+                              aria-label={`${criterion.code} question name`}
+                              value={criterion.name}
+                              onChange={(event) =>
+                                setCriterionText(
+                                  section,
+                                  index,
+                                  ratingKey,
+                                  'name',
+                                  event.target.value,
+                                )
+                              }
+                            />
+                          ) : (
+                            <span className="sc2-question-name">{criterion.name}</span>
+                          )}
+                          {rating?.knockout && <span className="sc2-ko-badge">KNOCKOUT</span>}
+                          {editStructure && canEditStructure && (
+                            <button
+                              type="button"
+                              className="sc2-icon-button"
+                              aria-label={`Remove ${criterion.name}`}
+                              disabled={dimension.criteria.length <= 1}
+                              onClick={() => removeCriterion(section, index, ratingKey)}
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </span>
+                        {editStructure && canEditStructure ? (
+                          <textarea
+                            className="sc2-note"
+                            aria-label={`${criterion.name} standard`}
+                            rows={2}
+                            value={criterion.standard}
+                            onChange={(event) =>
+                              setCriterionText(
+                                section,
+                                index,
+                                ratingKey,
+                                'standard',
+                                event.target.value,
+                              )
+                            }
+                          />
+                        ) : (
+                          <span className="sc2-question-std">{criterion.standard}</span>
+                        )}
+                        <span className="sc2-question-actions">
+                          <button
+                            type="button"
+                            className={`sc2-ko-toggle${rating?.knockout ? ' active' : ''}`}
+                            aria-pressed={Boolean(rating?.knockout)}
+                            disabled={locked}
+                            onClick={() => toggleKnockout(ratingKey)}
+                          >
+                            {rating?.knockout ? 'Knockout flagged' : 'Flag knockout'}
+                          </button>
+                          <button
+                            type="button"
+                            className="sc2-link"
+                            aria-expanded={noteOpen}
+                            onClick={() => toggleComment(ratingKey)}
+                          >
+                            {noteOpen
+                              ? 'Hide evidence note'
+                              : rating?.evidence?.trim()
+                                ? 'Evidence note saved · edit'
+                                : '+ Evidence note'}
+                          </button>
+                        </span>
+                      </div>
+                      <div
+                        className="sc2-seg-group"
+                        role="group"
+                        aria-label={`${criterion.name} score`}
+                      >
+                        {scoreOptions.map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            className="sc2-seg"
+                            aria-pressed={rating?.score === option}
+                            aria-label={`${criterion.name}: ${option}`}
+                            disabled={locked}
+                            onClick={() => setScore(ratingKey, option)}
+                          >
+                            {optionLabel(option)}
+                          </button>
+                        ))}
+                      </div>
+                      <div className="sc2-right">
+                        <input
+                          className="sc2-input"
+                          type="number"
+                          inputMode="decimal"
+                          min="0"
+                          step="0.5"
+                          aria-label={`${criterion.name} question weight`}
+                          value={numericInputValue(
+                            `criterion-weight:${ratingKey}`,
+                            criterion.weight,
+                          )}
+                          disabled={!canEditStructure}
+                          onChange={(event) =>
+                            setNumericDraft(
+                              `criterion-weight:${ratingKey}`,
+                              event.target.value,
+                              0,
+                              1000,
+                              false,
+                              (value) => {
+                                if (value !== undefined)
+                                  setCriterionWeight(section, index, ratingKey, value);
+                              },
+                            )
+                          }
+                          onBlur={() => clearNumericDraft(`criterion-weight:${ratingKey}`)}
+                        />
+                      </div>
+                    </div>
+                    {noteOpen && (
+                      <textarea
+                        className="sc2-note"
+                        aria-label={`${criterion.name} evidence note`}
+                        placeholder="Evidence observed in the session for this question"
+                        value={rating?.evidence ?? ''}
+                        disabled={locked}
+                        onChange={(event) => setRating(ratingKey, 'evidence', event.target.value)}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+              {editStructure && canEditStructure && (
+                <div className="sc2-add-row">
+                  <button
+                    type="button"
+                    className="sc2-link"
+                    onClick={() => addCriterion(section, index)}
+                  >
+                    + Add question
+                  </button>
+                </div>
+              )}
+              <div className="sc2-issue-foot">
+                <span>
+                  Target = sum of question weights (
+                  <span className="sc2-num">{formatScore(stats.target)}</span>). Actual = Σ score ×
+                  question weight (<span className="sc2-num">{formatScore(stats.actual)}</span>).
+                </span>
+                <span className="sc2-num sc2-strong">
+                  Issue score {stats.answered ? formatCategoryScore(stats.runningPct * 5) : '—'} / 5
+                </span>
+              </div>
+            </div>
           )}
         </div>
-      </div>
-      {data.submissions.length > 0 && (
-        <p className="scorecard-submission-note">
-          {data.submissions.filter((submission) => submission.submitted).length} assessor
-          scorecard(s) submitted. Final result averages all completed scorecards.
-        </p>
-      )}
-      <div className="scorecard-tabs-layout">
-        <div className="scorecard-category-tabs" role="tablist" aria-label="Scorecard category">
-          {(['technical', 'behavioral'] as const).map((section) => {
-            const dimensions = config[section];
-            const sectionLabel =
-              section === 'technical'
-                ? (config.technicalLabel ?? 'TECHNICAL')
-                : (config.behavioralLabel ?? 'BEHAVIORAL');
-            return (
-              <button
-                key={section}
-                type="button"
-                role="tab"
-                aria-selected={activeScorecardTab === section}
-                className={`scorecard-category-tab ${activeScorecardTab === section ? 'active' : ''}`}
-                onClick={() => setActiveScorecardTab(section)}
-              >
-                <span>{sectionLabel}</span>
-                <small>{dimensions.length} issues</small>
-              </button>
-            );
-          })}
+      );
+    });
+
+  return (
+    <section className="sc2" style={{ marginTop: '22px' }}>
+      <div className="sc2-header">
+        <div className="sc2-header-text">
+          <span className="sc2-kicker">ASSESSOR SCORECARD</span>
+          <h2 className="sc2-title">Assessment scorecard</h2>
+          <span className="sc2-sub">
+            Each question scores 0 to 1. An issue&apos;s target is its number of questions; its
+            actual is the sum of your scores.
+          </span>
         </div>
-        {data.canEditWeights && !locked && (
-          <label className="scorecard-section-name">
-            <span>Section name</span>
+        <div className="sc2-header-side">
+          {canEditStructure && (
+            <button
+              type="button"
+              className="sc2-link"
+              aria-pressed={editStructure}
+              onClick={() => setEditStructure((value) => !value)}
+            >
+              {editStructure ? 'Done editing questions' : 'Edit questions'}
+            </button>
+          )}
+          <span className="sc2-num sc2-sub">
+            {completedQuestionCount} / {totalQuestionCount} questions scored
+          </span>
+        </div>
+      </div>
+
+      <div className="sc2-summary">
+        {(['technical', 'behavioral'] as const).map((section) => {
+          const stats = section === 'technical' ? technicalStats : behavioralStats;
+          return (
+            <div key={section} className="sc2-card">
+              <span className="sc2-card-label">
+                {sectionLabel(section).toUpperCase()} · {config[`${section}Weight`]}%
+              </span>
+              <span className="sc2-num sc2-card-value">
+                {stats.score === undefined ? '—' : formatCategoryScore(stats.score)}
+                <span className="sc2-card-unit"> / 5</span>
+              </span>
+              <span className="sc2-card-note">{sectionStatus(stats)}</span>
+            </div>
+          );
+        })}
+        <div className="sc2-card sc2-card-dark">
+          <span className="sc2-card-label">OVERALL</span>
+          <span className="sc2-num sc2-card-value">
+            {runningOverall === undefined ? '—' : formatCategoryScore(runningOverall)}
+            <span className="sc2-card-unit"> / 5</span>
+          </span>
+          <span className={`sc2-result-chip result-${runningResult ?? 'none'}`}>
+            {runningResult
+              ? resultCodeLabel(runningResult)
+              : 'Score both sections to see the result'}
+          </span>
+        </div>
+        <div className="sc2-card">
+          <span className="sc2-card-label">KNOCKOUT</span>
+          <span className={`sc2-ko-status ${knockoutTriggered ? 'triggered' : 'clear'}`}>
+            {knockoutTriggered ? 'Triggered' : 'Clear'}
+          </span>
+          <span className="sc2-card-note">
+            {knockoutTriggered
+              ? `Flagged on ${knockoutFlags.map((criterion) => criterion.code).join(', ')}. Result is Not ready.`
+              : 'Flag a knockout on any question to force Not ready.'}
+          </span>
+        </div>
+      </div>
+
+      <div className="sc2-split">
+        <span className="sc2-strong">Section split</span>
+        {(['technicalWeight', 'behavioralWeight'] as const).map((field) => (
+          <label key={field} className="sc2-weight-field">
+            {field === 'technicalWeight' ? sectionLabel('technical') : sectionLabel('behavioral')}
             <input
-              aria-label={`${activeScorecardTab} section name`}
-              value={
-                activeScorecardTab === 'technical'
-                  ? (config.technicalLabel ?? 'TECHNICAL')
-                  : (config.behavioralLabel ?? 'BEHAVIORAL')
-              }
+              className="sc2-input"
+              type="number"
+              inputMode="numeric"
+              min="0"
+              max="100"
+              step="1"
+              value={numericInputValue(`section-weight:${field}`, config[field])}
+              disabled={!canEditStructure}
               onChange={(event) =>
-                setSectionLabel(
-                  activeScorecardTab === 'technical' ? 'technicalLabel' : 'behavioralLabel',
+                setNumericDraft(
+                  `section-weight:${field}`,
                   event.target.value,
+                  0,
+                  100,
+                  false,
+                  (value) => {
+                    if (value !== undefined) {
+                      setConfig({ ...config, [field]: value });
+                      setDirtyConfig(true);
+                    }
+                  },
                 )
               }
+              onBlur={() => clearNumericDraft(`section-weight:${field}`)}
             />
+            <span>%</span>
           </label>
-        )}
-      </div>
-      <div
-        className={`scorecard-weight-budget ${
-          activeSectionWeightTotal === 100
-            ? 'ok'
-            : activeSectionWeightTotal > 100
-              ? 'over'
-              : 'under'
-        }`}
-      >
-        <span>Issue weights</span>
-        <span className="scorecard-weight-budget-bar" aria-hidden="true">
-          <span style={{ width: `${Math.min(activeSectionWeightTotal, 100)}%` }} />
+        ))}
+        <span className={`sc2-pill ${sectionSplitTotal === 100 ? 'ok' : 'error'}`}>
+          {sectionSplitTotal === 100
+            ? 'Total 100% ✓'
+            : `Total ${sectionSplitTotal}% · must be 100%`}
         </span>
-        <strong>
-          {activeSectionWeightTotal === 100
-            ? '100% of 100% ✓'
-            : activeSectionWeightTotal > 100
-              ? `${activeSectionWeightTotal}% · over by ${activeSectionWeightTotal - 100}%`
-              : `${activeSectionWeightTotal}% · ${100 - activeSectionWeightTotal}% unassigned`}
-        </strong>
-        {sectionSplitTotal !== 100 && (
-          <span className="scorecard-weight-budget-split">
-            Technical + Behavioral = {sectionSplitTotal}% (must be 100%)
+      </div>
+
+      <div className="sc2-tabbar">
+        <div role="tablist" aria-label="Scorecard section" className="sc2-tabs">
+          {(['technical', 'behavioral'] as const).map((section) => (
+            <button
+              key={section}
+              type="button"
+              role="tab"
+              className="sc2-tab"
+              aria-selected={activeScorecardTab === section}
+              onClick={() => setActiveScorecardTab(section)}
+            >
+              {sectionLabel(section)}
+              <span className="sc2-num sc2-tab-count">{config[section].length} issues</span>
+            </button>
+          ))}
+        </div>
+        <div className="sc2-budget">
+          <span>Issue weights</span>
+          <span className="sc2-budget-bar">
+            <span
+              className={`sc2-bar-fill tone-${
+                activeSectionWeightTotal === 100
+                  ? 'good'
+                  : activeSectionWeightTotal > 100
+                    ? 'low'
+                    : 'mid'
+              }`}
+              style={{ width: `${Math.min(activeSectionWeightTotal, 100)}%` }}
+            />
           </span>
-        )}
-      </div>
-      <div className="scorecard-issue-list" role="tabpanel">
-        {dimensionRows(activeScorecardTab, config[activeScorecardTab])}
-      </div>
-      <div className="action-row" style={{ marginTop: '16px' }}>
-        {locked && data.canReviseSubmission && (
-          <button
-            className="secondary-button"
-            disabled={reviseSubmittedScores.isPending}
-            onClick={() => {
-              const reason = window.prompt(
-                'Why are you editing this submitted scorecard? This reason will be saved in the audit history.',
-              );
-              if (reason?.trim()) reviseSubmittedScores.mutate(reason.trim());
-            }}
+          <span
+            className={`sc2-num sc2-strong tone-text-${
+              activeSectionWeightTotal === 100
+                ? 'good'
+                : activeSectionWeightTotal > 100
+                  ? 'low'
+                  : 'mid'
+            }`}
           >
-            {reviseSubmittedScores.isPending ? 'Reopening…' : 'Edit submitted scores'}
-          </button>
-        )}
-        {data.canEditWeights && !locked && (
-          <button
-            className="secondary-button"
-            disabled={
-              !dirtyConfig ||
-              hasInvalidNumericDraft ||
-              weightProblems.length > 0 ||
-              saveConfig.isPending
+            {activeSectionWeightTotal === 100
+              ? '100% of 100%'
+              : activeSectionWeightTotal > 100
+                ? `${activeSectionWeightTotal}% · over by ${activeSectionWeightTotal - 100}%`
+                : `${activeSectionWeightTotal}% · ${100 - activeSectionWeightTotal}% unassigned`}
+          </span>
+        </div>
+      </div>
+
+      {editStructure && canEditStructure && (
+        <label className="sc2-edit-row">
+          Section name
+          <input
+            className="sc2-text-input"
+            value={sectionLabel(activeScorecardTab)}
+            onChange={(event) =>
+              setSectionLabel(
+                activeScorecardTab === 'technical' ? 'technicalLabel' : 'behavioralLabel',
+                event.target.value,
+              )
             }
-            title={weightProblems.join(' ') || undefined}
-            onClick={() => saveConfig.mutate(config)}
-          >
-            {saveConfig.isPending ? 'Saving…' : 'Save scorecard settings'}
-          </button>
-        )}
-        <button
-          className="secondary-button"
-          disabled={
-            locked ||
-            dirtyConfig ||
-            hasInvalidNumericDraft ||
-            saveConfig.isPending ||
-            saveRatings.isPending
-          }
-          onClick={() => saveRatings.mutate({ submit: false })}
-        >
-          {saveRatings.isPending && !saveRatings.variables?.submit ? 'Saving…' : 'Save score draft'}
-        </button>
-        <button
-          className="primary-button"
-          disabled={
-            locked ||
-            dirtyConfig ||
-            hasInvalidNumericDraft ||
-            saveConfig.isPending ||
-            preview.completeCount === 0 ||
-            saveRatings.isPending
-          }
-          onClick={() => saveRatings.mutate({ submit: true })}
-        >
-          {saveRatings.isPending && saveRatings.variables?.submit ? 'Submitting…' : 'Submit scores'}
-        </button>
+          />
+        </label>
+      )}
+
+      <div className="sc2-issues" role="tabpanel">
+        {issueCards(activeScorecardTab)}
       </div>
+
+      {data.submissions.length > 0 && (
+        <p className="sc2-sub">
+          {data.submissions.filter((submission) => submission.submitted).length} assessor
+          scorecard(s) submitted. The final result averages all completed scorecards.
+        </p>
+      )}
+
+      <div className="sc2-footer">
+        <span className={`sc2-footer-msg tone-${footerMessage.tone}`} role="status">
+          {footerMessage.text}
+        </span>
+        <div className="sc2-footer-actions">
+          {locked && data.canReviseSubmission && (
+            <button
+              type="button"
+              className="sc2-btn sc2-btn-secondary"
+              disabled={reviseSubmittedScores.isPending}
+              onClick={() => {
+                const reason = window.prompt(
+                  'Why are you editing this submitted scorecard? This reason will be saved in the audit history.',
+                );
+                if (reason?.trim()) reviseSubmittedScores.mutate(reason.trim());
+              }}
+            >
+              {reviseSubmittedScores.isPending ? 'Reopening…' : 'Edit submitted scores'}
+            </button>
+          )}
+          {canEditStructure && dirtyConfig && (
+            <button
+              type="button"
+              className="sc2-btn sc2-btn-secondary"
+              disabled={hasInvalidNumericDraft || weightProblems.length > 0 || saveConfig.isPending}
+              onClick={() => saveConfig.mutate(config)}
+            >
+              {saveConfig.isPending ? 'Saving…' : 'Save scorecard settings'}
+            </button>
+          )}
+          <button
+            type="button"
+            className="sc2-btn sc2-btn-secondary"
+            disabled={
+              locked ||
+              dirtyConfig ||
+              hasInvalidNumericDraft ||
+              saveConfig.isPending ||
+              saveRatings.isPending
+            }
+            onClick={() => saveRatings.mutate({ submit: false })}
+          >
+            {saveRatings.isPending && !saveRatings.variables?.submit ? 'Saving…' : 'Save draft'}
+          </button>
+          <button
+            type="button"
+            className="sc2-btn sc2-btn-primary"
+            disabled={
+              locked ||
+              dirtyConfig ||
+              hasInvalidNumericDraft ||
+              saveConfig.isPending ||
+              preview.completeCount === 0 ||
+              saveRatings.isPending
+            }
+            onClick={() => saveRatings.mutate({ submit: true })}
+          >
+            {saveRatings.isPending && saveRatings.variables?.submit
+              ? 'Submitting…'
+              : 'Submit scores'}
+          </button>
+        </div>
+      </div>
+
       {locked && (
         <div className="restricted-callout" style={{ marginTop: '12px' }}>
           <LockKeyhole size={16} />
@@ -3053,11 +3155,6 @@ function AssessorScorecard({
             </span>
           </div>
         </div>
-      )}
-      {dirtyConfig && weightProblems.length > 0 && (
-        <p className="scorecard-settings-hint" role="alert">
-          {weightProblems.join(' ')}
-        </p>
       )}
       {saveConfig.isError && <InlineError error={saveConfig.error} onRefresh={onRefresh} />}
       {saveRatings.isError && <InlineError error={saveRatings.error} onRefresh={onRefresh} />}

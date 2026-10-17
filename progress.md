@@ -432,3 +432,4 @@
 - Weights: issue weights per section and the Technical/Behavioral split must each total 100% (scorecardWeightProblems); enforced in the API on save and in the UI (budget bar, save disabled).
 - UI: segmented score buttons, Flag knockout toggle, issue total shows actual/target plus % and /5, weight budget indicator. Old 0-5 drafts count as unanswered.
 - Design proposal artifact: 'Scorecard redesign'.
+- Scorecard view rebuilt to match the approved mockup exactly (sc2-* styles, IBM Plex Sans/Mono, summary strip, section split, tabs with weight budget, issue rows with weight/progress/actual-target, question grid QUESTION | SCORE | Q. WEIGHT, knockout flag and evidence note under each question). Question text/issue name editing and add/remove moved behind 'Edit questions'.
