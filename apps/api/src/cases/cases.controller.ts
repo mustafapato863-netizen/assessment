@@ -258,7 +258,8 @@ export class CasesController {
     @Actor() actor: AuthActor,
   ) {
     const parsed = scorecardSubmissionSchema.safeParse(input);
-    if (!parsed.success) throw new BadRequestException('Scores must be whole numbers from 1 to 5.');
+    if (!parsed.success)
+      throw new BadRequestException('Each question is scored 0, 0.25, 0.5, 0.75 or 1.');
     return this.casesService.saveScorecard(caseId, parsed.data.ratings, parsed.data.submit, actor);
   }
 

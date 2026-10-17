@@ -55,8 +55,9 @@ import type {
 import {
   calculateScorecard,
   assessorRecommendationCodes,
-  SCORECARD_KNOCKOUT_THRESHOLD,
   SCORECARD_QUESTION_TARGET,
+  SCORECARD_SCORE_OPTIONS,
+  scorecardWeightProblems,
   SCORECARD_READY_NOW_THRESHOLD,
   SCORECARD_READY_WITH_DEVELOPMENT_THRESHOLD,
   scorecardRatingKey,
@@ -2331,23 +2332,25 @@ function AssessorScorecard({
       total +
       dimension.criteria.filter((criterion) => {
         const score = ratings[scorecardRatingKey(dimension, criterion)]?.score;
-        return Number.isFinite(score) && score! >= 0 && score! <= 5;
+        return (
+          score !== undefined && (SCORECARD_SCORE_OPTIONS as readonly number[]).includes(score)
+        );
       }).length,
     0,
   );
-  const knockoutCriteria = allDimensions.flatMap((dimension) =>
-    dimension.criteria
-      .filter((criterion) => criterion.knockout)
-      .map((criterion) => ({ dimension, criterion })),
+  // Knockout is a flag the assessor sets on a question; it does not depend on the score.
+  const knockoutFlags = allDimensions.flatMap((dimension) =>
+    dimension.criteria.filter(
+      (criterion) => ratings[scorecardRatingKey(dimension, criterion)]?.knockout === true,
+    ),
   );
-  const knockoutTriggered = knockoutCriteria.some(({ dimension, criterion }) => {
-    const score = ratings[scorecardRatingKey(dimension, criterion)]?.score;
-    return score !== undefined && score < SCORECARD_KNOCKOUT_THRESHOLD;
-  });
-  const knockoutPending = knockoutCriteria.some(
-    ({ dimension, criterion }) =>
-      ratings[scorecardRatingKey(dimension, criterion)]?.score === undefined,
+  const knockoutTriggered = knockoutFlags.length > 0;
+  const weightProblems = scorecardWeightProblems(config);
+  const activeSectionWeightTotal = config[activeScorecardTab].reduce(
+    (total, dimension) => total + dimension.weight,
+    0,
   );
+  const sectionSplitTotal = config.technicalWeight + config.behavioralWeight;
   const hasInvalidNumericDraft = Object.values(numericDrafts).some((draft) => !draft.valid);
   const setNumericDraft = (
     key: string,
@@ -2442,28 +2445,6 @@ function AssessorScorecard({
     });
     setDirtyConfig(true);
   };
-  const setCriterionKnockout = (
-    section: 'technical' | 'behavioral',
-    groupIndex: number,
-    ratingKey: string,
-    knockout: boolean,
-  ) => {
-    setConfig((current) => {
-      if (!current) return current;
-      const groups = [...current[section]];
-      const group = groups[groupIndex]!;
-      groups[groupIndex] = {
-        ...group,
-        criteria: group.criteria.map((criterion) =>
-          scorecardRatingKey(group, criterion) === ratingKey
-            ? { ...criterion, knockout }
-            : criterion,
-        ),
-      };
-      return { ...current, [section]: groups };
-    });
-    setDirtyConfig(true);
-  };
   const addCriterion = (section: 'technical' | 'behavioral', groupIndex: number) => {
     setConfig((current) => {
       if (!current) return current;
@@ -2523,6 +2504,13 @@ function AssessorScorecard({
         [field]: field === 'score' ? (value ? Number(value) : undefined) : value,
       },
     }));
+  const setScore = (code: string, score: number) =>
+    setRatings((current) => ({ ...current, [code]: { ...current[code], score } }));
+  const toggleKnockout = (code: string) =>
+    setRatings((current) => ({
+      ...current,
+      [code]: { ...current[code], knockout: !current[code]?.knockout },
+    }));
   const toggleComment = (ratingKey: string) =>
     setExpandedComments((current) => {
       const next = new Set(current);
@@ -2545,12 +2533,14 @@ function AssessorScorecard({
         (total, item) => total + item.score * item.weight,
         0,
       );
-      // Each question is rated 0-5; the maximum total is the top rating times the
-      // criterion weight, so the issue score is the weighted average rating.
+      // Each question scores 0-1 and its target is its weight (default 1), so the
+      // issue target is the number of questions when weights are untouched.
       const targetTotal = totalWeight * SCORECARD_QUESTION_TARGET;
       const hasScoredCriteria = ratedCriteria.length > 0;
       const ratedWeight = ratedCriteria.reduce((total, item) => total + item.weight, 0);
-      const issueScore = ratedWeight ? actualWeightedScore / ratedWeight : 0;
+      // Running 0-5 score over the questions scored so far.
+      const issueScore = ratedWeight ? (actualWeightedScore / ratedWeight) * 5 : 0;
+      const issuePercent = targetTotal ? Math.round((actualWeightedScore / targetTotal) * 100) : 0;
       const totalColor = !hasScoredCriteria
         ? 'var(--muted)'
         : issueScore >= SCORECARD_READY_NOW_THRESHOLD
@@ -2585,8 +2575,8 @@ function AssessorScorecard({
                   type="number"
                   inputMode="decimal"
                   min="0"
-                  max="1000"
-                  step="0.1"
+                  max="100"
+                  step="1"
                   value={numericInputValue(
                     `dimension-weight:${section}:${index}`,
                     dimension.weight,
@@ -2597,7 +2587,7 @@ function AssessorScorecard({
                       `dimension-weight:${section}:${index}`,
                       event.target.value,
                       0,
-                      1000,
+                      100,
                       false,
                       (value) => {
                         if (value !== undefined) setWeight(section, index, value);
@@ -2610,9 +2600,12 @@ function AssessorScorecard({
               </label>
               <strong className="scorecard-issue-total" style={{ color: totalColor }}>
                 <span>Issue total</span>
-                {hasScoredCriteria
-                  ? `${formatScore(actualWeightedScore)} / ${formatScore(targetTotal)}`
-                  : `— / ${formatScore(targetTotal)}`}
+                {`${hasScoredCriteria ? formatScore(actualWeightedScore) : '—'} / ${formatScore(targetTotal)}`}
+                <small className="scorecard-issue-percent">
+                  {hasScoredCriteria
+                    ? `${issuePercent}% · ${formatCategoryScore(issueScore)}/5`
+                    : `${dimension.criteria.length} questions`}
+                </small>
               </strong>
               <span className="scorecard-issue-chevron" aria-hidden="true" />
             </span>
@@ -2667,43 +2660,39 @@ function AssessorScorecard({
                     />
                   </div>
                   <div className="scorecard-question-controls">
+                    <div className="scorecard-question-control">
+                      <span id={`score-label-${ratingKey}`}>Score</span>
+                      <div
+                        className="scorecard-score-options"
+                        role="group"
+                        aria-labelledby={`score-label-${ratingKey}`}
+                      >
+                        {SCORECARD_SCORE_OPTIONS.map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            className="scorecard-score-option"
+                            aria-pressed={ratings[ratingKey]?.score === option}
+                            aria-label={`${criterion.name}: score ${option}`}
+                            disabled={locked}
+                            onClick={() => setScore(ratingKey, option)}
+                          >
+                            {option === 0.25
+                              ? '¼'
+                              : option === 0.5
+                                ? '½'
+                                : option === 0.75
+                                  ? '¾'
+                                  : option}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="scorecard-question-target">0 = not met · 1 = fully met</span>
+                    </div>
                     <label className="scorecard-question-control">
-                      <span>Actual score</span>
+                      <span>Question weight</span>
                       <input
-                        aria-label={`${criterion.name} score from 0 to 5`}
-                        type="number"
-                        inputMode="decimal"
-                        min="0"
-                        max="5"
-                        step="0.1"
-                        placeholder="0–5"
-                        value={numericInputValue(`score:${ratingKey}`, ratings[ratingKey]?.score)}
-                        onChange={(event) =>
-                          setNumericDraft(
-                            `score:${ratingKey}`,
-                            event.target.value,
-                            0,
-                            5,
-                            true,
-                            (value) =>
-                              setRating(
-                                ratingKey,
-                                'score',
-                                value === undefined ? '' : String(value),
-                              ),
-                          )
-                        }
-                        onBlur={() => clearNumericDraft(`score:${ratingKey}`)}
-                        disabled={locked}
-                      />
-                      <span className="scorecard-question-target">
-                        Max: {formatScore(SCORECARD_QUESTION_TARGET)}
-                      </span>
-                    </label>
-                    <label className="scorecard-question-control">
-                      <span>Weight</span>
-                      <input
-                        aria-label={`${criterion.name} weight`}
+                        aria-label={`${criterion.name} question weight`}
                         type="number"
                         inputMode="decimal"
                         min="0"
@@ -2729,17 +2718,15 @@ function AssessorScorecard({
                     </label>
                   </div>
                   <div className="scorecard-question-footer">
-                    <label className="scorecard-question-knockout">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(criterion.knockout)}
-                        disabled={!data.canEditWeights || locked}
-                        onChange={(event) =>
-                          setCriterionKnockout(section, index, ratingKey, event.target.checked)
-                        }
-                      />
-                      Knockout criterion
-                    </label>
+                    <button
+                      type="button"
+                      className={`scorecard-knockout-toggle${ratings[ratingKey]?.knockout ? ' active' : ''}`}
+                      aria-pressed={Boolean(ratings[ratingKey]?.knockout)}
+                      disabled={locked}
+                      onClick={() => toggleKnockout(ratingKey)}
+                    >
+                      {ratings[ratingKey]?.knockout ? 'Knockout flagged' : 'Flag knockout'}
+                    </button>
                     <div className="scorecard-question-comment">
                       <button
                         type="button"
@@ -2800,11 +2787,8 @@ function AssessorScorecard({
                 <span>
                   Questions scored: {ratedCriteria.length} / {dimension.criteria.length}
                 </span>
-                <span>
-                  Maximum total ({formatScore(SCORECARD_QUESTION_TARGET)} per question × weight):{' '}
-                  {formatScore(targetTotal)}
-                </span>
-                <span>Weighted actual total: {formatScore(actualWeightedScore)}</span>
+                <span>Target (sum of question weights): {formatScore(targetTotal)}</span>
+                <span>Actual (score × question weight): {formatScore(actualWeightedScore)}</span>
               </div>
               <div
                 style={{
@@ -2814,11 +2798,11 @@ function AssessorScorecard({
                   color: totalColor,
                 }}
               >
-                <span>Issue score (weighted actual / weighted maximum)</span>
+                <span>Issue score (actual / target × 5)</span>
                 <span>
                   {hasScoredCriteria
-                    ? `${formatScore(actualWeightedScore)} / ${formatScore(targetTotal)}`
-                    : `Enter a score · max ${formatScore(targetTotal)}`}
+                    ? `${formatCategoryScore(issueScore)} / 5`
+                    : 'Score the questions'}
                 </span>
               </div>
             </div>
@@ -2835,8 +2819,9 @@ function AssessorScorecard({
         action={<StatusBadge status={locked ? 'COMPLETED' : 'IN_PROGRESS'} />}
       />
       <p className="panel-intro">
-        Use the workbook standards as the starting point. Rate each criterion from 1 to 5 and add
-        evidence where useful. The result updates automatically from the submitted scorecards.
+        Score each question 0 (not met) to 1 (fully met). An issue&apos;s target is its number of
+        questions (or the sum of question weights). Flag a knockout on any question that rules the
+        candidate out; any knockout makes the result Not ready, whatever the scores.
       </p>
       <div className="scorecard-weight-grid">
         {(['technicalWeight', 'behavioralWeight'] as const).map((field) => (
@@ -2851,8 +2836,8 @@ function AssessorScorecard({
                 type="number"
                 inputMode="decimal"
                 min="0"
-                max="1000"
-                step="0.1"
+                max="100"
+                step="1"
                 value={numericInputValue(`section-weight:${field}`, config[field])}
                 disabled={!data.canEditWeights || locked}
                 onChange={(event) =>
@@ -2860,7 +2845,7 @@ function AssessorScorecard({
                     `section-weight:${field}`,
                     event.target.value,
                     0,
-                    1000,
+                    100,
                     false,
                     (value) => {
                       if (value !== undefined) {
@@ -2912,13 +2897,12 @@ function AssessorScorecard({
               : 'Complete all scores to calculate'}
           </small>
         </div>
-        <div
-          className={`scorecard-metric-card ${
-            knockoutTriggered ? 'danger' : knockoutPending ? 'warning' : 'success'
-          }`}
-        >
+        <div className={`scorecard-metric-card ${knockoutTriggered ? 'danger' : 'success'}`}>
           <span>Knockout</span>
-          <strong>{knockoutTriggered ? 'Triggered' : knockoutPending ? 'Pending' : 'Clear'}</strong>
+          <strong>{knockoutTriggered ? 'Triggered' : 'Clear'}</strong>
+          {knockoutTriggered && (
+            <small>Flagged on {knockoutFlags.map((criterion) => criterion.code).join(', ')}</small>
+          )}
         </div>
       </div>
       {data.submissions.length > 0 && (
@@ -2970,6 +2954,32 @@ function AssessorScorecard({
           </label>
         )}
       </div>
+      <div
+        className={`scorecard-weight-budget ${
+          activeSectionWeightTotal === 100
+            ? 'ok'
+            : activeSectionWeightTotal > 100
+              ? 'over'
+              : 'under'
+        }`}
+      >
+        <span>Issue weights</span>
+        <span className="scorecard-weight-budget-bar" aria-hidden="true">
+          <span style={{ width: `${Math.min(activeSectionWeightTotal, 100)}%` }} />
+        </span>
+        <strong>
+          {activeSectionWeightTotal === 100
+            ? '100% of 100% ✓'
+            : activeSectionWeightTotal > 100
+              ? `${activeSectionWeightTotal}% · over by ${activeSectionWeightTotal - 100}%`
+              : `${activeSectionWeightTotal}% · ${100 - activeSectionWeightTotal}% unassigned`}
+        </strong>
+        {sectionSplitTotal !== 100 && (
+          <span className="scorecard-weight-budget-split">
+            Technical + Behavioral = {sectionSplitTotal}% (must be 100%)
+          </span>
+        )}
+      </div>
       <div className="scorecard-issue-list" role="tabpanel">
         {dimensionRows(activeScorecardTab, config[activeScorecardTab])}
       </div>
@@ -2991,7 +3001,13 @@ function AssessorScorecard({
         {data.canEditWeights && !locked && (
           <button
             className="secondary-button"
-            disabled={!dirtyConfig || hasInvalidNumericDraft || saveConfig.isPending}
+            disabled={
+              !dirtyConfig ||
+              hasInvalidNumericDraft ||
+              weightProblems.length > 0 ||
+              saveConfig.isPending
+            }
+            title={weightProblems.join(' ') || undefined}
             onClick={() => saveConfig.mutate(config)}
           >
             {saveConfig.isPending ? 'Saving…' : 'Save scorecard settings'}
@@ -3037,6 +3053,11 @@ function AssessorScorecard({
             </span>
           </div>
         </div>
+      )}
+      {dirtyConfig && weightProblems.length > 0 && (
+        <p className="scorecard-settings-hint" role="alert">
+          {weightProblems.join(' ')}
+        </p>
       )}
       {saveConfig.isError && <InlineError error={saveConfig.error} onRefresh={onRefresh} />}
       {saveRatings.isError && <InlineError error={saveRatings.error} onRefresh={onRefresh} />}
@@ -3305,14 +3326,14 @@ function AssessmentSummary({
                 </span>
                 <strong style={{ color: check.triggered ? 'var(--danger)' : 'var(--success)' }}>
                   {check.actual === null
-                    ? `Pending · minimum ${formatScore(check.target)}`
-                    : `Lowest ${formatScore(check.actual)} · minimum ${formatScore(check.target)} · ${check.triggered ? 'Knockout triggered' : 'Clear'}`}
+                    ? 'Not flagged'
+                    : `Flagged by ${check.actual} assessor${check.actual === 1 ? '' : 's'} · knockout triggered`}
                 </strong>
               </div>
             ))}
           </div>
         ) : (
-          <p className="panel-intro">No critical knockout criteria are configured.</p>
+          <p className="panel-intro">No knockout flagged by any assessor.</p>
         )}
       </div>
 

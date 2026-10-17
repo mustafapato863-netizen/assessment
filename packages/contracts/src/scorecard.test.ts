@@ -3,6 +3,7 @@ import {
   calculateScorecard,
   defaultScorecardConfig,
   scorecardRatingKey,
+  scorecardWeightProblems,
   type ScorecardConfig,
   type ScorecardRatings,
 } from './scorecard';
@@ -21,7 +22,6 @@ const score = (config: ScorecardConfig, ratings: ScorecardRatings[]) =>
     ratings.map((r) => ({ ratings: r, submitted: true })),
   );
 
-// Small config without knockouts so the bands can be tested in isolation.
 const simple: ScorecardConfig = {
   technicalWeight: 50,
   behavioralWeight: 50,
@@ -29,7 +29,7 @@ const simple: ScorecardConfig = {
     {
       code: 'T',
       name: 'Technical',
-      weight: 1,
+      weight: 100,
       criteria: [
         { code: 'a', name: 'A', standard: '', weight: 1 },
         { code: 'b', name: 'B', standard: '', weight: 3 },
@@ -40,83 +40,83 @@ const simple: ScorecardConfig = {
     {
       code: 'B',
       name: 'Behavioral',
-      weight: 1,
+      weight: 100,
       criteria: [{ code: 'c', name: 'C', standard: '', weight: 1 }],
     },
   ],
 };
 
-describe('calculateScorecard', () => {
-  it('scores a uniform rating as that rating (no saturation at low ratings)', () => {
-    for (const value of [1, 2, 3, 4, 5]) {
-      expect(score(simple, [uniform(simple, value)]).overall).toBeCloseTo(value, 6);
+describe('calculateScorecard (questions scored 0 to 1)', () => {
+  it('converts the share of the target achieved to a 0-5 score', () => {
+    for (const value of [0, 0.25, 0.5, 0.75, 1]) {
+      expect(score(simple, [uniform(simple, value)]).overall).toBeCloseTo(value * 5, 6);
     }
   });
 
-  it('maps overall bands to result codes', () => {
-    expect(score(simple, [uniform(simple, 1)]).resultCode).toBe('NOT_READY');
-    expect(score(simple, [uniform(simple, 2.99)]).resultCode).toBe('NOT_READY');
-    expect(score(simple, [uniform(simple, 3)]).resultCode).toBe('READY_WITH_DEVELOPMENT');
-    expect(score(simple, [uniform(simple, 3.99)]).resultCode).toBe('READY_WITH_DEVELOPMENT');
-    expect(score(simple, [uniform(simple, 4)]).resultCode).toBe('READY_NOW');
-    expect(score(simple, [uniform(simple, 5)]).resultCode).toBe('READY_NOW');
+  it('uses the sum of question weights as the issue target', () => {
+    // a=1 (w1), b=0.5 (w3): actual 2.5 of target 4 -> 62.5% -> 3.125
+    const result = score(simple, [
+      { 'T:a': { score: 1 }, 'T:b': { score: 0.5 }, 'B:c': { score: 1 } },
+    ]);
+    expect(result.technicalIssues[0]).toMatchObject({ actual: 2.5, target: 4 });
+    expect(result.technical).toBeCloseTo(3.125, 6);
+    expect(result.behavioral).toBeCloseTo(5, 6);
   });
 
-  it('applies criterion weights within a dimension', () => {
-    // a=5 (w1), b=1 (w3) -> technical = (5 + 3) / 4 = 2; behavioral c=4 -> overall 3
-    const result = score(simple, [
-      { 'T:a': { score: 5 }, 'T:b': { score: 1 }, 'B:c': { score: 4 } },
-    ]);
-    expect(result.technical).toBeCloseTo(2, 6);
-    expect(result.behavioral).toBeCloseTo(4, 6);
-    expect(result.overall).toBeCloseTo(3, 6);
+  it('maps the overall score to result bands', () => {
+    expect(score(simple, [uniform(simple, 0.5)]).resultCode).toBe('NOT_READY'); // 2.5
+    expect(score(simple, [uniform(simple, 0.6)]).resultCode).toBe('READY_WITH_DEVELOPMENT'); // 3
+    expect(score(simple, [uniform(simple, 0.75)]).resultCode).toBe('READY_WITH_DEVELOPMENT'); // 3.75
+    expect(score(simple, [uniform(simple, 0.8)]).resultCode).toBe('READY_NOW'); // 4
   });
 
   it('averages complete submissions across assessors', () => {
-    const result = score(simple, [uniform(simple, 5), uniform(simple, 3)]);
-    expect(result.completeCount).toBe(2);
-    expect(result.overall).toBeCloseTo(4, 6);
+    expect(score(simple, [uniform(simple, 1), uniform(simple, 0.6)]).overall).toBeCloseTo(4, 6);
   });
 
-  it('returns INCOMPLETE when no assessor submitted every criterion', () => {
-    const partial = { 'T:a': { score: 5 } };
-    expect(score(simple, [partial]).resultCode).toBe('INCOMPLETE');
+  it('treats out-of-range scores (old 0-5 drafts) as unanswered', () => {
+    expect(score(simple, [uniform(simple, 3)]).resultCode).toBe('INCOMPLETE');
   });
 
-  it('forces NOT_READY when a knockout criterion is rated below the threshold', () => {
-    const withKnockout: ScorecardConfig = {
-      ...simple,
-      technical: [
-        {
-          ...simple.technical[0]!,
-          criteria: [
-            { ...simple.technical[0]!.criteria[0]!, knockout: true },
-            simple.technical[0]!.criteria[1]!,
-          ],
-        },
-      ],
-    };
-    const strong = uniform(withKnockout, 5);
-    expect(score(withKnockout, [strong]).resultCode).toBe('READY_NOW');
-    const failed = { ...strong, 'T:a': { score: 1.5 } };
-    const result = score(withKnockout, [failed]);
+  it('knockout is a flag set by the assessor, independent of the score', () => {
+    const full = uniform(simple, 1);
+    expect(score(simple, [full]).knockout).toBe(false);
+    const flagged = { ...full, 'T:a': { score: 1, knockout: true } };
+    const result = score(simple, [flagged]);
     expect(result.knockout).toBe(true);
     expect(result.resultCode).toBe('NOT_READY');
-    // One assessor triggering the knockout is enough.
-    expect(score(withKnockout, [strong, failed]).knockout).toBe(true);
-    // Exactly at the threshold is not a knockout.
-    expect(score(withKnockout, [{ ...strong, 'T:a': { score: 2 } }]).knockout).toBe(false);
+    expect(result.overall).toBeCloseTo(5, 6);
+    expect(result.knockoutChecks).toEqual([
+      expect.objectContaining({ code: 'a', triggered: true, actual: 1 }),
+    ]);
+    // A low score alone does not trigger a knockout.
+    expect(score(simple, [{ ...full, 'T:a': { score: 0 } }]).knockout).toBe(false);
   });
 
-  it('does not rate a weak candidate on the default config as READY_NOW', () => {
-    // Regression: with a per-question target of 1, every rating >= 1 scored 5/5.
-    for (const value of [2, 2.5]) {
-      const result = score(defaultScorecardConfig, [uniform(defaultScorecardConfig, value)]);
-      expect(result.overall).toBeCloseTo(value, 6);
-      expect(result.resultCode).toBe('NOT_READY');
-    }
-    expect(score(defaultScorecardConfig, [uniform(defaultScorecardConfig, 3.5)]).resultCode).toBe(
-      'READY_WITH_DEVELOPMENT',
+  it('scores the default workbook config on the same scale', () => {
+    expect(score(defaultScorecardConfig, [uniform(defaultScorecardConfig, 1)]).resultCode).toBe(
+      'READY_NOW',
     );
+    expect(score(defaultScorecardConfig, [uniform(defaultScorecardConfig, 0.25)]).resultCode).toBe(
+      'NOT_READY',
+    );
+  });
+});
+
+describe('scorecardWeightProblems', () => {
+  it('accepts the default config (each set totals 100%)', () => {
+    expect(scorecardWeightProblems(defaultScorecardConfig)).toEqual([]);
+  });
+
+  it('reports each set that does not total 100%', () => {
+    const broken: ScorecardConfig = {
+      ...simple,
+      technicalWeight: 60,
+      technical: [{ ...simple.technical[0]!, weight: 90 }],
+    };
+    const problems = scorecardWeightProblems(broken);
+    expect(problems).toHaveLength(2);
+    expect(problems.join(' ')).toMatch(/110%/);
+    expect(problems.join(' ')).toMatch(/90%/);
   });
 });

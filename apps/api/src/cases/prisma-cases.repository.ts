@@ -25,6 +25,8 @@ import {
   updateDevelopmentSchema,
   updateAssessorRecommendationSchema,
   calculateScorecard,
+  SCORECARD_SCORE_OPTIONS,
+  scorecardWeightProblems,
   defaultScorecardConfig,
   scorecardRatingKey,
   scorecardConfigSchema,
@@ -1413,7 +1415,7 @@ export class PrismaCasesRepository {
       );
       if (!scorecardResult.completeCount)
         throw new BadRequestException(
-          'At least one assessor must submit a complete 1 to 5 scorecard before finalizing the result.',
+          'At least one assessor must submit a complete scorecard before finalizing the result.',
         );
       const effectiveResultCode = scorecardResult.resultCode;
       const changed = await tx.assessmentCase.updateMany({
@@ -2308,6 +2310,11 @@ export class PrismaCasesRepository {
 
   async updateScorecardConfig(caseId: string, configInput: ScorecardConfig, actor: AuthActor) {
     const config = scorecardConfigSchema.parse(configInput);
+    const weightProblems = scorecardWeightProblems(config);
+    if (weightProblems.length)
+      throw new BadRequestException(
+        this.error('SCORECARD_WEIGHTS_INVALID', weightProblems.join(' ')),
+      );
     const record = await this.prisma.assessmentCase.findUnique({
       where: { id: caseId },
       include: { plan: true, scorecards: { where: { submittedAt: { not: null } }, take: 1 } },
@@ -2390,15 +2397,15 @@ export class PrismaCasesRepository {
       if (Object.keys(ratings).some((key) => !criterionKeys.has(key)))
         throw new BadRequestException('The scorecard contains an unknown criterion.');
       if (
-        submit &&
-        criteria.some((entry) => {
-          const score = ratings[entry.ratingKey]?.score;
-          return score === undefined || !Number.isFinite(score) || score < 0 || score > 5;
-        })
+        Object.values(ratings).some(
+          (rating) =>
+            rating.score !== undefined &&
+            !(SCORECARD_SCORE_OPTIONS as readonly number[]).includes(rating.score),
+        )
       )
-        throw new BadRequestException(
-          'Enter a score from 0 to 5 for every criterion before submitting.',
-        );
+        throw new BadRequestException('Each question is scored 0, 0.25, 0.5, 0.75 or 1.');
+      if (submit && criteria.some((entry) => ratings[entry.ratingKey]?.score === undefined))
+        throw new BadRequestException('Score every question before submitting.');
       const existing = record.scorecards.find((submission) => submission.assessorId === actor.id);
       if (existing?.submittedAt)
         throw new ConflictException('This scorecard was submitted and is locked.');

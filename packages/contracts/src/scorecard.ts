@@ -27,23 +27,24 @@ export interface ScorecardConfig {
 }
 
 export interface ScorecardRating {
+  /** 0 = not met, 1 = fully met (allowed steps: SCORECARD_SCORE_OPTIONS). */
   score?: number;
   evidence?: string;
+  /** Set by the assessor on this question. Any knockout forces NOT_READY, whatever the scores. */
+  knockout?: boolean;
 }
 
 export type ScorecardRatings = Record<string, ScorecardRating>;
 
-/** Highest rating an assessor can give a single criterion (scale 0-5). */
-export const SCORECARD_MAX_RATING = 5;
 /**
- * Per-question reference used for attainment. It must equal the top of the
- * rating scale: a target of 1 on a 0-5 scale saturated every dimension at 5/5
- * as soon as the average rating reached 1, which made almost every complete
- * scorecard READY_NOW.
+ * Each question is scored 0 (not met) to 1 (fully met) in quarter steps. An
+ * issue's target is the sum of its question weights (default 1 each, so the
+ * number of questions); its actual is the sum of score x question weight. The
+ * issue score on the 0-5 scale is actual / target x 5.
  */
+export const SCORECARD_MAX_RATING = 1;
 export const SCORECARD_QUESTION_TARGET = SCORECARD_MAX_RATING;
-/** A knockout criterion rated below this by any assessor forces NOT_READY. */
-export const SCORECARD_KNOCKOUT_THRESHOLD = 2;
+export const SCORECARD_SCORE_OPTIONS = [0, 0.25, 0.5, 0.75, 1] as const;
 /** Overall score bands (0-5) mapped to result codes. */
 export const SCORECARD_READY_NOW_THRESHOLD = 4;
 export const SCORECARD_READY_WITH_DEVELOPMENT_THRESHOLD = 3;
@@ -329,10 +330,33 @@ export const scorecardConfigSchema = z.object({
 export const scorecardRatingsSchema = z.record(
   z.string().min(1).max(60),
   z.object({
+    // Stored drafts from the earlier 0-5 scale still parse; new saves are
+    // limited to 0-1 by the API. Out-of-range scores count as unanswered.
     score: z.number().finite().min(0).max(5).optional(),
     evidence: z.string().max(4000).optional(),
+    knockout: z.boolean().optional(),
   }),
 );
+
+/** Weight problems that block saving scorecard settings (each set must total 100%). */
+export function scorecardWeightProblems(config: ScorecardConfig): string[] {
+  const total = (values: number[]) => values.reduce((sum, value) => sum + value, 0);
+  const off = (value: number) => Math.abs(value - 100) > 0.001;
+  const problems: string[] = [];
+  const split = config.technicalWeight + config.behavioralWeight;
+  if (off(split)) problems.push(`Technical and Behavioral weights total ${split}% (must be 100%).`);
+  const technical = total(config.technical.map((group) => group.weight));
+  if (off(technical))
+    problems.push(
+      `${config.technicalLabel ?? 'Technical'} issue weights total ${technical}% (must be 100%).`,
+    );
+  const behavioral = total(config.behavioral.map((group) => group.weight));
+  if (off(behavioral))
+    problems.push(
+      `${config.behavioralLabel ?? 'Behavioral'} issue weights total ${behavioral}% (must be 100%).`,
+    );
+  return problems;
+}
 
 export const scorecardSubmissionSchema = z.object({
   ratings: scorecardRatingsSchema,
@@ -373,7 +397,7 @@ export function calculateScorecard(
       submission.submitted &&
       criterionEntries.every((criterion) => {
         const score = submission.ratings[criterion.ratingKey]?.score;
-        return Number.isFinite(score) && score! >= 0 && score! <= 5;
+        return Number.isFinite(score) && score! >= 0 && score! <= SCORECARD_MAX_RATING;
       }),
   );
   if (!completeSubmissions.length) {
@@ -385,16 +409,7 @@ export function calculateScorecard(
       behavioralWeight: config.behavioralWeight,
       technicalIssues: [] as ScorecardIssueSummary[],
       behavioralIssues: [] as ScorecardIssueSummary[],
-      knockoutChecks: criterionEntries
-        .filter((entry) => entry.criterion.knockout)
-        .map(({ criterion, group }) => ({
-          code: criterion.code,
-          name: criterion.name,
-          issueName: group.name,
-          actual: null,
-          target: SCORECARD_KNOCKOUT_THRESHOLD,
-          triggered: false,
-        })),
+      knockoutChecks: [] as ScorecardKnockoutCheck[],
     };
   }
 
@@ -475,20 +490,27 @@ export function calculateScorecard(
       score: target ? Math.min(actual / target, 1) * 5 : 0,
     };
   });
-  const knockoutChecks = criterionEntries
-    .filter((entry) => entry.criterion.knockout)
-    .map(({ criterion, group, ratingKey }) => {
-      const scores = completeSubmissions.map((submission) => submission.ratings[ratingKey]!.score!);
-      const actual = Math.min(...scores);
-      return {
-        code: criterion.code,
-        name: criterion.name,
-        issueName: group.name,
-        actual,
-        target: SCORECARD_KNOCKOUT_THRESHOLD,
-        triggered: scores.some((score) => score < SCORECARD_KNOCKOUT_THRESHOLD),
-      };
-    });
+  // Knockout is a flag the assessor sets on a question, independent of its score.
+  // actual = number of assessors who flagged it; any flag triggers.
+  const knockoutChecks: ScorecardKnockoutCheck[] = criterionEntries.flatMap(
+    ({ criterion, group, ratingKey }) => {
+      const flaggedBy = completeSubmissions.filter(
+        (submission) => submission.ratings[ratingKey]?.knockout === true,
+      ).length;
+      return flaggedBy
+        ? [
+            {
+              code: criterion.code,
+              name: criterion.name,
+              issueName: group.name,
+              actual: flaggedBy,
+              target: 0,
+              triggered: true,
+            },
+          ]
+        : [];
+    },
+  );
   const knockout = knockoutChecks.some((check) => check.triggered);
   const overall = average('overall');
   const resultCode: ResultCode = knockout

@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { defaultScorecardConfig, scorecardRatingKey } from '@assessflow/contracts';
 import { CalibrationService, calculateBoxIndex, scoreBand } from './calibration.service';
 
-/** Ratings with one value for every Technical criterion and another for Behavioral. */
+/**
+ * Ratings giving the requested 0-5 issue scores: each question is scored 0-1,
+ * so a uniform question score of x/5 yields an issue score of x.
+ */
 function ratings(technical: number, behavioral: number) {
   const out: Record<string, { score: number }> = {};
   for (const group of defaultScorecardConfig.technical)
-    for (const c of group.criteria) out[scorecardRatingKey(group, c)] = { score: technical };
+    for (const c of group.criteria) out[scorecardRatingKey(group, c)] = { score: technical / 5 };
   for (const group of defaultScorecardConfig.behavioral)
-    for (const c of group.criteria) out[scorecardRatingKey(group, c)] = { score: behavioral };
+    for (const c of group.criteria) out[scorecardRatingKey(group, c)] = { score: behavioral / 5 };
   return out;
 }
 
