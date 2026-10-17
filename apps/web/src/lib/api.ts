@@ -66,7 +66,12 @@ export type AccessRole =
   | 'EmployeeManager';
 
 export type AccessScope =
-  'NONE' | 'ORGANIZATION' | 'DEPARTMENTS' | 'DIRECT_REPORTS' | 'ASSIGNED' | 'SELF';
+  | 'NONE'
+  | 'ORGANIZATION'
+  | 'DEPARTMENTS'
+  | 'DIRECT_REPORTS'
+  | 'ASSIGNED'
+  | 'SELF';
 
 export interface AccessAccount {
   id: string;
@@ -338,10 +343,14 @@ export const api = {
     });
     return request<AdminAuditPage>(`/admin/audit?${query.toString()}`);
   },
-  changeTemporaryPassword: (newPassword: string, confirmPassword: string) =>
+  changeTemporaryPassword: (
+    currentPassword: string,
+    newPassword: string,
+    confirmPassword: string,
+  ) =>
     request<{ changed: true }>('/auth/change-password', {
       method: 'POST',
-      body: JSON.stringify({ newPassword, confirmPassword }),
+      body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
     }),
   overview: () => request<OverviewResponse>('/overview'),
   assessorAssignments: () => request<AssessorAssignment[]>('/assessor/assignments'),

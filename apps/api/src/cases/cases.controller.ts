@@ -490,7 +490,8 @@ export class CasesController {
   }
 
   @Get('calibration/matrix')
-  @Roles(...ROUTE_PERMISSIONS.OVERVIEW)
+  // Calibration committee only; results are further limited to the viewer's case scope.
+  @Roles('HR', 'Admin', 'Assessor', 'PanelLead', 'Manager', 'Auditor')
   getCalibrationMatrix(@Query('department') department?: string) {
     return this.calibrationService.getMatrix(department);
   }

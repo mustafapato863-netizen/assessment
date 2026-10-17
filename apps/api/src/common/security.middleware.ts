@@ -114,15 +114,10 @@ export function createRateLimiterMiddleware(options?: RateLimiterOptions): RateL
     }
 
     // Resolve client IP
-    const forwarded = req.headers['x-forwarded-for'];
-    const forwardedIp =
-      typeof forwarded === 'string'
-        ? forwarded.split(',')[0]?.trim()
-        : Array.isArray(forwarded)
-          ? forwarded[0]?.split(',')[0]?.trim()
-          : undefined;
-
-    const clientIp = forwardedIp || req.ip || req.socket?.remoteAddress || '127.0.0.1';
+    // Use Express's req.ip, which honors X-Forwarded-For only from proxies
+    // trusted via the 'trust proxy' setting (see main.ts / TRUST_PROXY). Reading
+    // the header directly let any client pick its own IP and bypass the limit.
+    const clientIp = req.ip || req.socket?.remoteAddress || '127.0.0.1';
 
     const now = Date.now();
     let record = store.get(clientIp);

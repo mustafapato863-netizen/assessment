@@ -207,7 +207,9 @@ export function Sidebar({
       icon: BarChart3,
       path: '/insights',
     },
-    ...(PILOT_FLAGS.calibration
+    // Calibration is for the calibration committee (matches the /calibration RoleGate).
+    ...(PILOT_FLAGS.calibration &&
+    ['SYS_ADMIN', 'HR_ADMIN', 'MANAGER', 'ASSESSOR'].includes(user?.role ?? '')
       ? [{ id: 'calibration' as View, label: t.calibration, icon: Sparkles, path: '/calibration' }]
       : []),
   ];

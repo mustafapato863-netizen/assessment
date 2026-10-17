@@ -6,6 +6,7 @@ import { getSession, markTemporaryPasswordChanged } from '../lib/auth';
 export function TemporaryPasswordPage() {
   const session = getSession();
   const navigate = useNavigate();
+  const [currentPassword, setCurrentPassword] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [error, setError] = useState('');
@@ -17,6 +18,10 @@ export function TemporaryPasswordPage() {
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
+    if (!currentPassword) {
+      setError('Enter the one-time password you signed in with.');
+      return;
+    }
     if (password.length < 12) {
       setError('Use at least 12 characters.');
       return;
@@ -27,7 +32,7 @@ export function TemporaryPasswordPage() {
     }
     setSaving(true);
     try {
-      await api.changeTemporaryPassword(password, confirmation);
+      await api.changeTemporaryPassword(currentPassword, password, confirmation);
       markTemporaryPasswordChanged();
       navigate('/', { replace: true });
     } catch (requestError) {
@@ -45,6 +50,16 @@ export function TemporaryPasswordPage() {
         </div>
         <h1>Set your password</h1>
         <p>Your administrator issued a one-time password. Create a new password to continue.</p>
+        <label className="admin-field">
+          <span>One-time password</span>
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={currentPassword}
+            onChange={(event) => setCurrentPassword(event.target.value)}
+            required
+          />
+        </label>
         <label className="admin-field">
           <span>New password</span>
           <input

@@ -1,82 +1,118 @@
 # AssessFlow
 
-AssessFlow is a standalone employee-assessment workflow platform for promotion, internal mobility, and role realignment. This repository is the implementation foundation for the approved 9/10 delivery guide.
+AssessFlow is a standalone employee-assessment workflow platform for promotion, internal mobility, role realignment and external recruitment. Built for Saudi German Health.
 
-## Current delivery slice
+## What is in the product today
 
-The application currently includes:
+- **Web app** (React + Vite, English, LTR): overview, My work, assessments, case workspace, employees, development, insights, calibration (9-box), administration, sign-in.
+- **API** (NestJS, `/api/v1/assessflow`): the full case workflow, from request to closure:
+  draft → submit → eligibility (with governance override) → plan → events → evidence → **scorecard** → result → recommendation → sequential HR → Business approval → development → reassessment → closure.
+- **Worker**: outbox, reminders, retention (hold-first), attachment scanning, HRIS sync and export queues on BullMQ/Redis, with a stub mode when Redis is absent.
+- **Database**: PostgreSQL through Prisma, with migrations `0001`–`0007` and seed data.
 
-- React/Vite bilingual shell with English/Arabic LTR/RTL switching.
-- AssessFlow semantic design tokens, role-aware navigation, responsive cards, loading/error/empty states, and reduced-motion behavior.
-- NestJS API under `/api/v1/assessflow`.
-- Full workflow: create draft → submit → eligibility decision → governance override → plan finalize → event schedule → evidence draft/submit → result finalize/reopen → recommendation → sequential HR/Business approval → development → reassessment (linked draft) → closure.
-- Version-checked commands, PG-backed idempotency (`Idempotency-Key`), and structured API errors.
-- Prisma/PostgreSQL schema for the complete MVP domain, seed data, a reviewed baseline migration, and a database readiness endpoint.
-- Prisma-backed first-slice commands for cases, eligibility, tasks, audit events, outbox records, and optimistic version checks.
-- Worker boundary for outbox, reminders, HRIS sync, and export queues with BullMQ/Redis wiring and a no-infrastructure stub mode.
+### Assessment scoring
 
-The demo defaults to `DATA_MODE=memory` so the UI can be reviewed without infrastructure. The same API boundary switches to the Prisma-backed first slice with `DATA_MODE=database` after PostgreSQL is running and seeded.
+Assessors rate each scorecard criterion from **0 to 5**. Each dimension score is the weighted average rating, and the overall score blends Technical and Behavioral by their configured weights.
 
-## Local start
+| Overall score | Result                 |
+| ------------- | ---------------------- |
+| 4.0 and above | READY_NOW              |
+| 3.0 to 3.99   | READY_WITH_DEVELOPMENT |
+| below 3.0     | NOT_READY              |
 
-1. Install Node.js 20+ and pnpm 10+.
-2. Copy `.env.example` to `.env` and keep `DATA_MODE=memory` for the first run.
-3. Install dependencies:
+A **knockout** criterion rated below **2** by any assessor forces NOT_READY. Finalizing a result uses the computed code. The constants live in `packages/contracts/src/scorecard.ts`.
+
+### Calibration (9-box)
+
+- **Performance (x-axis):** Technical scorecard score. This is a proxy until annual performance ratings are imported.
+- **Potential (y-axis):** Behavioral / leadership scorecard score.
+- **Bands:** below 3 is low, 3 to 3.99 is medium, 4 and above is high.
+- **Who is placed:** only candidates with a finalized result and a complete scorecard. Everyone else appears under _Not yet placed_ with the reason.
+- **Who can view:** HR, Admin, Assessor, Panel Lead, Manager and Auditor. Each viewer sees only the cases in their own data scope.
+
+### Access and approvals
+
+- **Sign-in:** company email and password (`@saudigerman.com` by default; see `ACCESS_ALLOWED_EMAIL_DOMAIN`). An Admin creates accounts and sets roles and data scope.
+- **Lockout:** an account is locked for 15 minutes after 5 failed sign-ins, and an IP after 20.
+- **Changing a password** requires the current password.
+- **Server-side rules:** roles and data scope are enforced by the API. The UI only reflects `availableActions`.
+- **Segregation of duties:**
+  - The HR step is decided by HR or Admin, and the Business step by a Business Approver or Admin.
+  - The approver cannot be anyone who scored the candidate, finalized the result, submitted the recommendation, or decided the other step.
+  - Assessors cannot approve.
+- **Role task queues:** workflow tasks go to role queues (for example `hr-approver` or `business-approver`). Users with that role see the tasks within their scope.
+
+## Run it locally (Windows)
+
+1. Install Node.js 20+ and pnpm 10+, and start **Docker Desktop**.
+2. Start PostgreSQL and Redis. The compose project name is pinned to `assessmentworkflow`, so the existing data volume is reused:
+
+   ```text
+   docker compose up -d postgres redis
+   ```
+
+3. Create `.env` from `.env.example` and point `DATABASE_URL` at your database. The Docker database listens on port **5433**.
+4. Install dependencies and start everything:
 
    ```text
    pnpm install
-   ```
-
-4. Start the API, web app, and worker:
-
-   ```text
    pnpm dev
    ```
 
-5. Open the Vite URL shown in the terminal. `pnpm dev` starts with `PORT` from `.env` (otherwise 3001) for the API and `WEB_PORT` (otherwise 5174) for the web app. If either port is occupied, it automatically searches the next 100 ports and prints the selected URLs. The web app uses a same-origin proxy connected to the selected API port, overriding `VITE_API_URL` for this development session. Health checks are available at `/health` and `/health/ready` on either server.
+5. Open http://localhost:5174. The API runs on `PORT` (default 8080 from `.env`).
 
-Set `WEB_PORT` and `PORT` in `.env` to prefer different ports. Set `DEV_AUTO_PORT=false` or run `pnpm dev --strict-ports` to fail when a preferred port is unavailable. Existing servers are left running. These options apply to the root `pnpm dev` command; production startup is unchanged. Port checks happen before startup; if another process takes the API port during startup, rerun `pnpm dev`.
+To run without a database, set `DATA_MODE=memory`. This is a demo with a single all-roles user, and approval separation is not enforced in that mode.
 
-## PostgreSQL mode
-
-Start the local services with `docker compose up -d`, set `DATA_MODE=database`, then run:
+### First-time database setup
 
 ```text
 pnpm --filter @assessflow/database build
-pnpm --filter @assessflow/database db:push
+pnpm --filter @assessflow/database db:migrate:deploy
 pnpm --filter @assessflow/database db:seed
-pnpm dev
 ```
 
-Production migrations must use reviewed expand/contract migrations. Do not use destructive down migrations as a production rollback strategy.
+Production migrations must be reviewed expand/contract migrations. Never roll back with destructive down migrations.
 
 ## Quality checks
 
 ```text
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm validate
+pnpm validate        # typecheck + unit tests + production build
+pnpm --filter @assessflow/web exec playwright test   # browser E2E (needs the app running)
 ```
 
-The release bar remains the plan's 9/10 target: no unresolved P0/P1 defects, no critical/high security findings, WCAG 2.2 AA evidence, workflow/permission coverage, migration and restore evidence, and a successful pilot.
+Read-only check of stored results against the current scoring formula:
+
+```text
+node scripts/audit-scorecard-results.mjs
+```
+
+## Configuration notes
+
+| Variable                   | Purpose                                                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV=production`      | **Required in any shared environment.** Outside production, requests without a token get a local all-roles demo user.           |
+| `AUTH_JWT_SECRET`          | Required in production (32+ random characters). Locally a development fallback is used.                                         |
+| `TRUST_PROXY`              | Which proxies may set `X-Forwarded-For` (default: private networks). Use a hop count such as `1` behind a public load balancer. |
+| `VITE_FEATURE_CALIBRATION` | Shows the calibration module.                                                                                                   |
 
 ## Workspace map
 
-| Workspace                       | Responsibility                                                          |
-| ------------------------------- | ----------------------------------------------------------------------- |
-| `apps/web`                      | React SPA, routes, design system, localization, role-aware UI           |
-| `apps/api`                      | NestJS modular API and authoritative workflow commands                  |
-| `apps/worker`                   | Background job boundary for notifications, reminders, sync, and exports |
-| `packages/contracts`            | Zod validation and stable shared API types                              |
-| `packages/database`             | Prisma schema, migrations, seed data, and PostgreSQL client             |
-| `infra/bicep`                   | Azure deployment boundary and operational notes                         |
-| `AssessFlow_Design_System_v1.0` | Static design-system reference, not production runtime code             |
+| Workspace            | Responsibility                                                         |
+| -------------------- | ---------------------------------------------------------------------- |
+| `apps/web`           | React SPA, routes, design system, role-aware UI                        |
+| `apps/api`           | NestJS API, workflow commands, auth, permissions                       |
+| `apps/worker`        | Background jobs: outbox, reminders, retention, scanning, sync, exports |
+| `packages/contracts` | Zod schemas, shared types, scorecard calculation                       |
+| `packages/database`  | Prisma schema, migrations, seed, client                                |
+| `infra/bicep`        | Azure deployment baseline                                              |
+| `docs/`              | ADRs, runbooks, role-access model, workflow state machine              |
 
-## Important implementation guardrails
+## Known gaps
 
-- Numeric scoring and calibration are not part of the MVP path.
-- Result, recommendation, approval, development, and reassessment remain separate domain concepts.
-- Employee disclosure is limited to approved summary, approved recommendation, and development actions.
-- Server-side permissions and transitions are authoritative; UI actions are only a projection of `availableActions`.
-- Teal is not used as white text on light surfaces; semantic colors always include visible text or an icon.
+See `progress.md` for the latest session log. The main open items are:
+
+- **Performance:** no pagination on case lists and the overview.
+- **Duplicated workflow:** the logic exists twice, once in memory and once in Prisma.
+- **Sign-in lockout:** counters are in memory, so they are per API instance.
+- **Annual performance ratings:** not imported yet, so calibration uses a performance proxy.
+- **E2E smoke journey:** still approves both steps as one user and needs two approver accounts.

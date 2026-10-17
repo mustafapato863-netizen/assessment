@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ErrorBanner, LoadingRows } from '../components/ui';
 import { api } from '../lib/api';
 import Calibration from './calibration-view/Calibration';
-import { mapCalibrationCandidates } from './calibration-view/calibrationData';
+import { describeAxes, mapCalibrationCandidates } from './calibration-view/calibrationData';
 
 export function CalibrationPage() {
   const matrixQuery = useQuery({
@@ -27,7 +27,13 @@ export function CalibrationPage() {
     );
   }
 
-  return <Calibration candidates={candidates} title={matrixQuery.data.cohortName} />;
+  return (
+    <Calibration
+      candidates={candidates}
+      title={matrixQuery.data.cohortName}
+      axesNote={describeAxes(matrixQuery.data)}
+    />
+  );
 }
 
 export default CalibrationPage;

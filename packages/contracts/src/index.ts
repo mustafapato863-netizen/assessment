@@ -515,19 +515,28 @@ export interface CalibrationCandidate {
   displayName: string;
   department: string;
   currentRole: string;
-  currentLevel: string;
+  /** Null when the case did not capture the employee's current level. */
+  currentLevel: string | null;
   targetRole: string;
-  targetLevel: string;
+  targetLevel: string | null;
   status: CaseStatus;
   stage: CaseStage;
   resultCode?: ResultCode | null;
   recommendationCode?: string | null;
-  performanceBand: CalibrationPerformanceLevel;
-  potentialBand: CalibrationPotentialLevel;
-  boxIndex: number; // 1 to 9 (1 = Underperformer, 9 = Top Talent/Star)
-  boxLabel: string;
+  /** Weighted average Technical score (0-5) from submitted scorecards. */
+  technicalScore?: number | null;
+  /** Weighted average Behavioral score (0-5) from submitted scorecards. */
+  behavioralScore?: number | null;
+  /** Null placement means the candidate is listed in `unplaced`, not on the grid. */
+  performanceBand: CalibrationPerformanceLevel | null;
+  potentialBand: CalibrationPotentialLevel | null;
+  boxIndex: number | null; // 1 to 9 (1 = Underperformer, 9 = Star) when placed
+  boxLabel: string | null;
   readinessLabel: string;
-  tenureMonths: number;
+  /** Reason a candidate is not on the grid (e.g. result not finalized). */
+  unplacedReason?: string | null;
+  /** Not tracked yet; kept for compatibility and always null. */
+  tenureMonths: number | null;
 }
 
 export interface CalibrationCell {
@@ -542,7 +551,17 @@ export interface CalibrationCell {
 export interface CalibrationMatrixResponse {
   cohortName: string;
   evaluatedAt: string;
+  /** Placed plus unplaced candidates in the viewer's scope. */
   totalCandidates: number;
+  /** Candidates on the grid; cell percentages are relative to this. */
+  placedCandidates?: number;
+  /** How each axis is derived, for display next to the grid. */
+  axes?: {
+    performance: string;
+    potential: string;
+    lowBelow: number;
+    highFrom: number;
+  };
   distributionSummary: {
     readyNowCount: number;
     readyWithDevelopmentCount: number;
@@ -557,6 +576,8 @@ export interface CalibrationMatrixResponse {
     notReady: number;
   }>;
   grid: CalibrationCell[];
+  /** In-scope candidates without a finalized, scored result. */
+  unplaced?: CalibrationCandidate[];
 }
 
 // ==========================================

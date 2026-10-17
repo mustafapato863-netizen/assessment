@@ -25,9 +25,23 @@ import {
   CORS_EXPOSED_HEADERS,
 } from './common/cors.util';
 
+/** Express 'trust proxy' value: hop count, true/false, or an address/subnet list. */
+function trustProxySetting(raw: string | undefined): number | boolean | string {
+  const value = raw?.trim();
+  if (!value) return 'loopback, linklocal, uniquelocal';
+  if (/^\d+$/.test(value)) return Number(value);
+  if (value === 'true' || value === 'false') return value === 'true';
+  return value;
+}
+
 async function bootstrap() {
   initObservability();
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // Only trust X-Forwarded-For from known proxies so req.ip (rate limits,
+  // sign-in lockout) cannot be spoofed. Default trusts private-network proxies
+  // (Docker, nginx, a load balancer on the VNet). Set TRUST_PROXY to a hop count
+  // or address list if the API sits behind a public CDN or proxy.
+  app.getHttpAdapter().getInstance().set('trust proxy', trustProxySetting(process.env.TRUST_PROXY));
 
   app.enableCors({
     origin: createCorsOriginChecker(process.env.CORS_ALLOWED_ORIGINS),

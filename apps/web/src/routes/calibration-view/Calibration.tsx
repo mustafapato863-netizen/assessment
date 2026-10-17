@@ -161,9 +161,11 @@ function DepartmentCard({ rows, selected }: { rows: DepartmentBenchmarkRow[]; se
 export default function Calibration({
   candidates = [],
   title = 'Talent calibration',
+  axesNote,
 }: {
   candidates?: CalibrationCandidate[];
   title?: string;
+  axesNote?: string;
 }) {
   const [state, setState] = useState<CalibrationState>(() => readState());
   const [expanded, setExpanded] = useState(false);
@@ -201,7 +203,10 @@ export default function Calibration({
     () => qOnly.filter((c) => matches(c, { dept: state.dept })),
     [qOnly, state.dept],
   );
-  const unplacedCandidates = useMemo(() => base.filter((candidate) => boxOf(candidate) === null), [base]);
+  const unplacedCandidates = useMemo(
+    () => base.filter((candidate) => boxOf(candidate) === null),
+    [base],
+  );
   const counts = useMemo(() => readinessCounts(base), [base]);
   const shown = useMemo(() => byReadiness(base, state.status), [base, state.status]);
   const stats = useMemo(() => boxStats(shown), [shown]);
@@ -237,6 +242,7 @@ export default function Calibration({
           <p>
             {title}. {base.length} candidates, {readyNow} ready now.
           </p>
+          {axesNote ? <p className="cb-empty__hint">{axesNote}</p> : null}
         </div>
         <div className="cb-actions">
           <div className="cb-toggle" role="group" aria-label="View">
@@ -356,9 +362,10 @@ export default function Calibration({
           onClick={toggleUnplaced}
         >
           <span>
-            <strong>{unplacedCandidates.length} unevaluated candidates</strong>
+            <strong>{unplacedCandidates.length} not yet placed</strong>
             <span className="cb-empty__hint">
-              These real cases have no completed performance and potential result yet.
+              No finalized result with a complete scorecard yet (pending, reopened, or result
+              entered without a scorecard).
             </span>
           </span>
           <strong>{showUnplaced ? 'Hide cases ↑' : 'View cases →'}</strong>

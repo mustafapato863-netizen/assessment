@@ -18,18 +18,19 @@ function apiCandidate(overrides: Partial<ApiCandidate> = {}): ApiCandidate {
     stage: 'ASSESSMENT',
     resultCode: null,
     recommendationCode: null,
-    performanceBand: 'MEDIUM',
-    potentialBand: 'MEDIUM',
-    boxIndex: 5,
-    boxLabel: 'Core Player',
+    performanceBand: null,
+    potentialBand: null,
+    boxIndex: null,
+    boxLabel: null,
     readinessLabel: 'ASSESSMENT IN PROGRESS',
-    tenureMonths: 12,
+    unplacedReason: 'Result not finalized yet',
+    tenureMonths: null,
     ...overrides,
   };
 }
 
 describe('mapCalibrationCandidates', () => {
-  it('maps current API fields and suppresses fallback boxes for unevaluated candidates', () => {
+  it('maps placed grid candidates and appends unplaced candidates', () => {
     const evaluated = apiCandidate({
       id: 'case-456',
       caseId: 'case-456',
@@ -38,15 +39,16 @@ describe('mapCalibrationCandidates', () => {
       performanceBand: 'HIGH',
       potentialBand: 'HIGH',
       boxIndex: 9,
+      boxLabel: 'Star / Future Leader',
     });
-    const unevaluated = apiCandidate();
+    const unevaluated = apiCandidate({ id: 'case-789', caseId: 'case-789' });
     const cell: CalibrationCell = {
-      boxIndex: 5,
-      label: 'Core Player',
-      description: 'Core performance.',
+      boxIndex: 9,
+      label: 'Star / Future Leader',
+      description: 'Top performance.',
       targetPercentage: 10,
-      actualPercentage: 50,
-      candidates: [evaluated, unevaluated],
+      actualPercentage: 100,
+      candidates: [evaluated],
     };
 
     const result = mapCalibrationCandidates({
@@ -61,6 +63,7 @@ describe('mapCalibrationCandidates', () => {
       },
       departmentBreakdown: [],
       grid: [cell],
+      unplaced: [unevaluated],
     });
 
     expect(result).toHaveLength(2);
@@ -83,7 +86,13 @@ describe('mapCalibrationCandidates', () => {
   });
 
   it('does not make generated demo candidates link to nonexistent case pages', () => {
-    const demo = apiCandidate({ id: 'mock-cal-1', caseId: 'mock-case-1' });
+    const demo = apiCandidate({
+      id: 'mock-cal-1',
+      caseId: 'mock-case-1',
+      boxIndex: 5,
+      performanceBand: 'MEDIUM',
+      potentialBand: 'MEDIUM',
+    });
     const cell: CalibrationCell = {
       boxIndex: 5,
       label: 'Core Player',

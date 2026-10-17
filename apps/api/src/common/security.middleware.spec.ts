@@ -265,6 +265,29 @@ describe('rateLimiterMiddleware', () => {
     expect(r3.next).toHaveBeenCalledOnce();
   });
 
+  it('ignores a client-supplied X-Forwarded-For header (no spoofed bypass)', () => {
+    const limiter = createRateLimiterMiddleware({ windowMs: 60_000, maxRequests: 1 });
+    limiter.stopSweep();
+    const request = (spoofed: string) =>
+      createMockReqRes({
+        method: 'POST',
+        url: '/api/v1/assessflow/auth/login',
+        path: '/api/v1/assessflow/auth/login',
+        ip: '10.0.0.7',
+        headers: { 'x-forwarded-for': spoofed },
+      });
+
+    const first = request('1.1.1.1');
+    limiter(first.req, first.res, first.next);
+    expect(first.next).toHaveBeenCalledOnce();
+
+    // A new fake header value must not open a fresh quota for the same client.
+    const second = request('2.2.2.2');
+    limiter(second.req, second.res, second.next);
+    expect(second.next).not.toHaveBeenCalled();
+    expect(second.res.statusCode).toBe(429);
+  });
+
   it('prunes expired entries during sweep', () => {
     const limiter = createRateLimiterMiddleware({
       windowMs: 100,
