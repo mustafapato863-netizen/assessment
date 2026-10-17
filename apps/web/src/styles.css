@@ -9187,3 +9187,455 @@ td span + small {
   color: #64748b;
   white-space: nowrap;
 }
+
+/* Scorecard v2: next-step bar after submitting */
+.sc2-next {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 16px 20px;
+  border: 1px solid #a7f3d0;
+  border-radius: 14px;
+  background: #ecfdf5;
+}
+.sc2-next-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 14px;
+  color: #065f46;
+}
+.sc2-next .sc2-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---- Result summary: mirrors the approved "Result summary redesign" mockup ---- */
+.rs {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  color: #0f172a;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 16px 0;
+}
+.rs-num {
+  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+}
+.rs-kicker {
+  font:
+    600 11px 'IBM Plex Mono',
+    monospace;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+.rs-kicker.rs-on-dark {
+  color: #c7d2fe;
+  letter-spacing: 0.08em;
+}
+.rs-muted {
+  font-size: 13px;
+  color: #475569;
+}
+.rs-normal {
+  font-weight: 400;
+}
+.rs-strong {
+  font-weight: 600;
+  color: #0f172a;
+}
+.rs-warn {
+  color: #b45309;
+}
+.rs-right {
+  text-align: right;
+}
+.rs-pad {
+  padding: 14px 18px;
+  margin: 0;
+}
+.rs-strip {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 16px;
+}
+.rs-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.rs-meta strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+.rs-hero {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+.rs-overall {
+  grid-column: span 2;
+  min-width: 0;
+  background: #312e81;
+  color: #fff;
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.rs-big {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.rs-overall-value {
+  font-size: 44px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.rs-overall-max {
+  font-size: 18px;
+  color: #c7d2fe;
+}
+.rs-big-value {
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+.rs-big-max {
+  font-size: 15px;
+  color: #64748b;
+}
+.rs-pill {
+  margin-left: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+}
+.rs-pill.ready_now {
+  background: #d1fae5;
+  color: #065f46;
+}
+.rs-pill.ready_with_development {
+  background: #fef3c7;
+  color: #92400e;
+}
+.rs-pill.not_ready {
+  background: #fee2e2;
+  color: #991b1b;
+}
+.rs-scale {
+  position: relative;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+.rs-scale-fill {
+  height: 10px;
+  border-radius: 999px;
+  background: #a5b4fc;
+}
+.rs-scale-mark {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 18px;
+  background: #e0e7ff;
+}
+.rs-scale-labels {
+  position: relative;
+  height: 16px;
+  font-size: 11px;
+  color: #c7d2fe;
+}
+.rs-scale-labels span {
+  position: absolute;
+  white-space: nowrap;
+}
+.rs-equation {
+  font-size: 13px;
+  color: #e0e7ff;
+}
+.rs-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+.rs-track {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  overflow: hidden;
+}
+.rs-fill {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+}
+.rs-fill.full {
+  background: #059669;
+}
+.rs-fill.good {
+  background: #0d9488;
+}
+.rs-fill.mid {
+  background: #d97706;
+}
+.rs-fill.low {
+  background: #dc2626;
+}
+.rs-ko {
+  font-size: 26px;
+  font-weight: 700;
+}
+.rs-ko.clear {
+  color: #047857;
+}
+.rs-ko.triggered {
+  color: #b91c1c;
+}
+.rs-tables {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(420px, 1fr));
+  gap: 16px;
+}
+.rs-table {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  overflow: hidden;
+  min-width: 0;
+}
+.rs-table-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.rs-table-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.rs-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px 90px 56px 44px;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 18px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 14px;
+}
+.rs-row:last-child {
+  border-bottom: none;
+}
+.rs-row-head {
+  padding: 8px 18px;
+  font:
+    600 11px 'IBM Plex Mono',
+    monospace;
+  letter-spacing: 0.06em;
+  color: #64748b;
+}
+.rs-issue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.rs-code {
+  font-size: 11px;
+  font-weight: 600;
+  color: #4338ca;
+  background: #eef2ff;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+.rs-issue-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rs-score {
+  font-weight: 600;
+}
+.rs-score.short {
+  color: #b45309;
+}
+.rs-panel {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.rs-panel-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rs-panel-title {
+  font-size: 17px;
+  font-weight: 700;
+}
+.rs-recos {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.rs-reco {
+  all: unset;
+  box-sizing: border-box;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  min-height: 76px;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+}
+.rs-reco[aria-pressed='true'] {
+  border-color: #4f46e5;
+  background: #eef2ff;
+  box-shadow: inset 0 0 0 1px #4f46e5;
+}
+.rs-reco:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+.rs-reco-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.rs-reco-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.rs-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: #065f46;
+  background: #d1fae5;
+  border-radius: 999px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+.rs-reco-readonly {
+  font-size: 16px;
+}
+.rs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+.rs-field-head {
+  display: flex;
+  justify-content: space-between;
+}
+.rs-field input,
+.rs-field textarea {
+  font:
+    400 14px 'IBM Plex Sans',
+    system-ui,
+    sans-serif;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  min-height: 44px;
+  color: #0f172a;
+  background: #fff;
+}
+.rs-field textarea {
+  resize: vertical;
+}
+.rs-field input:focus,
+.rs-field textarea:focus {
+  outline: 2px solid #6366f1;
+  outline-offset: 1px;
+  border-color: #6366f1;
+}
+.rs-people {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+.rs-evidence {
+  margin-bottom: 16px;
+}
+.rs-footer {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 16px 20px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.rs-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.rs-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rs-check.ok {
+  color: #047857;
+}
+.rs-check.todo {
+  color: #b45309;
+}
+@media (max-width: 720px) {
+  .rs-overall {
+    grid-column: auto;
+  }
+  .rs-tables {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rs-row {
+    grid-template-columns: minmax(0, 1fr) 64px 48px 40px;
+  }
+  .rs-row > :nth-child(3) {
+    display: none;
+  }
+}

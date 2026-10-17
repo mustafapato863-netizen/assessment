@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   ArrowUpRight,
   Building2,
   CalendarDays,
@@ -920,7 +921,12 @@ export function CasePage({
           {isStageVisible('Assessment') && (
             <>
               <EventsPanel caseDetail={caseDetail} onToast={onToast} onRefresh={refreshCase} />
-              <EvidencePanel caseDetail={caseDetail} onToast={onToast} onRefresh={refreshCase} />
+              <EvidencePanel
+                caseDetail={caseDetail}
+                onToast={onToast}
+                onRefresh={refreshCase}
+                onGoToStage={handleSelectStage}
+              />
             </>
           )}
           {isStageVisible('Result') && (
@@ -1729,10 +1735,12 @@ function EvidencePanel({
   caseDetail,
   onToast,
   onRefresh,
+  onGoToStage,
 }: {
   caseDetail: AssessmentCaseDetail;
   onToast: (msg: string) => void;
   onRefresh: () => void;
+  onGoToStage?: (stage: string) => void;
 }) {
   const queryClient = useQueryClient();
   const isVisible = caseDetail.status === 'SCHEDULED' || caseDetail.status === 'IN_PROGRESS';
@@ -2050,7 +2058,12 @@ function EvidencePanel({
         </div>
       )}
 
-      <AssessorScorecard caseId={caseDetail.id} onToast={onToast} onRefresh={onRefresh} />
+      <AssessorScorecard
+        caseId={caseDetail.id}
+        onToast={onToast}
+        onRefresh={onRefresh}
+        onGoToResult={onGoToStage ? () => onGoToStage('Result') : undefined}
+      />
 
       {/* Evidence Attachments with Anti-Malware Scan Gate */}
       <div style={{ marginTop: '24px', paddingTop: '20px', borderTop: '1px solid var(--border)' }}>
@@ -2220,11 +2233,7 @@ function resultCodeLabel(code: ResultCode) {
 }
 
 function formatScore(value: number) {
-  return String(value);
-}
-
-function formatRoundedScore(value: number) {
-  return value.toFixed(1);
+  return String(Math.round(value * 100) / 100);
 }
 
 function formatCategoryScore(value: number) {
@@ -2235,10 +2244,13 @@ function AssessorScorecard({
   caseId,
   onToast,
   onRefresh,
+  onGoToResult,
 }: {
   caseId: string;
   onToast: (msg: string) => void;
   onRefresh: () => void;
+  /** Shown after submitting: moves the case view to the Result stage. */
+  onGoToResult?: () => void;
 }) {
   const queryClient = useQueryClient();
   const queryKey = ['scorecard', caseId];
@@ -3210,6 +3222,19 @@ function AssessorScorecard({
         </div>
       </div>
 
+      {locked && onGoToResult && (
+        <div className="sc2-next">
+          <div className="sc2-next-text">
+            <strong>Scores submitted</strong>
+            <span>Next step: review the calculated result and finalize it.</span>
+          </div>
+          <button type="button" className="sc2-btn sc2-btn-primary" onClick={onGoToResult}>
+            Go to Result
+            <ArrowRight size={16} />
+          </button>
+        </div>
+      )}
+
       {locked && (
         <div className="restricted-callout" style={{ marginTop: '12px' }}>
           <LockKeyhole size={16} />
@@ -3310,6 +3335,30 @@ function summaryDate(value?: string | null) {
       );
 }
 
+const RECOMMENDATION_OPTIONS = [
+  { label: 'Strong', band: '4.00 – 5.00' },
+  { label: 'Appointable with development', band: '3.00 – 3.99' },
+  { label: 'Not appointable', band: 'below 3.00 · or any knockout' },
+] as const;
+
+function formatIssuePoints(value: number) {
+  return String(Math.round(value * 100) / 100);
+}
+
+function summaryResultCode(summary: AssessmentSummaryData): ResultCode {
+  if (!summary.completeCount || summary.overall === undefined) return 'INCOMPLETE';
+  if (summary.knockout) return 'NOT_READY';
+  if (summary.overall >= SCORECARD_READY_NOW_THRESHOLD) return 'READY_NOW';
+  if (summary.overall >= SCORECARD_READY_WITH_DEVELOPMENT_THRESHOLD)
+    return 'READY_WITH_DEVELOPMENT';
+  return 'NOT_READY';
+}
+
+function issueTone(pct: number) {
+  return pct >= 0.999 ? 'full' : pct >= 0.8 ? 'good' : pct >= 0.6 ? 'mid' : 'low';
+}
+
+// ---- Assessment summary: mirrors the approved "Result summary redesign" mockup ----
 function AssessmentSummary({
   caseDetail,
   summary,
@@ -3329,224 +3378,275 @@ function AssessmentSummary({
   editable?: boolean;
   onRecommendationChange?: (value: string) => void;
 }) {
-  const totalDimensionWeight = summary.technicalWeight + summary.behavioralWeight;
-  const latestSubmission = assessors
-    .filter((assessor) => assessor.submitted && assessor.submittedAt)
+  const totalDimensionWeight = summary.technicalWeight + summary.behavioralWeight || 1;
+  const submitted = assessors.filter((assessor) => assessor.submitted);
+  const submittedNames = submitted.map((assessor) => assessor.assessorName).join(', ');
+  const latestSubmission = submitted
+    .filter((assessor) => assessor.submittedAt)
     .map((assessor) => assessor.submittedAt!)
     .sort((a, b) => b.localeCompare(a))[0];
-  const dimensionRows = [
-    {
-      label: 'Technical competencies',
-      score: summary.technical,
-      weight: summary.technicalWeight,
-      issues: summary.technicalIssues,
-    },
-    {
-      label: 'Behavioral competencies',
-      score: summary.behavioral,
-      weight: summary.behavioralWeight,
-      issues: summary.behavioralIssues,
-    },
-  ];
+  const resultCode = summaryResultCode(summary);
+  const contribution = (score: number | undefined, weight: number) =>
+    score === undefined ? undefined : (score * weight) / totalDimensionWeight;
+  const technicalContribution = contribution(summary.technical, summary.technicalWeight);
+  const behavioralContribution = contribution(summary.behavioral, summary.behavioralWeight);
+  const pctOf = (value: number | undefined) =>
+    `${Math.max(0, Math.min(100, ((value ?? 0) / 5) * 100)).toFixed(1)}%`;
+  const recommendationText =
+    assessorRecommendationText(recommendationCode) ?? defaultAssessorRecommendation(summary) ?? '';
+  const suggested = defaultAssessorRecommendation(summary);
+  const isPreset = RECOMMENDATION_OPTIONS.some((option) => option.label === recommendationText);
 
-  const issueTable = (label: string, issues: ScorecardIssueSummary[]) => (
-    <div style={{ marginTop: '15px' }}>
-      <h4 style={{ margin: '0 0 8px', color: 'var(--indigo)' }}>{label}</h4>
-      {issues.length ? (
-        (() => {
-          const issueWeightTotal = issues.reduce((total, issue) => total + issue.weight, 0);
-          return (
-            <div style={{ overflowX: 'auto' }}>
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Issue</th>
-                    <th>Actual / target</th>
-                    <th>Score / 5</th>
-                    <th>Weight</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {issues.map((issue) => (
-                    <tr key={issue.code}>
-                      <td>{issue.name}</td>
-                      <td>
-                        {formatScore(issue.actual)} / {formatScore(issue.target)}
-                      </td>
-                      <td>{formatScore(issue.score)} / 5</td>
-                      <td>
-                        {issueWeightTotal
-                          ? `${formatScore((issue.weight / issueWeightTotal) * 100)}%`
-                          : '0%'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          );
-        })()
-      ) : (
-        <p className="panel-intro">Issue scores will appear after a scorecard is submitted.</p>
-      )}
+  const sectionCard = (
+    label: string,
+    weight: number,
+    score: number | undefined,
+    contributes: number | undefined,
+  ) => (
+    <div className="rs-card">
+      <span className="rs-kicker">
+        {label} · {Math.round((weight / totalDimensionWeight) * 100)}%
+      </span>
+      <div className="rs-big">
+        <span className="rs-num rs-big-value">
+          {score === undefined ? '—' : formatCategoryScore(score)}
+        </span>
+        <span className="rs-num rs-big-max">/ 5</span>
+      </div>
+      <div className="rs-track">
+        <div className={`rs-fill ${issueTone((score ?? 0) / 5)}`} style={{ width: pctOf(score) }} />
+      </div>
+      <span className="rs-muted">
+        Contributes{' '}
+        <span className="rs-num rs-strong">
+          {contributes === undefined ? '—' : formatCategoryScore(contributes)}
+        </span>
+      </span>
     </div>
   );
 
+  const issueTable = (
+    title: string,
+    prefix: string,
+    score: number | undefined,
+    issues: ScorecardIssueSummary[],
+  ) => {
+    const issueWeightTotal = issues.reduce((total, issue) => total + issue.weight, 0);
+    return (
+      <div className="rs-table">
+        <div className="rs-table-head">
+          <span className="rs-table-title">{title}</span>
+          <span className="rs-num rs-strong">
+            {score === undefined ? '—' : formatCategoryScore(score)} / 5
+          </span>
+        </div>
+        {issues.length ? (
+          <>
+            <div className="rs-row rs-row-head">
+              <span>ISSUE</span>
+              <span className="rs-right">ACT/TGT</span>
+              <span />
+              <span className="rs-right">SCORE</span>
+              <span className="rs-right">WT</span>
+            </div>
+            {issues.map((issue, index) => {
+              const pct = issue.target ? issue.actual / issue.target : 0;
+              const tone = issueTone(pct);
+              return (
+                <div key={issue.code} className="rs-row">
+                  <span className="rs-issue">
+                    <span className="rs-code rs-num">
+                      {prefix}
+                      {index + 1}
+                    </span>
+                    <span className="rs-issue-name" title={issue.name}>
+                      {issue.name}
+                    </span>
+                  </span>
+                  <span className="rs-num rs-right">
+                    {formatIssuePoints(issue.actual)} / {formatIssuePoints(issue.target)}
+                  </span>
+                  <span className="rs-track">
+                    <span
+                      className={`rs-fill ${tone}`}
+                      style={{ width: `${Math.min(100, pct * 100).toFixed(1)}%` }}
+                    />
+                  </span>
+                  <span className={`rs-num rs-right rs-score ${tone === 'full' ? '' : 'short'}`}>
+                    {formatCategoryScore(issue.score)}
+                  </span>
+                  <span className="rs-num rs-right rs-muted">
+                    {issueWeightTotal ? Math.round((issue.weight / issueWeightTotal) * 100) : 0}%
+                  </span>
+                </div>
+              );
+            })}
+          </>
+        ) : (
+          <p className="rs-muted rs-pad">Issue scores appear after a scorecard is submitted.</p>
+        )}
+      </div>
+    );
+  };
+
   return (
-    <section className="panel" style={{ marginBottom: '16px' }}>
-      <PanelHeader icon={<FileCheck2 size={17} />} title="Assessment summary" />
-      <div className="summary-grid">
-        <div className="info-item">
-          <span>Candidate</span>
+    <section className="rs">
+      <div className="rs-strip">
+        <div className="rs-meta">
+          <span className="rs-kicker">CANDIDATE</span>
           <strong>{caseDetail.employeeName}</strong>
         </div>
-        <div className="info-item">
-          <span>Role / department</span>
+        <div className="rs-meta">
+          <span className="rs-kicker">ROLE · DEPARTMENT</span>
           <strong>
             {caseDetail.targetRole} · {caseDetail.department}
           </strong>
         </div>
-        <div className="info-item">
-          <span>Assessor(s)</span>
+        <div className="rs-meta">
+          <span className="rs-kicker">ASSESSOR(S)</span>
           <strong>
-            {assessors
-              .filter((assessor) => assessor.submitted)
-              .map((assessor) => assessor.assessorName)
-              .join(', ') || 'Pending score submission'}
+            {submittedNames || 'Pending score submission'}
+            {assessors.length > 0 && (
+              <span className="rs-muted rs-normal">
+                {' '}
+                · {submitted.length} of {assessors.length} submitted
+              </span>
+            )}
           </strong>
         </div>
-        <div className="info-item">
-          <span>Assessment date</span>
+        <div className="rs-meta">
+          <span className="rs-kicker">ASSESSMENT DATE</span>
           <strong>{summaryDate(latestSubmission ?? caseDetail.requestedAt)}</strong>
         </div>
-        <div className="info-item">
-          <span>Panel decision date</span>
-          <strong>{summaryDate(finalizedAt)}</strong>
+        <div className="rs-meta">
+          <span className="rs-kicker">PANEL DECISION</span>
+          <strong className={finalizedAt ? '' : 'rs-warn'}>{summaryDate(finalizedAt)}</strong>
         </div>
       </div>
 
-      <div style={{ marginTop: '16px', overflowX: 'auto' }}>
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Dimension</th>
-              <th>Score / 5</th>
-              <th>Weight</th>
-              <th>Weighted contribution</th>
-            </tr>
-          </thead>
-          <tbody>
-            {dimensionRows.map((row) => (
-              <tr key={row.label}>
-                <td>{row.label}</td>
-                <td>{row.score === undefined ? '—' : `${formatCategoryScore(row.score)} / 5`}</td>
-                <td>
-                  {totalDimensionWeight
-                    ? `${formatScore((row.weight / totalDimensionWeight) * 100)}%`
-                    : '0%'}
-                </td>
-                <td>
-                  {row.score === undefined
-                    ? '—'
-                    : `${formatScore((row.score * row.weight) / (totalDimensionWeight || 1))} points`}
-                </td>
-              </tr>
-            ))}
-            <tr>
-              <td>
-                <strong>Overall weighted score</strong>
-              </td>
-              <td>
-                <strong>
-                  {summary.overall === undefined
-                    ? '—'
-                    : `${formatRoundedScore(summary.overall)} / 5`}
-                </strong>
-              </td>
-              <td>100%</td>
-              <td>
-                <strong>
-                  {summary.overall === undefined
-                    ? '—'
-                    : `${formatRoundedScore(summary.overall)} points`}
-                </strong>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      {issueTable('Technical issue results', summary.technicalIssues)}
-      {issueTable('Behavioral issue results', summary.behavioralIssues)}
-
-      <div style={{ marginTop: '16px' }}>
-        <h4 style={{ margin: '0 0 8px', color: 'var(--indigo)' }}>Knockout checks</h4>
-        {summary.knockoutChecks.length ? (
-          <div style={{ display: 'grid', gap: '7px' }}>
-            {summary.knockoutChecks.map((check) => (
-              <div key={`${check.issueName}-${check.code}`} className="info-item">
-                <span>
-                  {check.issueName} · {check.name} ({check.code})
-                </span>
-                <strong style={{ color: check.triggered ? 'var(--danger)' : 'var(--success)' }}>
-                  {check.actual === null
-                    ? 'Not flagged'
-                    : `Flagged by ${check.actual} assessor${check.actual === 1 ? '' : 's'} · knockout triggered`}
-                </strong>
-              </div>
-            ))}
+      <div className="rs-hero">
+        <div className="rs-overall">
+          <span className="rs-kicker rs-on-dark">OVERALL WEIGHTED SCORE</span>
+          <div className="rs-big">
+            <span className="rs-num rs-overall-value">
+              {summary.overall === undefined ? '—' : formatCategoryScore(summary.overall)}
+            </span>
+            <span className="rs-num rs-overall-max">/ 5</span>
+            <span className={`rs-pill ${resultCode.toLowerCase()}`}>
+              {resultCodeLabel(resultCode)}
+            </span>
           </div>
-        ) : (
-          <p className="panel-intro">No knockout flagged by any assessor.</p>
+          <div className="rs-scale">
+            <div className="rs-scale-fill" style={{ width: pctOf(summary.overall) }} />
+            <span className="rs-scale-mark" style={{ left: '60%' }} />
+            <span className="rs-scale-mark" style={{ left: '80%' }} />
+          </div>
+          <div className="rs-scale-labels rs-num">
+            <span style={{ left: 0 }}>0</span>
+            <span style={{ left: '60%', transform: 'translateX(-50%)' }}>3 · with development</span>
+            <span style={{ left: '80%', transform: 'translateX(-10%)' }}>4 · ready now</span>
+          </div>
+          {technicalContribution !== undefined && behavioralContribution !== undefined && (
+            <span className="rs-num rs-equation">
+              {formatCategoryScore(technicalContribution)} technical +{' '}
+              {formatCategoryScore(behavioralContribution)} behavioral ={' '}
+              {formatCategoryScore(technicalContribution + behavioralContribution)}
+            </span>
+          )}
+        </div>
+        {sectionCard(
+          'TECHNICAL',
+          summary.technicalWeight,
+          summary.technical,
+          technicalContribution,
         )}
+        {sectionCard(
+          'BEHAVIORAL',
+          summary.behavioralWeight,
+          summary.behavioral,
+          behavioralContribution,
+        )}
+        <div className="rs-card">
+          <span className="rs-kicker">KNOCKOUT</span>
+          {summary.knockout ? (
+            <>
+              <span className="rs-ko triggered">Triggered</span>
+              {summary.knockoutChecks
+                .filter((check) => check.triggered)
+                .map((check) => (
+                  <span key={`${check.issueName}-${check.code}`} className="rs-muted">
+                    {check.issueName} · {check.name} — flagged by {check.actual ?? 0}
+                  </span>
+                ))}
+            </>
+          ) : (
+            <>
+              <span className="rs-ko clear">Clear</span>
+              <span className="rs-muted">No knockout flagged by any assessor.</span>
+            </>
+          )}
+        </div>
       </div>
 
-      <div className="summary-grid" style={{ marginTop: '16px' }}>
-        <div className="info-item">
-          <span>Recommendation</span>
-          {editable && onRecommendationChange ? (
-            <textarea
-              aria-label="Assessor recommendation"
-              rows={2}
-              value={
-                assessorRecommendationText(recommendationCode) ??
-                defaultAssessorRecommendation(summary) ??
-                ''
-              }
-              onChange={(event) => onRecommendationChange(event.target.value)}
-              placeholder="Strong, Appointable with development, Not appointable"
-            />
-          ) : (
-            <strong>
-              {assessorRecommendationText(recommendationCode)
-                ? assessorRecommendationText(recommendationCode)
-                : recommendationLabel(summary)}
-            </strong>
-          )}
-          {editable && (
-            <small style={{ color: 'var(--muted)' }}>
-              The default is based on the score. You can edit it using any wording.
-            </small>
-          )}
+      <div className="rs-tables">
+        {issueTable('Technical issues', 'T', summary.technical, summary.technicalIssues)}
+        {issueTable('Behavioral issues', 'B', summary.behavioral, summary.behavioralIssues)}
+      </div>
+
+      <div className="rs-panel">
+        <div className="rs-panel-head">
+          <span className="rs-panel-title">Recommendation</span>
+          <span className="rs-muted">
+            Pre-selected from the score. A knockout always forces Not appointable.
+          </span>
         </div>
-        <div className="info-item">
-          <span>Lead assessor</span>
-          <strong>
-            {assessors
-              .filter((assessor) => assessor.submitted)
-              .map((assessor) => assessor.assessorName)
-              .join(', ') || 'Pending'}
+        {editable && onRecommendationChange ? (
+          <>
+            <div className="rs-recos">
+              {RECOMMENDATION_OPTIONS.map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  className="rs-reco"
+                  aria-pressed={recommendationText === option.label}
+                  onClick={() => onRecommendationChange(option.label)}
+                >
+                  <span className="rs-reco-top">
+                    <span className="rs-reco-label">{option.label}</span>
+                    {suggested === option.label && <span className="rs-tag">From score</span>}
+                  </span>
+                  <span className="rs-num rs-muted">{option.band}</span>
+                </button>
+              ))}
+            </div>
+            <label className="rs-field">
+              Recommendation wording (optional)
+              <input
+                type="text"
+                value={isPreset ? '' : recommendationText}
+                placeholder="e.g. Strong – ready for the target role now"
+                onChange={(event) => onRecommendationChange(event.target.value || suggested || '')}
+              />
+            </label>
+          </>
+        ) : (
+          <strong className="rs-reco-readonly">
+            {assessorRecommendationText(recommendationCode) ?? recommendationLabel(summary)}
           </strong>
-        </div>
-        <div className="info-item">
-          <span>Panel chair / finalized by</span>
-          <strong>{finalizedBy ?? 'Pending panel decision'}</strong>
+        )}
+        <div className="rs-people">
+          <div className="rs-meta">
+            <span className="rs-kicker">LEAD ASSESSOR</span>
+            <strong>{submittedNames || 'Pending'}</strong>
+          </div>
+          <div className="rs-meta">
+            <span className="rs-kicker">PANEL CHAIR · FINALIZED BY</span>
+            <strong className={finalizedBy ? '' : 'rs-warn'}>
+              {finalizedBy ?? 'Pending panel decision'}
+            </strong>
+          </div>
         </div>
       </div>
-      <p className="panel-intro" style={{ marginTop: '14px' }}>
-        Recommendation bands: 4–5 Strong · 3–3.99 Appointable with development · below 3 Not
-        appointable. Any knockout overrides the score.
-      </p>
     </section>
   );
 }
@@ -3831,17 +3931,51 @@ function ResultPanel({
           }
         />
       )}
-      <label className="field" style={{ marginTop: '14px' }}>
-        <span>Evidence summary</span>
-        <textarea
-          value={evidenceSummary}
-          onChange={(e) => setEvidenceSummary(e.target.value)}
-          placeholder="Consolidated observations and overall performance rationale…"
-          rows={4}
-          disabled={finalizeResult.isPending}
-        />
-      </label>
-      <div className="action-row" style={{ marginTop: '16px' }}>
+      <div className="rs-panel rs-evidence">
+        <label className="rs-field">
+          <span className="rs-field-head">
+            <span>Evidence summary</span>
+            <span className="rs-num rs-muted rs-normal">{evidenceSummary.length} / 4000</span>
+          </span>
+          <textarea
+            value={evidenceSummary}
+            maxLength={4000}
+            onChange={(e) => setEvidenceSummary(e.target.value)}
+            placeholder="Consolidated observations and overall performance rationale…"
+            rows={5}
+            disabled={finalizeResult.isPending}
+          />
+        </label>
+      </div>
+      <div className="rs-footer">
+        <div className="rs-checks">
+          {[
+            {
+              ok: Boolean(scorecard?.aggregate.completeCount),
+              label: scorecard?.aggregate.completeCount
+                ? 'Scorecard submitted'
+                : 'Waiting for a submitted scorecard',
+            },
+            {
+              ok: Boolean(
+                assessorRecommendation ??
+                (summaryData ? defaultAssessorRecommendation(summaryData) : undefined),
+              ),
+              label: 'Recommendation selected',
+            },
+            {
+              ok: evidenceSummary.trim().length > 0,
+              label: evidenceSummary.trim()
+                ? 'Evidence summary added'
+                : 'Evidence summary (recommended)',
+            },
+          ].map((check) => (
+            <span key={check.label} className={`rs-check ${check.ok ? 'ok' : 'todo'}`}>
+              {check.ok ? <Check size={16} /> : <CircleDashed size={16} />}
+              {check.label}
+            </span>
+          ))}
+        </div>
         <button
           className="primary-button"
           disabled={
