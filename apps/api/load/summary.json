@@ -1,0 +1,271 @@
+{
+  "options": {
+    "summaryTrendStats": [
+      "avg",
+      "min",
+      "med",
+      "max",
+      "p(90)",
+      "p(95)"
+    ],
+    "summaryTimeUnit": "",
+    "noColor": false
+  },
+  "state": {
+    "testRunDurationMs": 83995.5614,
+    "isStdOutTTY": false,
+    "isStdErrTTY": false
+  },
+  "metrics": {
+    "vus_max": {
+      "contains": "default",
+      "values": {
+        "value": 100,
+        "min": 100,
+        "max": 100
+      },
+      "type": "gauge"
+    },
+    "iterations": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 571,
+        "rate": 6.797978256027228
+      }
+    },
+    "data_received": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "rate": 8216299.79605089,
+        "count": 690132714
+      }
+    },
+    "http_req_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 1095.1830059544664,
+        "min": 3.3444,
+        "med": 570.2096,
+        "max": 8378.5253,
+        "p(90)": 3363.8085800000017,
+        "p(95)": 4068.8314199999995
+      },
+      "thresholds": {
+        "p(95)<1500": {
+          "ok": false
+        }
+      }
+    },
+    "http_req_duration{expected_response:true}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 1095.1830059544664,
+        "min": 3.3444,
+        "med": 570.2096,
+        "max": 8378.5253,
+        "p(90)": 3363.8085800000017,
+        "p(95)": 4068.8314199999995
+      }
+    },
+    "http_reqs": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 3997,
+        "rate": 47.5858477921906
+      }
+    },
+    "http_req_connecting": {
+      "values": {
+        "p(95)": 0,
+        "avg": 0.07362096572429322,
+        "min": 0,
+        "med": 0,
+        "max": 66.7596,
+        "p(90)": 0
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "http_req_tls_handshaking": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 0,
+        "min": 0,
+        "med": 0,
+        "max": 0,
+        "p(90)": 0,
+        "p(95)": 0
+      }
+    },
+    "checks": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "passes": 4568,
+        "fails": 0,
+        "rate": 1
+      }
+    },
+    "vus": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "value": 1,
+        "min": 1,
+        "max": 100
+      }
+    },
+    "data_sent": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "rate": 18027.928794818436,
+        "count": 1514266
+      }
+    },
+    "http_req_failed": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 3997
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_waiting": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 568.1767,
+        "max": 8378.5253,
+        "p(90)": 3355.77344,
+        "p(95)": 4068.2044199999996,
+        "avg": 1090.883224843632,
+        "min": 0.5036
+      }
+    },
+    "http_req_receiving": {
+      "values": {
+        "min": 0,
+        "med": 0.3778,
+        "max": 1041.7047,
+        "p(90)": 4.080060000000001,
+        "p(95)": 8.382499999999997,
+        "avg": 4.262703177383032
+      },
+      "type": "trend",
+      "contains": "time"
+    },
+    "http_req_blocked": {
+      "contains": "time",
+      "values": {
+        "avg": 0.0858276457343007,
+        "min": 0,
+        "med": 0,
+        "max": 66.7596,
+        "p(90)": 0,
+        "p(95)": 0
+      },
+      "type": "trend"
+    },
+    "iteration_duration": {
+      "contains": "time",
+      "values": {
+        "avg": 8998.238482662,
+        "min": 1310.556,
+        "med": 7337.4014,
+        "max": 17272.5104,
+        "p(90)": 16707.8969,
+        "p(95)": 16864.84045
+      },
+      "type": "trend"
+    },
+    "http_req_sending": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 0.03707793345008756,
+        "min": 0,
+        "med": 0,
+        "max": 4.9923,
+        "p(90)": 0,
+        "p(95)": 0
+      }
+    }
+  },
+  "root_group": {
+    "id": "d41d8cd98f00b204e9800998ecf8427e",
+    "groups": [],
+    "checks": [
+        {
+          "path": "::overview returns 200",
+          "id": "7a37edf5af334d1fd85ee141321dca9d",
+          "passes": 571,
+          "fails": 0,
+          "name": "overview returns 200"
+        },
+        {
+          "path": "::overview has metrics",
+          "id": "7a7c130abfb1ecdb18cefc18f64b8561",
+          "passes": 571,
+          "fails": 0,
+          "name": "overview has metrics"
+        },
+        {
+          "name": "case list returns 200",
+          "path": "::case list returns 200",
+          "id": "16574c77361b613bb87f286c209c1d7a",
+          "passes": 571,
+          "fails": 0
+        },
+        {
+          "id": "f4b63bd2007f20d97e2dcefebb259265",
+          "passes": 571,
+          "fails": 0,
+          "name": "case detail returns 200",
+          "path": "::case detail returns 200"
+        },
+        {
+          "passes": 571,
+          "fails": 0,
+          "name": "pending eligibility list returns 200",
+          "path": "::pending eligibility list returns 200",
+          "id": "d3e594a2d938f5a3397de39c9d58ba1c"
+        },
+        {
+          "name": "tasks queue returns 200",
+          "path": "::tasks queue returns 200",
+          "id": "eca2bd6563955394a0dc1c1e9b1d7a07",
+          "passes": 571,
+          "fails": 0
+        },
+        {
+          "id": "9e7f929de6e75811421e41f39449c37b",
+          "passes": 571,
+          "fails": 0,
+          "name": "create draft returns 201",
+          "path": "::create draft returns 201"
+        },
+        {
+          "name": "submit case returns 200 or 201",
+          "path": "::submit case returns 200 or 201",
+          "id": "0399eeb2fb1c0b6dd5d3aba74238b06c",
+          "passes": 571,
+          "fails": 0
+        }
+      ],
+    "name": "",
+    "path": ""
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "pnpm --filter @assessflow/contracts build && pnpm --filter @assessflow/web build",
+  "outputDirectory": "apps/web/dist",
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/api/v1/assessflow/:path*",
+      "destination": "https://bkassess.zainx.cloud/api/v1/assessflow/:path*"
+    },
+    {
+      "source": "/health/:path*",
+      "destination": "https://bkassess.zainx.cloud/health/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://bkassess.zainx.cloud/health"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

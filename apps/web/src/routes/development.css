@@ -1,0 +1,400 @@
+/* development.css — كل الـ classes بتبدأ بـ dv- */
+.dv {
+  --accent: #4338ca;
+  --ink: #14172b;
+  --muted: #5b6078;
+  --line: #e6e8f0;
+  --row-line: #eef0f5;
+  --good: #0f766e;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  color: var(--ink);
+  font-size: 14px;
+}
+.dv h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.dv h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 800;
+}
+.dv p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 15px;
+}
+.dv-sub {
+  font-size: 13px;
+  color: var(--muted);
+}
+.dv-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.dv-empty {
+  color: var(--muted);
+}
+.dv-good {
+  color: var(--good);
+}
+
+.dv-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.dv-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 16px 20px;
+}
+.dv-kpi--on {
+  border: 2px solid var(--accent);
+  padding: 15px 19px;
+}
+.dv-kpi span {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.dv-kpi b {
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.dv-kpi small {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.dv-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.9fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.dv-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.dv-card__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px 12px;
+}
+.dv-card__head h2 {
+  font-size: 18px;
+}
+.dv-side {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* رأس الخطة */
+.dv-plan-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 24px 16px;
+}
+.dv-who {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.dv-who strong {
+  display: block;
+  font-size: 20px;
+  font-weight: 800;
+}
+.dv-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 99px;
+  background: #eef0ff;
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.dv-avatar--lg {
+  width: 48px;
+  height: 48px;
+  font-size: 15px;
+}
+.dv-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.dv-link:hover {
+  text-decoration: underline;
+}
+
+.dv-progress {
+  margin: 0 24px 16px;
+  background: #f3f4fb;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dv-progress__top {
+  display: flex;
+  justify-content: space-between;
+}
+.dv-bar {
+  height: 8px;
+  background: #dde0f3;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.dv-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+}
+
+.dv-card > h2 {
+  padding: 0 24px 8px;
+}
+
+/* الإجراءات: أعمدة ثابتة */
+.dv-actions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dv-action {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) 150px 150px;
+  gap: 20px;
+  align-items: center;
+  padding: 14px 24px;
+  border-top: 1px solid var(--row-line);
+}
+.dv-action > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.dv-evidence {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.dv-evidence textarea,
+.dv-form input {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  min-height: 42px;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.dv-chip {
+  justify-self: start;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 99px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+.dv-chip--overdue {
+  background: #ffedd5;
+  color: #9a3412;
+}
+.dv-chip--soon {
+  background: #fef3c7;
+  color: #92400e;
+}
+.dv-chip--neutral {
+  background: #eef0f5;
+  color: #454a61;
+}
+.dv-chip--done {
+  background: #ccfbf1;
+  color: #115e59;
+}
+
+.dv-select {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  background: #fff;
+}
+.dv-select--completed {
+  background: #ccfbf1;
+  color: #115e59;
+  border-color: #99f6e4;
+}
+.dv-select--in_progress {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+/* فورم الإضافة */
+.dv-form {
+  margin: 8px 24px 24px;
+  border: 1px dashed #c7cbe6;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.dv-form__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) 160px auto;
+  gap: 12px;
+  align-items: start;
+}
+.dv-form input[aria-invalid='true'] {
+  border-color: #b42318;
+}
+.dv-form p {
+  margin: 0;
+  font-size: 13px;
+}
+.dv-error {
+  color: #b42318 !important;
+}
+
+.dv-btn {
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border: 0;
+}
+.dv-btn--primary {
+  background: var(--accent);
+  color: #fff;
+}
+.dv-btn--primary:disabled {
+  background: #dde0f3;
+  color: #454a61;
+  cursor: not-allowed;
+}
+.dv-btn--ghost {
+  align-self: flex-start;
+  background: #fff;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+/* قايمة الخطط */
+.dv-plans {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dv-plan {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  border: 0;
+  border-top: 1px solid var(--row-line);
+  border-left: 4px solid transparent;
+  background: #fff;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dv-plan:hover,
+.dv-plan.is-on {
+  background: #f3f4fb;
+}
+.dv-plan.is-on {
+  border-left-color: var(--accent);
+}
+.dv-plan__txt {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dv-note {
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 16px;
+  padding: 18px 24px;
+  color: #115e59;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dv-note--warn {
+  background: #fff7ed;
+  border-color: #fed7aa;
+  color: #7c2d12;
+}
+
+.dv a:focus-visible,
+.dv button:focus-visible,
+.dv input:focus-visible,
+.dv select:focus-visible,
+.dv textarea:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1100px) {
+  .dv-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dv-grid {
+    grid-template-columns: 1fr;
+  }
+  .dv-action {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .dv-form__grid {
+    grid-template-columns: 1fr;
+  }
+}

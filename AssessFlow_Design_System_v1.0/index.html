@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>AssessFlow Design System</title>
+  <link rel="stylesheet" href="styles/tokens.css"/>
+  <link rel="stylesheet" href="styles/base.css"/>
+  <link rel="stylesheet" href="styles/sidebar.css"/>
+  <link rel="stylesheet" href="styles/components.css"/>
+  <link rel="stylesheet" href="styles/layout.css"/>
+  <link rel="stylesheet" href="styles/enhancements.css"/>
+</head>
+<body>
+  <a class="skip-link" href="#design-system">Skip to design system content</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Primary navigation">
+      <div class="brand">
+        <img src="assets/logo.svg" alt="AssessFlow logo"/>
+        <div class="brand-copy"><div class="brand-name">AssessFlow</div><div class="brand-sub">Talent Assessment OS</div></div>
+        <button class="side-collapse" id="collapseSidebar" aria-label="Collapse sidebar"><svg><use href="assets/icons.svg#menu"/></svg></button>
+      </div>
+
+      <div class="workspace-switcher">
+        <div class="workspace-icon"><svg><use href="assets/icons.svg#assessment"/></svg></div>
+        <div class="workspace-text"><strong>Assessment Workspace</strong><span>FY26 Talent Cycle · Egypt</span></div>
+        <span class="live-dot" title="Live"></span>
+      </div>
+
+      <div class="nav-scroll">
+        <nav class="nav-group">
+          <div class="nav-label">Workspace</div>
+          <a class="nav-item" href="#overview"><span class="icon"><svg><use href="assets/icons.svg#home"/></svg></span><span>Overview</span></a>
+          <a class="nav-item" href="#cases"><span class="icon"><svg><use href="assets/icons.svg#assessment"/></svg></span><span>Assessments</span><span class="nav-badge">12</span></a>
+          <a class="nav-item" href="#profiles"><span class="icon"><svg><use href="assets/icons.svg#employees"/></svg></span><span>Employees</span></a>
+          <a class="nav-item" href="#workflow"><span class="icon"><svg><use href="assets/icons.svg#calibration"/></svg></span><span>Calibration</span><span class="nav-badge">3</span></a>
+          <a class="nav-item" href="#analytics"><span class="icon"><svg><use href="assets/icons.svg#report"/></svg></span><span>Insights</span></a>
+          <a class="nav-item" href="#patterns"><span class="icon"><svg><use href="assets/icons.svg#task"/></svg></span><span>My Tasks</span><span class="nav-badge">6</span></a>
+        </nav>
+
+        <nav class="nav-group">
+          <div class="nav-label">System</div>
+          <a class="nav-item active" href="#design-system"><span class="icon"><svg><use href="assets/icons.svg#palette"/></svg></span><span>Design System</span><span class="nav-badge">DS</span></a>
+          <a class="nav-item" href="#components"><span class="icon"><svg><use href="assets/icons.svg#components"/></svg></span><span>Component Library</span></a>
+          <a class="nav-item" href="#patterns"><span class="icon"><svg><use href="assets/icons.svg#pattern"/></svg></span><span>Patterns</span></a>
+          <a class="nav-item" href="#icons"><span class="icon"><svg><use href="assets/icons.svg#icons"/></svg></span><span>Icons</span></a>
+          <a class="nav-item" href="#loading"><span class="icon"><svg><use href="assets/icons.svg#task"/></svg></span><span>Loading states</span></a>
+          <a class="nav-item" href="#data"><span class="icon"><svg><use href="assets/icons.svg#database"/></svg></span><span>Data Dictionary</span></a>
+        </nav>
+
+        <nav class="nav-group">
+          <div class="nav-label">Resources</div>
+          <a class="nav-item" href="docs/README.md"><span class="icon"><svg><use href="assets/icons.svg#docs"/></svg></span><span>Documentation</span></a>
+          <a class="nav-item" href="docs/sidebar-spec.md"><span class="icon"><svg><use href="assets/icons.svg#docs"/></svg></span><span>Sidebar Spec</span></a>
+        </nav>
+      </div>
+
+      <div class="sidebar-spotlight">
+        <div class="spot-top"><span>Live Cycle</span><i class="spot-chip">FY26</i></div>
+        <div class="spot-title">Leadership Assessment</div>
+        <div class="spot-progress"><i></i></div>
+        <div class="spot-meta"><span>68% complete</span><span>28 / 41</span></div>
+      </div>
+
+      <div class="side-footer">
+        <div class="user-card">
+          <div class="avatar">SJ</div>
+          <div class="user-copy"><strong>Sarah Johnson</strong><span>HR Business Partner</span></div>
+          <svg style="width:14px;height:14px;color:var(--af-slate-400)"><use href="assets/icons.svg#chevron"/></svg>
+        </div>
+        <div class="env-row"><span class="env-pill"><i></i> Production</span><span>v1.0</span></div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <button class="mobile-menu" id="mobileMenu" aria-label="Open menu"><svg><use href="assets/icons.svg#menu"/></svg></button>
+        <div class="top-search"><svg><use href="assets/icons.svg#search"/></svg><input id="searchInput" placeholder="Search components, tokens, patterns..."/><kbd>⌘ K</kbd></div>
+        <div class="top-spacer"></div>
+        <button class="icon-btn" id="themeToggle" aria-label="Toggle theme"><svg><use id="themeUse" href="assets/icons.svg#moon"/></svg></button>
+        <button class="icon-btn" aria-label="Notifications"><svg><use href="assets/icons.svg#bell"/></svg><i class="notify-dot"></i></button>
+        <button class="icon-btn" aria-label="Help"><svg><use href="assets/icons.svg#help"/></svg></button>
+        <div class="top-user"><div class="avatar">SJ</div><div class="top-user-copy"><strong>Sarah Johnson</strong><span>HR Business Partner</span></div></div>
+      </header>
+
+      <div class="page" id="design-system">
+        <div class="page-header">
+          <div><div class="eyebrow">System Foundation</div><h1 class="title">AssessFlow Design System</h1><div class="muted">Reusable foundations, components, enterprise patterns and assessment-specific UI.</div></div>
+          <div class="header-actions"><a class="btn btn-secondary" href="simulation.html">Open workflow simulation</a><button class="btn btn-secondary" data-toast="Guidelines opened">View guidelines</button><button class="btn btn-primary" data-toast="Change request created"><svg><use href="assets/icons.svg#plus"/></svg>Request change</button></div>
+        </div>
+        <div class="hero-note"><strong>Design principle:</strong> calm enterprise surfaces + strong information hierarchy + distinctive module identity. Color supports meaning; text always carries the status.</div>
+
+        <section class="section surface" id="overview">
+          <div class="section-head"><div><h2 class="section-title">Foundations</h2><div class="section-copy">Color, typography and primary actions.</div></div><span class="badge badge-violet">v1.0</span></div>
+          <div class="grid-3">
+            <div class="card"><h3 class="section-title">Color palette</h3><div class="section-copy">Click any swatch to copy its hex value.</div><div class="color-row">
+              <div class="swatch" data-hex="#4F46E5" style="background:#4F46E5"><strong>Indigo 600</strong><span>#4F46E5</span></div>
+              <div class="swatch" data-hex="#14B8A6" style="background:#14B8A6"><strong>Teal 500</strong><span>#14B8A6</span></div>
+              <div class="swatch" data-hex="#7C3AED" style="background:#7C3AED"><strong>Violet 600</strong><span>#7C3AED</span></div>
+              <div class="swatch" data-hex="#0F172A" style="background:#0F172A"><strong>Slate 900</strong><span>#0F172A</span></div>
+              <div class="swatch light" data-hex="#F8FAFC" style="background:#F8FAFC;border:1px solid #E2E8F0"><strong>Slate 50</strong><span>#F8FAFC</span></div>
+            </div></div>
+            <div class="card"><h3 class="section-title">Typography</h3><div class="section-copy">Inter/system sans; compact and readable.</div>
+              <div class="type-sample"><span class="type-glyph" style="font-size:30px">Ag</span><span class="type-meta">Display / 30 / 800</span></div>
+              <div class="type-sample"><span class="type-glyph" style="font-size:22px">Ag</span><span class="type-meta">H1 / 22 / 750</span></div>
+              <div class="type-sample"><span class="type-glyph" style="font-size:16px">Ag</span><span class="type-meta">H2 / 16 / 700</span></div>
+              <div class="type-sample"><span class="type-glyph" style="font-size:12px">Ag</span><span class="type-meta">Body / 12 / 500</span></div>
+            </div>
+            <div class="card"><h3 class="section-title">Buttons</h3><div class="section-copy">Primary, secondary, ghost and destructive.</div><div class="button-stack" style="margin-top:14px"><button class="btn btn-primary">Primary</button><button class="btn btn-secondary">Secondary</button><button class="btn btn-ghost">Tertiary</button><button class="btn btn-danger">Delete</button></div><div class="section-copy" style="margin-top:16px">Sizes</div><div class="button-stack" style="margin-top:8px"><button class="btn btn-secondary btn-sm">Small</button><button class="btn btn-secondary">Medium</button><button class="btn btn-secondary btn-lg">Large</button></div></div>
+          </div>
+        </section>
+
+        <section class="section surface" id="components">
+          <div class="section-head"><div><h2 class="section-title">Form controls & input states</h2><div class="section-copy">Default, focus, errors, disabled and long-form content.</div></div></div>
+          <div class="form-grid">
+            <div class="field"><label>Employee name</label><input class="input" placeholder="Enter employee name"/><span class="helper">Helper text goes here</span></div>
+            <div class="field"><label>Focused</label><input class="input" value="Anna Cooper" autofocus/></div>
+            <div class="field error"><label>Email</label><input class="input" value="anna.cooper@company"/><span class="helper">Please enter a valid email</span></div>
+            <div class="field"><label>Disabled</label><input class="input" value="System generated" disabled/></div>
+            <div class="field"><label>Assessment type</label><select class="select"><option>Promotion</option><option>Internal mobility</option><option>Role realignment</option></select></div>
+            <div class="field"><label>Assessment method</label><select class="select"><option>CBI + Case Study</option><option>Roleplay</option></select></div>
+            <div class="field"><label>Due date</label><input class="input" type="date" value="2026-08-28"/></div>
+            <div class="field"><label>Notes</label><textarea class="textarea" placeholder="Add assessment notes..."></textarea></div>
+          </div>
+        </section>
+
+        <section class="section surface">
+          <div class="section-head"><div><h2 class="section-title">Assessment statuses</h2><div class="section-copy">Status colors are semantic, but text is always required.</div></div></div>
+          <div class="status-line"><span class="badge badge-neutral">Draft</span><span class="badge badge-warning">Eligibility Review</span><span class="badge badge-teal">Eligible</span><span class="badge badge-danger">Not Eligible</span><span class="badge badge-violet">Assessment Planned</span><span class="badge badge-info">In Progress</span><span class="badge badge-success">Ready Now</span><span class="badge badge-warning">Ready with Development</span><span class="badge badge-danger">Not Ready</span><span class="badge badge-violet">Pending Approval</span><span class="badge badge-success">Approved</span><span class="badge badge-neutral">Closed</span></div>
+        </section>
+
+        <section class="section surface" id="analytics">
+          <div class="section-head metrics-section-head"><div><h2 class="section-title">Metrics &amp; analytics</h2><div class="section-copy">A focused cycle snapshot for volume, flow, review load and outcomes.</div></div><div class="metrics-toolbar"><span class="metrics-updated"><i></i>Updated 2m ago</span><button class="btn btn-secondary btn-sm" type="button" data-toast="Metric range preview">Last 30 days <svg><use href="assets/icons.svg#chevron"/></svg></button></div></div>
+          <div class="grid-4 metrics-grid">
+            <article class="card kpi" data-tone="indigo" aria-labelledby="metric-total">
+              <div class="kpi-top"><div class="kpi-heading"><span class="kpi-icon"><svg><use href="assets/icons.svg#assessment"/></svg></span><div><span class="kpi-eyebrow">Portfolio volume</span><h3 class="kpi-label" id="metric-total">Total assessments</h3></div></div><span class="kpi-status"><i></i>Healthy</span></div>
+              <div class="kpi-value-row"><div class="kpi-value-wrap"><strong class="kpi-value">428</strong><span class="kpi-unit">cases</span></div><span class="kpi-trend up"><svg><use href="assets/icons.svg#arrow"/></svg>12%</span></div>
+              <div class="kpi-chart" role="img" aria-label="Assessment volume trending upward"><span style="height:35%"></span><span style="height:46%"></span><span style="height:42%"></span><span style="height:58%"></span><span style="height:54%"></span><span style="height:72%"></span><span style="height:88%"></span></div>
+              <div class="kpi-foot"><span>vs last cycle</span><strong>+46 cases</strong></div>
+            </article>
+            <article class="card kpi" data-tone="teal" aria-labelledby="metric-progress">
+              <div class="kpi-top"><div class="kpi-heading"><span class="kpi-icon"><svg><use href="assets/icons.svg#task"/></svg></span><div><span class="kpi-eyebrow">Active workflow</span><h3 class="kpi-label" id="metric-progress">In progress</h3></div></div><span class="kpi-status"><i></i>Moving</span></div>
+              <div class="kpi-value-row"><div class="kpi-value-wrap"><strong class="kpi-value">156</strong><span class="kpi-unit">active cases</span></div><span class="kpi-trend up"><svg><use href="assets/icons.svg#arrow"/></svg>8%</span></div>
+              <div class="kpi-chart" role="img" aria-label="Active cases trending upward"><span style="height:62%"></span><span style="height:55%"></span><span style="height:68%"></span><span style="height:52%"></span><span style="height:74%"></span><span style="height:69%"></span><span style="height:84%"></span></div>
+              <div class="kpi-foot"><span>vs last cycle</span><strong>+12 active</strong></div>
+            </article>
+            <article class="card kpi" data-tone="amber" aria-labelledby="metric-review">
+              <div class="kpi-top"><div class="kpi-heading"><span class="kpi-icon"><svg><use href="assets/icons.svg#calibration"/></svg></span><div><span class="kpi-eyebrow">Manager queue</span><h3 class="kpi-label" id="metric-review">Ready for review</h3></div></div><span class="kpi-status"><i></i>Watch</span></div>
+              <div class="kpi-value-row"><div class="kpi-value-wrap"><strong class="kpi-value">73</strong><span class="kpi-unit">awaiting review</span></div><span class="kpi-trend danger"><svg><use href="assets/icons.svg#arrow"/></svg>4%</span></div>
+              <div class="kpi-chart" role="img" aria-label="Review queue trending downward"><span style="height:86%"></span><span style="height:76%"></span><span style="height:80%"></span><span style="height:66%"></span><span style="height:58%"></span><span style="height:52%"></span><span style="height:43%"></span></div>
+              <div class="kpi-foot"><span>waiting calibration</span><strong>Queue reduced</strong></div>
+            </article>
+            <article class="card kpi" data-tone="violet" aria-labelledby="metric-completed">
+              <div class="kpi-top"><div class="kpi-heading"><span class="kpi-icon"><svg><use href="assets/icons.svg#check"/></svg></span><div><span class="kpi-eyebrow">Closed this cycle</span><h3 class="kpi-label" id="metric-completed">Completed</h3></div></div><span class="kpi-status"><i></i>On track</span></div>
+              <div class="kpi-value-row"><div class="kpi-value-wrap"><strong class="kpi-value">199</strong><span class="kpi-unit">completed cases</span></div><span class="kpi-trend up"><svg><use href="assets/icons.svg#arrow"/></svg>15%</span></div>
+              <div class="kpi-chart" role="img" aria-label="Completed cases trending upward"><span style="height:28%"></span><span style="height:36%"></span><span style="height:48%"></span><span style="height:45%"></span><span style="height:62%"></span><span style="height:72%"></span><span style="height:92%"></span></div>
+              <div class="kpi-foot"><span>of all assessments</span><strong>46.5% complete</strong></div>
+            </article>
+          </div>
+        </section>
+
+        <section class="section surface" id="workflow">
+          <div class="section-head"><div><h2 class="section-title">Assessment workflow</h2><div class="section-copy">MVP path: result is explicit; numeric scoring is future-ready, not required.</div></div><span class="badge badge-teal">MVP</span></div>
+          <div class="workflow">
+            <div class="step done"><div class="step-circle">1</div><strong>Request</strong><span>Reason & target role</span></div>
+            <div class="step done"><div class="step-circle">2</div><strong>Eligibility</strong><span>Policy gate</span></div>
+            <div class="step done"><div class="step-circle">3</div><strong>Plan</strong><span>Methods & assessors</span></div>
+            <div class="step active"><div class="step-circle">4</div><strong>Assess</strong><span>Evidence captured</span></div>
+            <div class="step"><div class="step-circle">5</div><strong>Approve</strong><span>Business / HR</span></div>
+            <div class="step"><div class="step-circle">6</div><strong>Complete</strong><span>Feedback & follow-up</span></div>
+          </div>
+        </section>
+
+        <section class="section surface" id="cases">
+          <div class="section-head"><div><h2 class="section-title">Assessment cases — table pattern</h2><div class="section-copy">Compact rows, visible ownership, explicit next date.</div></div><button class="btn btn-secondary btn-sm">Export</button></div>
+          <div class="table-wrap"><table class="table"><thead><tr><th>Employee</th><th>Reason</th><th>Status</th><th>Manager</th><th>Due date</th><th>Result</th><th>Updated</th></tr></thead><tbody>
+            <tr><td><div class="person"><div class="person-mini">AC</div><div><strong>Anna Cooper</strong><span>Software Engineer · L4</span></div></div></td><td>Promotion</td><td><span class="badge badge-info">In Progress</span></td><td>David Lee</td><td>Aug 20, 2026</td><td>—</td><td>Aug 14</td></tr>
+            <tr><td><div class="person"><div class="person-mini">MC</div><div><strong>Michael Chen</strong><span>Product Manager</span></div></div></td><td>Internal Mobility</td><td><span class="badge badge-warning">Eligibility Review</span></td><td>Sarah Johnson</td><td>Aug 22, 2026</td><td>—</td><td>Aug 13</td></tr>
+            <tr><td><div class="person"><div class="person-mini">PP</div><div><strong>Priya Patel</strong><span>Data Analyst</span></div></div></td><td>Promotion</td><td><span class="badge badge-success">Finalized</span></td><td>David Lee</td><td>Aug 18, 2026</td><td><span class="badge badge-warning">Ready with Development</span></td><td>Aug 12</td></tr>
+            <tr><td><div class="person"><div class="person-mini">JW</div><div><strong>James Wilson</strong><span>UX Designer</span></div></div></td><td>Role Realignment</td><td><span class="badge badge-violet">Pending Approval</span></td><td>Sarah Johnson</td><td>Aug 17, 2026</td><td><span class="badge badge-success">Ready Now</span></td><td>Aug 11</td></tr>
+          </tbody></table></div>
+        </section>
+
+        <section class="section surface">
+          <div class="grid-4">
+            <div class="card"><h3 class="section-title">Outcome distribution</h3><div class="chart-bars"><div class="bar" data-label="NR" style="height:32%"></div><div class="bar" data-label="RD" style="height:56%"></div><div class="bar" data-label="RN" style="height:82%"></div><div class="bar" data-label="Inc" style="height:24%"></div></div></div>
+            <div class="card"><h3 class="section-title">Assessment reasons</h3><div class="donut"></div><div class="legend"><span><i style="background:#4F46E5"></i>Promotion 58%</span><span><i style="background:#14B8A6"></i>Mobility 20%</span><span><i style="background:#D97706"></i>Realignment 12%</span><span><i style="background:#E2E8F0"></i>Other 10%</span></div></div>
+            <div class="card"><h3 class="section-title">Cycle progress</h3><div style="margin-top:18px"><div style="display:flex;justify-content:space-between;font-size:10px"><span>Completed</span><strong>68%</strong></div><div class="progress" style="margin-top:8px"><i style="width:68%"></i></div><div class="section-copy" style="margin-top:12px">28 of 41 assessment cases completed.</div></div></div>
+            <div class="card"><h3 class="section-title">Health</h3><div style="display:grid;gap:9px;margin-top:14px"><div class="badge badge-success">● On Track · 61%</div><div class="badge badge-warning">● At Risk · 21%</div><div class="badge badge-danger">● Behind · 8%</div><div class="badge badge-neutral">● Closed · 10%</div></div></div>
+          </div>
+        </section>
+
+        <section class="section surface" id="profiles">
+          <div class="section-head"><div><h2 class="section-title">Profile, schedule & summary cards</h2><div class="section-copy">Reusable dashboard composition.</div></div></div>
+          <div class="grid-4">
+            <div class="card"><div class="profile-card"><div class="profile-photo">AC</div><div class="profile-meta"><h4>Anna Cooper</h4><p>Software Engineer · L4</p><p>Engineering · Cairo</p></div></div><div class="status-line" style="margin-top:14px"><span class="tag">High Potential</span><span class="tag" style="background:var(--af-teal-50);color:var(--af-teal-700)">Top Performer</span></div></div>
+            <div class="card"><h3 class="section-title">Upcoming schedule</h3><div class="quick-actions" style="margin-top:10px"><div class="quick-action">CBI Interview <span class="muted" style="margin-left:auto">Aug 18</span></div><div class="quick-action">Calibration <span class="muted" style="margin-left:auto">Aug 20</span></div><div class="quick-action">Review & Approve <span class="muted" style="margin-left:auto">Aug 22</span></div></div></div>
+            <div class="card"><h3 class="section-title">Assessment summary</h3><div style="margin-top:12px;display:grid;gap:9px;font-size:10px"><div style="display:flex;justify-content:space-between"><span class="muted">Current Result</span><span class="badge badge-warning">Ready with Development</span></div><div style="display:flex;justify-content:space-between"><span class="muted">Recommendation</span><strong>Development then reassess</strong></div><div style="display:flex;justify-content:space-between"><span class="muted">Reassessment</span><strong>90 days</strong></div></div></div>
+            <div class="card"><h3 class="section-title">Quick actions</h3><div class="quick-actions" style="margin-top:10px"><button class="quick-action"><svg><use href="assets/icons.svg#plus"/></svg>Create assessment</button><button class="quick-action"><svg><use href="assets/icons.svg#task"/></svg>Invite feedback</button><button class="quick-action"><svg><use href="assets/icons.svg#calibration"/></svg>Schedule calibration</button><button class="quick-action"><svg><use href="assets/icons.svg#report"/></svg>Export report</button></div></div>
+          </div>
+        </section>
+
+        <section class="section surface">
+          <div class="grid-3">
+            <div class="card"><h3 class="section-title">Approval timeline</h3><div class="timeline" style="margin-top:12px"><div class="timeline-item"><i class="timeline-dot"></i><strong>Assessment submitted</strong><span>Aug 12 · David Lee</span></div><div class="timeline-item"><i class="timeline-dot"></i><strong>Calibration completed</strong><span>Aug 14 · Sarah Johnson</span></div><div class="timeline-item"><i class="timeline-dot" style="border-color:#D97706"></i><strong>Pending approval</strong><span>VP Engineering</span></div></div></div>
+            <div class="card"><h3 class="section-title">Activity log</h3><div class="timeline" style="margin-top:12px"><div class="timeline-item"><i class="timeline-dot"></i><strong>Status changed to In Progress</strong><span>Today · System</span></div><div class="timeline-item"><i class="timeline-dot"></i><strong>Evidence submitted</strong><span>Yesterday · Anna Cooper</span></div><div class="timeline-item"><i class="timeline-dot"></i><strong>Assessor added</strong><span>Aug 10 · David Lee</span></div></div></div>
+            <div class="card"><h3 class="section-title">Comments</h3><div class="comment"><div class="avatar" style="width:30px;height:30px">SJ</div><div class="comment-body"><div class="comment-top"><strong>Sarah Johnson</strong><span>10:30 AM</span></div><p>Strong delivery evidence. Confirm leadership development action.</p></div></div><div class="comment"><div class="avatar" style="width:30px;height:30px">DL</div><div class="comment-body"><div class="comment-top"><strong>David Lee</strong><span>11:05 AM</span></div><p>Agreed. Add a 90-day stretch assignment before reassessment.</p></div></div></div>
+          </div>
+        </section>
+
+        <section class="section surface" id="patterns">
+          <div class="section-head"><div><h2 class="section-title">Controls & interaction patterns</h2><div class="section-copy">Small reusable primitives.</div></div></div>
+          <div class="grid-4">
+            <div class="card"><div class="tabs"><button class="tab active">Details</button><button class="tab">History</button><button class="tab">Feedback</button></div><div class="section-copy" style="margin-top:12px">Tabs organize contextual content without creating new pages.</div></div>
+            <div class="card"><h3 class="section-title">Selection</h3><label class="check-row"><input type="checkbox" checked/> Select all</label><label class="check-row"><input type="checkbox" checked/> Include self-assessment</label><label class="check-row"><input type="checkbox"/> Share with calibration group</label></div>
+            <div class="card"><h3 class="section-title">Radio states</h3><label class="radio-row"><input type="radio" name="r"/> Not started</label><label class="radio-row"><input type="radio" name="r" checked/> In progress</label><label class="radio-row"><input type="radio" name="r"/> Completed</label></div>
+            <div class="card"><h3 class="section-title">Toggles & tags</h3><div class="toggle-row"><span class="toggle on"></span> Email notifications</div><div class="toggle-row"><span class="toggle"></span> Auto-save drafts</div><div style="margin-top:8px"><span class="tag">Engineering</span><span class="tag">Remote</span><span class="tag">Critical</span></div></div>
+          </div>
+        </section>
+
+        <section class="section surface">
+          <div class="grid-2">
+            <div class="card"><h3 class="section-title">File upload</h3><div class="dropzone" style="margin-top:12px"><div><div class="upload-icon"><svg><use href="assets/icons.svg#upload"/></svg></div><strong>Drop files here</strong><div class="section-copy">PDF, DOCX, XLSX · up to 10MB</div><button class="btn btn-secondary btn-sm" style="margin-top:10px">Browse files</button></div></div></div>
+            <div class="card"><h3 class="section-title">Empty state</h3><div class="empty"><div class="empty-ill"><svg style="width:34px;height:34px"><use href="assets/icons.svg#assessment"/></svg></div><strong>No assessments yet</strong><div class="section-copy">Create your first assessment case to start the workflow.</div><button class="btn btn-primary btn-sm" style="margin-top:11px">Create assessment</button></div></div>
+          </div>
+        </section>
+
+        <section class="section surface">
+          <div class="grid-2">
+            <div class="card"><h3 class="section-title">Alerts</h3><div class="alert success">✓ Assessment approved successfully.</div><div class="alert info">ⓘ New assessment cycle is live.</div><div class="alert warning">△ Three assessments are overdue.</div><div class="alert danger">× Failed to save changes. Try again.</div></div>
+            <div class="card"><h3 class="section-title">Notification pattern</h3><div class="quick-actions" style="margin-top:10px"><div class="quick-action">Calibration scheduled <span class="muted" style="margin-left:auto">10m</span></div><div class="quick-action">Anna Cooper submitted self-assessment <span class="muted" style="margin-left:auto">1h</span></div><div class="quick-action">Michael Chen is due in 3 days <span class="muted" style="margin-left:auto">3h</span></div></div></div>
+          </div>
+        </section>
+
+        <section class="section surface">
+          <div class="section-head"><div><h2 class="section-title">Calendar / scheduling pattern</h2><div class="section-copy">Use for assessor scheduling and calibration sessions.</div></div><button class="btn btn-secondary btn-sm">Week view</button></div>
+          <div class="calendar"><div class="cal-cell cal-head">Time</div><div class="cal-cell cal-head">Mon 17</div><div class="cal-cell cal-head">Tue 18</div><div class="cal-cell cal-head">Wed 19</div><div class="cal-cell cal-head">Thu 20</div><div class="cal-cell cal-head">Fri 21</div><div class="cal-cell">10:00</div><div class="cal-cell"></div><div class="cal-cell"><div class="cal-event">CBI · Anna</div></div><div class="cal-cell"></div><div class="cal-cell"><div class="cal-event teal">Calibration</div></div><div class="cal-cell"></div><div class="cal-cell">14:00</div><div class="cal-cell"><div class="cal-event warn">Roleplay</div></div><div class="cal-cell"></div><div class="cal-cell"><div class="cal-event">Panel review</div></div><div class="cal-cell"></div><div class="cal-cell"><div class="cal-event teal">Approval</div></div></div>
+        </section>
+
+        <section class="section surface" id="loading">
+          <div class="section-head"><div><h2 class="section-title">Loading &amp; async feedback</h2><div class="section-copy">Keep the surface stable while assessment data or actions are being processed.</div></div><span class="badge badge-info">Live states</span></div>
+          <div class="grid-3">
+            <div class="card"><h3 class="section-title">Progressive loader</h3><div class="loading-demo" role="status" aria-live="polite"><div class="loader-stage"><span class="loader-orbit" aria-hidden="true"><i class="loader-ring"></i><i class="loader-core"></i></span><span class="loader-copy"><span class="loader-kicker">Processing</span><strong>Loading assessment data</strong><span class="loader-support">Syncing responses and reviewer states.</span></span></div><div class="loader-progress" aria-hidden="true"><i></i></div><div class="loader-meta"><span><i class="loader-live"></i>Live sync</span><span>Step 2 of 3</span></div></div></div>
+            <div class="card"><h3 class="section-title">Skeleton content</h3><div class="skeleton-demo" aria-label="Loading summary"><span></span><span></span><span class="short"></span></div><div class="section-copy" style="margin-top:10px">Reserve the final layout to prevent content shift.</div></div>
+            <div class="card"><h3 class="section-title">Async action</h3><div class="async-demo"><button class="btn btn-primary" type="button">Save assessment</button><span class="async-hint">Click to preview the loading state.</span></div></div>
+          </div>
+        </section>
+
+        <section class="section surface" id="icons">
+          <div class="section-head"><div><h2 class="section-title">Design system rules</h2><div class="section-copy">The non-negotiables developers and designers should follow.</div></div></div>
+          <div class="grid-3"><div class="callout"><span class="icon"><svg><use href="assets/icons.svg#check"/></svg></span><div><strong>Status text is mandatory</strong><span>Never use color alone to communicate readiness.</span></div></div><div class="callout"><span class="icon"><svg><use href="assets/icons.svg#check"/></svg></span><div><strong>One primary CTA per surface</strong><span>Secondary actions stay visually quieter.</span></div></div><div class="callout"><span class="icon"><svg><use href="assets/icons.svg#check"/></svg></span><div><strong>Server-authoritative workflows</strong><span>UI hints never replace backend validation.</span></div></div></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div class="toast" id="toast"></div>
+  <script src="scripts/app.js"></script>
+</body>
+</html>

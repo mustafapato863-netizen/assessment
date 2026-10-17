@@ -1,0 +1,80 @@
+/* assessments.css — كل الـ classes بتبدأ بـ as- */
+.as {
+  --accent: #4338ca; --ink: #14172b; --muted: #5b6078;
+  --line: #e6e8f0; --row-line: #eef0f5; --good: #0f766e;
+  display: flex; flex-direction: column; gap: 24px; color: var(--ink); font-size: 14px;
+}
+.as h1 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.01em; }
+.as p { margin: 6px 0 0; color: var(--muted); font-size: 15px; }
+.as-sub { font-size: 13px; color: var(--muted); }
+.as-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; }
+.as-actions { display: flex; gap: 10px; }
+
+.as-btn { min-height: 40px; padding: 0 18px; border-radius: 10px; font: inherit; font-weight: 700; cursor: pointer; }
+.as-btn--primary { background: var(--accent); color: #fff; border: 0; }
+.as-btn--outline { background: #fff; color: var(--ink); border: 1px solid var(--line); font-weight: 600; }
+
+/* كروت الأرقام */
+.as-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.as-kpi { display: flex; flex-direction: column; gap: 4px; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px 20px; }
+.as-kpi--on { border: 2px solid var(--accent); padding: 15px 19px; }
+.as-kpi span { font-size: 13px; font-weight: 600; color: var(--muted); }
+.as-kpi b { font-size: 34px; font-weight: 800; line-height: 1.1; }
+.as-kpi small { font-size: 13px; color: var(--muted); }
+.as-good { color: var(--good); }
+
+.as-card { background: #fff; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+
+/* التابات */
+.as-tabs { display: flex; gap: 8px; flex-wrap: wrap; padding: 20px 24px 0; }
+.as-tab { border: 0; border-radius: 99px; padding: 6px 14px; background: #f3f4fb; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.as-tab.is-on, .as-tab--primary { background: var(--accent); color: #fff; font-weight: 700; }
+.as-tab:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* chip الفلتر النشط (لما تيجي من الـ pipeline) */
+.as-filterbar { padding: 12px 24px 0; }
+.as-filterchip { display: inline-flex; align-items: center; gap: 8px; background: #eef0ff; color: var(--accent); font-size: 13px; font-weight: 700; border-radius: 99px; padding: 4px 6px 4px 12px; }
+.as-filterchip button { width: 22px; height: 22px; border: 0; border-radius: 99px; background: #fff; color: var(--accent); font-weight: 800; cursor: pointer; line-height: 1; }
+
+.as-tools { display: flex; gap: 12px; padding: 16px 24px; }
+.as-search { flex: 1; min-height: 42px; border: 1px solid var(--line); border-radius: 10px; padding: 0 14px; font: inherit; }
+.as-select { min-width: 190px; min-height: 42px; border: 1px solid var(--line); border-radius: 10px; padding: 0 12px; font: inherit; font-weight: 600; background: #fff; }
+
+/* الجدول: نفس الـ template للعناوين والصفوف عشان يتراصوا */
+.as-list { list-style: none; margin: 0; padding: 0; }
+.as-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1.4fr) minmax(0, 1.1fr) 220px minmax(0, 1fr) 100px 40px;
+  gap: 20px; align-items: center;
+  padding: 12px 24px; border-top: 1px solid var(--row-line);
+  min-height: 64px; box-sizing: border-box;
+}
+.as-row:not(.as-row--head):hover { background: #f3f4fb; }
+.as-row--head { min-height: 44px; background: #fafafd; border-top: 1px solid var(--line); font-size: 13px; font-weight: 700; color: var(--muted); }
+.as-cell { display: flex; flex-direction: column; min-width: 0; }
+.as-cell strong { font-weight: 700; }
+.as-date { font-weight: 600; }
+.as-avatar { width: 36px; height: 36px; border-radius: 99px; background: #eef0ff; color: var(--accent); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+.as-open { width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; text-decoration: none; }
+.as-open:hover { background: #eef0ff; }
+
+/* الـ chip: ميطلعش برا عموده أبداً */
+.as-chip { justify-self: start; max-width: 100%; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; border-radius: 99px; padding: 3px 10px; }
+.as-chip--indigo { background: #eef0ff; color: #4338ca; }
+.as-chip--gray { background: #eef0f5; color: #454a61; }
+.as-chip--teal { background: #ccfbf1; color: #115e59; }
+.as-chip--amber { background: #fef3c7; color: #92400e; }
+
+.as-foot { display: flex; justify-content: space-between; align-items: center; padding: 14px 24px; border-top: 1px solid var(--row-line); }
+.as-pager { display: flex; gap: 8px; }
+.as-empty { padding: 24px; color: var(--muted); }
+
+.as a:focus-visible, .as button:focus-visible, .as input:focus-visible, .as select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+@media (max-width: 1100px) {
+  .as-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .as-row { grid-template-columns: 40px minmax(0, 1fr) auto; }
+  .as-row--head { display: none; }
+  .as-row > :nth-child(n + 3):not(:last-child) { grid-column: 2; }
+  .as-open { grid-column: 3; grid-row: 1; }
+}

@@ -1,0 +1,563 @@
+openapi: 3.1.0
+info:
+  title: AssessFlow API (implemented contract)
+  version: 1.1.0
+  description: >
+    Implemented REST contract for the AssessFlow MVP workflow
+    (request → eligibility → plan → evidence → result → recommendation →
+    approval → development/reassessment → closure), reconciled with the
+    NestJS implementation, Prisma schema, and Gate 1 approvals.
+    Numeric scoring is disabled (scoringEnabled=false).
+    Deltas vs v1.0 design baseline: PATCH case-edit and per-criterion PUT are
+    not implemented (covered by finalize flows); recommendation binds the
+    latest finalized result revision implicitly. All commands are version-checked
+    (optimistic concurrency, 409 on stale version) and accept Idempotency-Key.
+servers:
+- url: /api/v1/assessflow
+security:
+- bearerAuth: []
+tags:
+- name: Cases
+- name: Eligibility
+- name: Planning
+- name: Events
+- name: Evidence
+- name: Results
+- name: Recommendations
+- name: Approvals
+- name: Development
+- name: Reassessment
+- name: System
+paths:
+  /overview:
+    get:
+      tags: [System]
+      summary: Role-aware overview metrics, tasks, and pipeline
+      responses:
+        '200': { description: Overview payload }
+  /tasks:
+    get:
+      tags: [System]
+      summary: Current user task queue (server-scoped)
+      responses:
+        '200': { description: Task list }
+  /cases:
+    get:
+      tags: [Cases]
+      summary: List assessment cases
+      parameters:
+      - in: query
+        name: status
+        schema: { type: string }
+      - in: query
+        name: search
+        schema: { type: string }
+      responses:
+        '200': { description: Case summaries }
+    post:
+      tags: [Cases]
+      summary: Create a draft assessment case
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateCaseRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AssessmentCase' }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /cases/{caseId}:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      tags: [Cases]
+      summary: Get assessment case detail (includes availableActions)
+      responses:
+        '200': { description: Case detail }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /cases/{caseId}/submit:
+    post:
+      tags: [Cases]
+      summary: Submit draft for eligibility review
+      parameters:
+      - { $ref: '#/components/parameters/CaseId' }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VersionCommand' }
+      responses:
+        '200': { description: Submitted (PENDING_ELIGIBILITY) }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /cases/{caseId}/eligibility/decision:
+    post:
+      tags: [Eligibility]
+      summary: Record eligibility decision (ELIGIBLE moves to READY_FOR_PLANNING)
+      parameters:
+      - { $ref: '#/components/parameters/CaseId' }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EligibilityDecisionInput' }
+      responses:
+        '200': { description: Decision recorded }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /cases/{caseId}/eligibility/override-request:
+    post:
+      tags: [Eligibility]
+      summary: Request governance override of NOT_ELIGIBLE
+      parameters:
+      - { $ref: '#/components/parameters/CaseId' }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason: { type: string }
+      responses:
+        '200': { description: Override requested (PENDING_ELIGIBILITY, HR Governance) }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /cases/{caseId}/plan/finalize:
+    post:
+      tags: [Planning]
+      summary: Finalize assessment plan (READY_FOR_PLANNING → PLANNING)
+      parameters:
+      - { $ref: '#/components/parameters/CaseId' }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FinalizePlanRequest' }
+      responses:
+        '200': { description: Plan finalized }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /cases/{caseId}/plan:
+    get:
+      tags: [Planning]
+      summary: Get assessment plan with methods and events
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Plan }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /cases/{caseId}/events:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      tags: [Events]
+      summary: List assessment events
+      responses:
+        '200': { description: Events }
+    post:
+      tags: [Events]
+      summary: Schedule assessment event (PLANNING/SCHEDULED → SCHEDULED)
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ScheduleEventRequest' }
+      responses:
+        '201': { description: Event scheduled (returns case detail plus eventId) }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /events/{eventId}/evidence:
+    post:
+      tags: [Evidence]
+      summary: Save assessor evidence draft (independent per assessor)
+      parameters:
+      - in: path
+        name: eventId
+        required: true
+        schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EvidenceInput' }
+      responses:
+        '200': { description: Draft saved }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /events/{eventId}/evidence/submit:
+    post:
+      tags: [Evidence]
+      summary: Submit assessor evidence (first submit moves SCHEDULED → IN_PROGRESS)
+      parameters:
+      - in: path
+        name: eventId
+        required: true
+        schema: { type: string, format: uuid }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EvidenceInput' }
+      responses:
+        '200': { description: Submitted (returns case detail plus evidenceId) }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /cases/{caseId}/result/finalize:
+    post:
+      tags: [Results]
+      summary: Finalize result (IN_PROGRESS → RESULT_FINALIZED, versioned revision)
+      parameters:
+      - { $ref: '#/components/parameters/CaseId' }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FinalizeResultRequest' }
+      responses:
+        '200': { description: Result finalized }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /cases/{caseId}/result/reopen:
+    post:
+      tags: [Results]
+      summary: Reopen finalized result (RESULT_FINALIZED → IN_PROGRESS)
+      parameters:
+      - { $ref: '#/components/parameters/CaseId' }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason, expectedVersion]
+              properties:
+                reason: { type: string, minLength: 10 }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '200': { description: Result reopened }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /cases/{caseId}/result:
+    get:
+      tags: [Results]
+      summary: Get latest result revision
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Latest result revision }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /cases/{caseId}/recommendation:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      tags: [Recommendations]
+      summary: Get latest recommendation revision
+      responses:
+        '200': { description: Latest recommendation revision }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Recommendations]
+      summary: Submit recommendation (creates HR → Business approval steps, → PENDING_APPROVAL)
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubmitRecommendationRequest' }
+      responses:
+        '200': { description: Recommendation submitted }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /cases/{caseId}/approval-steps:
+    get:
+      tags: [Approvals]
+      summary: List approval steps in sequence order
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Approval steps }
+  /approval-steps/{stepId}/decision:
+    post:
+      tags: [Approvals]
+      summary: Decide one approval step (all APPROVED → APPROVED; REJECTED/CHANGES → back to recommendation)
+      parameters:
+      - in: path
+        name: stepId
+        required: true
+        schema: { type: string, format: uuid }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApprovalDecisionInput' }
+      responses:
+        '200': { description: Decision recorded }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /cases/{caseId}/development:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      tags: [Development]
+      summary: Get development plan with actions
+      responses:
+        '200': { description: Development plan }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Development]
+      summary: Update development plan (APPROVED → DEVELOPMENT_IN_PROGRESS)
+      parameters: [{ $ref: '#/components/parameters/IdempotencyKey' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateDevelopmentRequest' }
+      responses:
+        '200': { description: Development plan updated }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /cases/{caseId}/reassessment:
+    post:
+      tags: [Reassessment]
+      summary: Schedule reassessment (creates linked DRAFT case; source stays immutable)
+      parameters:
+      - { $ref: '#/components/parameters/CaseId' }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason, expectedVersion]
+              properties:
+                reason: { type: string, minLength: 10 }
+                targetDate: { type: string, format: date-time }
+                expectedVersion: { type: integer, minimum: 1 }
+      responses:
+        '200': { description: Reassessment draft created (returns new case plus linkId) }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /cases/{caseId}/close:
+    post:
+      tags: [Cases]
+      summary: Close case (APPROVED/DEVELOPMENT_IN_PROGRESS → CLOSED)
+      parameters:
+      - { $ref: '#/components/parameters/CaseId' }
+      - { $ref: '#/components/parameters/IdempotencyKey' }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/VersionCommand' }
+      responses:
+        '200': { description: Closed }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    CaseId:
+      in: path
+      name: caseId
+      required: true
+      schema: { type: string, format: uuid }
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      schema: { type: string }
+      description: Command deduplication key, scoped with x-actor-id. Persisted in PostgreSQL.
+  schemas:
+    AssessmentReason:
+      type: string
+      enum: [PROMOTION, INTERNAL_MOBILITY, ROLE_REALIGNMENT]
+    ResultCode:
+      type: string
+      enum: [READY_NOW, READY_WITH_DEVELOPMENT, NOT_READY, INCOMPLETE]
+    AssessmentCase:
+      type: object
+      required: [id, caseCode, assessmentReason, stage, status, scoringEnabled, version, availableActions]
+      properties:
+        id: { type: string, format: uuid }
+        caseCode: { type: string }
+        assessmentReason: { $ref: '#/components/schemas/AssessmentReason' }
+        stage: { type: string }
+        status: { type: string }
+        scoringEnabled: { type: boolean, default: false }
+        version: { type: integer }
+        availableActions:
+          type: array
+          items:
+            type: object
+            required: [code, label, kind, enabled]
+            properties:
+              code: { type: string }
+              label: { type: string }
+              kind: { type: string, enum: [primary, secondary, danger] }
+              enabled: { type: boolean }
+              reason: { type: string }
+              requiresConfirmation: { type: boolean }
+              confirmationSeverity: { type: string, enum: [standard, destructive] }
+              prerequisites: { type: array, items: { type: string } }
+              consequences: { type: array, items: { type: string } }
+              nextOwner: { type: string }
+              auditEvent: { type: string }
+    CreateCaseRequest:
+      type: object
+      required: [employeeId, employeeName, department, currentRole, assessmentReason, targetRole, targetLevel, justification]
+      properties:
+        employeeId: { type: string }
+        employeeName: { type: string, minLength: 2, maxLength: 120 }
+        department: { type: string }
+        currentRole: { type: string }
+        assessmentReason: { $ref: '#/components/schemas/AssessmentReason' }
+        targetRole: { type: string }
+        targetLevel: { type: string }
+        justification: { type: string, minLength: 20, maxLength: 4000 }
+        priority: { type: string, enum: [LOW, NORMAL, HIGH], default: NORMAL }
+    VersionCommand:
+      type: object
+      required: [expectedVersion]
+      properties:
+        expectedVersion: { type: integer, minimum: 1 }
+    EligibilityDecisionInput:
+      type: object
+      required: [decision, expectedVersion]
+      properties:
+        decision: { type: string, enum: [ELIGIBLE, NOT_ELIGIBLE] }
+        reason: { type: string }
+        expectedVersion: { type: integer, minimum: 1 }
+    FinalizePlanRequest:
+      type: object
+      required: [methods, expectedVersion]
+      properties:
+        methods:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: object
+            required: [methodCode]
+            properties:
+              methodCode: { type: string }
+              methodLabel: { type: string }
+              required: { type: boolean, default: true }
+              durationMin: { type: integer, minimum: 1, maximum: 1440 }
+        leadAssessor: { type: string }
+        complexityBand: { type: string }
+        deviationReason: { type: string }
+        expectedVersion: { type: integer, minimum: 1 }
+    ScheduleEventRequest:
+      type: object
+      required: [startsAt, expectedVersion]
+      properties:
+        planMethodId: { type: string, format: uuid }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        timezone: { type: string }
+        location: { type: string }
+        meetingLink: { type: string }
+        assessors:
+          type: array
+          maxItems: 20
+          items:
+            type: object
+            required: [userId, displayName]
+            properties:
+              userId: { type: string }
+              displayName: { type: string }
+        expectedVersion: { type: integer, minimum: 1 }
+    EvidenceInput:
+      type: object
+      required: [summary]
+      properties:
+        summary: { type: string, minLength: 20, maxLength: 8000 }
+        strengths: { type: string }
+        gaps: { type: string }
+    FinalizeResultRequest:
+      type: object
+      required: [resultCode, expectedVersion]
+      properties:
+        resultCode: { $ref: '#/components/schemas/ResultCode' }
+        evidenceSummary: { type: string }
+        strengths: { type: string }
+        gaps: { type: string }
+        developmentFocus: { type: string }
+        expectedVersion: { type: integer, minimum: 1 }
+    SubmitRecommendationRequest:
+      type: object
+      required: [code, rationale, expectedVersion]
+      properties:
+        code: { type: string }
+        rationale: { type: string, minLength: 20, maxLength: 8000 }
+        requiresDevelopment: { type: boolean, default: false }
+        requiresReassessment: { type: boolean, default: false }
+        targetDate: { type: string, format: date-time }
+        expectedVersion: { type: integer, minimum: 1 }
+    ApprovalDecisionInput:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string, enum: [APPROVED, CHANGES_REQUESTED, REJECTED] }
+        comment: { type: string }
+        expectedVersion: { type: integer, minimum: 1 }
+    UpdateDevelopmentRequest:
+      type: object
+      required: [expectedVersion]
+      properties:
+        actions:
+          type: array
+          maxItems: 30
+          items:
+            type: object
+            required: [title, ownerName]
+            properties:
+              title: { type: string, minLength: 3, maxLength: 200 }
+              ownerName: { type: string }
+              dueDate: { type: string, format: date-time }
+              status: { type: string, enum: [NOT_STARTED, IN_PROGRESS, COMPLETED], default: NOT_STARTED }
+              evidenceNote: { type: string }
+        targetDate: { type: string, format: date-time }
+        expectedVersion: { type: integer, minimum: 1 }
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message, correlationId]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            fieldErrors:
+              type: object
+              additionalProperties:
+                type: array
+                items: { type: string }
+            blockingRequirements:
+              type: array
+              items: { type: string }
+            correlationId: { type: string }
+  responses:
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    Conflict:
+      description: Stale version (optimistic concurrency) — refresh and retry
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    BusinessRuleFailed:
+      description: Validation or workflow rule failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
