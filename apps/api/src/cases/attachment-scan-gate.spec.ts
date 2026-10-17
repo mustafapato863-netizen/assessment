@@ -340,9 +340,10 @@ describe('Attachment Scan Gate — API & Service', () => {
 
   describe('3. Controller & RBAC Role Mappings', () => {
     it('wires Phase-01 permission roles correctly', () => {
-      // ATTACHMENT_UPLOAD: Requester, HR, Coordinator, Assessor, PanelLead, Admin
+      // ATTACHMENT_UPLOAD (access model 2026-10-17): Requester, Assessor, PanelLead, Admin.
+      // HR and Coordinator are read-only apart from approval.
       expect(ROUTE_PERMISSIONS.ATTACHMENT_UPLOAD).toContain('Requester');
-      expect(ROUTE_PERMISSIONS.ATTACHMENT_UPLOAD).toContain('HR');
+      expect((ROUTE_PERMISSIONS.ATTACHMENT_UPLOAD as readonly string[]).includes('HR')).toBe(false);
       expect(ROUTE_PERMISSIONS.ATTACHMENT_UPLOAD).toContain('Assessor');
       expect(ROUTE_PERMISSIONS.ATTACHMENT_UPLOAD).toContain('PanelLead');
       expect(ROUTE_PERMISSIONS.ATTACHMENT_UPLOAD).toContain('Admin');
