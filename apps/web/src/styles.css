@@ -9158,3 +9158,32 @@ td span + small {
     justify-content: flex-start;
   }
 }
+
+/* Scorecard v2: points entry (quick-pick shares of the weight + exact points box) */
+.sc2-points {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.sc2-points-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sc2-points-input {
+  width: 64px;
+  text-align: center;
+}
+.sc2-points-input.invalid {
+  border-color: #b91c1c;
+  outline-color: #b91c1c;
+  background: #fef2f2;
+}
+.sc2-points-max {
+  font:
+    500 13px 'IBM Plex Mono',
+    monospace;
+  color: #64748b;
+  white-space: nowrap;
+}

@@ -3,15 +3,17 @@ import { defaultScorecardConfig, scorecardRatingKey } from '@assessflow/contract
 import { CalibrationService, calculateBoxIndex, scoreBand } from './calibration.service';
 
 /**
- * Ratings giving the requested 0-5 issue scores: each question is scored 0-1,
+ * Ratings giving the requested 0-5 issue scores: each question takes points 0..weight,
  * so a uniform question score of x/5 yields an issue score of x.
  */
 function ratings(technical: number, behavioral: number) {
   const out: Record<string, { score: number }> = {};
   for (const group of defaultScorecardConfig.technical)
-    for (const c of group.criteria) out[scorecardRatingKey(group, c)] = { score: technical / 5 };
+    for (const c of group.criteria)
+      out[scorecardRatingKey(group, c)] = { score: (technical / 5) * c.weight };
   for (const group of defaultScorecardConfig.behavioral)
-    for (const c of group.criteria) out[scorecardRatingKey(group, c)] = { score: behavioral / 5 };
+    for (const c of group.criteria)
+      out[scorecardRatingKey(group, c)] = { score: (behavioral / 5) * c.weight };
   return out;
 }
 

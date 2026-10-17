@@ -25,7 +25,7 @@ import {
   updateDevelopmentSchema,
   updateAssessorRecommendationSchema,
   calculateScorecard,
-  SCORECARD_SCORE_OPTIONS,
+  isValidQuestionScore,
   scorecardWeightProblems,
   defaultScorecardConfig,
   scorecardRatingKey,
@@ -2396,14 +2396,14 @@ export class PrismaCasesRepository {
       const criterionKeys = new Set(criteria.map((entry) => entry.ratingKey));
       if (Object.keys(ratings).some((key) => !criterionKeys.has(key)))
         throw new BadRequestException('The scorecard contains an unknown criterion.');
-      if (
-        Object.values(ratings).some(
-          (rating) =>
-            rating.score !== undefined &&
-            !(SCORECARD_SCORE_OPTIONS as readonly number[]).includes(rating.score),
-        )
-      )
-        throw new BadRequestException('Each question is scored 0, 0.25, 0.5, 0.75 or 1.');
+      const outOfRange = criteria.find((entry) => {
+        const score = ratings[entry.ratingKey]?.score;
+        return score !== undefined && !isValidQuestionScore(score, entry.criterion.weight);
+      });
+      if (outOfRange)
+        throw new BadRequestException(
+          `"${outOfRange.criterion.name}" takes 0 to ${outOfRange.criterion.weight} points (up to two decimals).`,
+        );
       if (submit && criteria.some((entry) => ratings[entry.ratingKey]?.score === undefined))
         throw new BadRequestException('Score every question before submitting.');
       const existing = record.scorecards.find((submission) => submission.assessorId === actor.id);

@@ -2,19 +2,26 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateScorecard,
   defaultScorecardConfig,
+  isValidQuestionScore,
   scorecardRatingKey,
   scorecardWeightProblems,
   type ScorecardConfig,
   type ScorecardRatings,
 } from './scorecard';
 
-const allKeys = (config: ScorecardConfig) =>
+const allQuestions = (config: ScorecardConfig) =>
   [...config.technical, ...config.behavioral].flatMap((group) =>
-    group.criteria.map((criterion) => scorecardRatingKey(group, criterion)),
+    group.criteria.map((criterion) => ({
+      key: scorecardRatingKey(group, criterion),
+      weight: criterion.weight,
+    })),
   );
 
-const uniform = (config: ScorecardConfig, score: number): ScorecardRatings =>
-  Object.fromEntries(allKeys(config).map((key) => [key, { score }]));
+/** Every question gets the same share of its own weight (points = fraction x weight). */
+const uniform = (config: ScorecardConfig, fraction: number): ScorecardRatings =>
+  Object.fromEntries(
+    allQuestions(config).map(({ key, weight }) => [key, { score: fraction * weight }]),
+  );
 
 const score = (config: ScorecardConfig, ratings: ScorecardRatings[]) =>
   calculateScorecard(
@@ -46,20 +53,20 @@ const simple: ScorecardConfig = {
   ],
 };
 
-describe('calculateScorecard (questions scored 0 to 1)', () => {
+describe('calculateScorecard (points entered per question, 0 to its weight)', () => {
   it('converts the share of the target achieved to a 0-5 score', () => {
     for (const value of [0, 0.25, 0.5, 0.75, 1]) {
       expect(score(simple, [uniform(simple, value)]).overall).toBeCloseTo(value * 5, 6);
     }
   });
 
-  it('uses the sum of question weights as the issue target', () => {
-    // a=1 (w1), b=0.5 (w3): actual 2.5 of target 4 -> 62.5% -> 3.125
+  it('target = sum of question weights, actual = sum of points entered (not multiplied)', () => {
+    // a = 1 of 1, b = 2.5 of 3: actual 3.5 of target 4 -> 87.5% -> 4.375
     const result = score(simple, [
-      { 'T:a': { score: 1 }, 'T:b': { score: 0.5 }, 'B:c': { score: 1 } },
+      { 'T:a': { score: 1 }, 'T:b': { score: 2.5 }, 'B:c': { score: 1 } },
     ]);
-    expect(result.technicalIssues[0]).toMatchObject({ actual: 2.5, target: 4 });
-    expect(result.technical).toBeCloseTo(3.125, 6);
+    expect(result.technicalIssues[0]).toMatchObject({ actual: 3.5, target: 4 });
+    expect(result.technical).toBeCloseTo(4.375, 6);
     expect(result.behavioral).toBeCloseTo(5, 6);
   });
 
@@ -74,8 +81,11 @@ describe('calculateScorecard (questions scored 0 to 1)', () => {
     expect(score(simple, [uniform(simple, 1), uniform(simple, 0.6)]).overall).toBeCloseTo(4, 6);
   });
 
-  it('treats out-of-range scores (old 0-5 drafts) as unanswered', () => {
-    expect(score(simple, [uniform(simple, 3)]).resultCode).toBe('INCOMPLETE');
+  it('treats points above the question weight as unanswered', () => {
+    // a has weight 1, so 2 points is out of range.
+    expect(
+      score(simple, [{ 'T:a': { score: 2 }, 'T:b': { score: 3 }, 'B:c': { score: 1 } }]).resultCode,
+    ).toBe('INCOMPLETE');
   });
 
   it('knockout is a flag set by the assessor, independent of the score', () => {
@@ -100,6 +110,19 @@ describe('calculateScorecard (questions scored 0 to 1)', () => {
     expect(score(defaultScorecardConfig, [uniform(defaultScorecardConfig, 0.25)]).resultCode).toBe(
       'NOT_READY',
     );
+  });
+});
+
+describe('isValidQuestionScore', () => {
+  it('accepts 0 up to the weight with at most two decimals', () => {
+    expect(isValidQuestionScore(0, 3)).toBe(true);
+    expect(isValidQuestionScore(2.5, 3)).toBe(true);
+    expect(isValidQuestionScore(2.75, 3)).toBe(true);
+    expect(isValidQuestionScore(3, 3)).toBe(true);
+    expect(isValidQuestionScore(3.25, 3)).toBe(false);
+    expect(isValidQuestionScore(-1, 3)).toBe(false);
+    expect(isValidQuestionScore(1.234, 3)).toBe(false);
+    expect(isValidQuestionScore(undefined, 3)).toBe(false);
   });
 });
 

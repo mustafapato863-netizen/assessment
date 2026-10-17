@@ -55,8 +55,8 @@ import type {
 import {
   calculateScorecard,
   assessorRecommendationCodes,
-  SCORECARD_QUESTION_TARGET,
-  SCORECARD_SCORE_OPTIONS,
+  SCORECARD_QUICK_FRACTIONS,
+  isValidQuestionScore,
   scorecardWeightProblems,
   SCORECARD_READY_NOW_THRESHOLD,
   SCORECARD_READY_WITH_DEVELOPMENT_THRESHOLD,
@@ -2262,10 +2262,13 @@ function AssessorScorecard({
   >({});
 
   useEffect(() => {
-    if (!data) return;
-    if (!dirtyConfig) setConfig(data.config);
-    setRatings(data.mySubmission?.ratings ?? {});
-  }, [data?.config, data?.mySubmission, dirtyConfig]);
+    if (data && !dirtyConfig) setConfig(data.config);
+  }, [data?.config, dirtyConfig]);
+  // Reload scores only when the saved copy on the server changes. Editing or saving
+  // scorecard settings must never wipe the scores being entered.
+  useEffect(() => {
+    if (data) setRatings(data.mySubmission?.ratings ?? {});
+  }, [data?.mySubmission]);
 
   const saveConfig = useMutation({
     mutationFn: (next: ScorecardConfig) => api.updateScorecardConfig(caseId, next),
@@ -2280,7 +2283,10 @@ function AssessorScorecard({
     },
   });
   const saveRatings = useMutation({
-    mutationFn: ({ submit }: { submit: boolean }) => api.saveScorecard(caseId, ratings, submit),
+    mutationFn: async ({ submit }: { submit: boolean }) => {
+      if (dirtyConfig && config) await saveConfig.mutateAsync(config);
+      return api.saveScorecard(caseId, ratings, submit);
+    },
     onSuccess: (_result, variables) => {
       queryClient.invalidateQueries({ queryKey });
       if (variables.submit) {
@@ -2336,9 +2342,7 @@ function AssessorScorecard({
       total +
       dimension.criteria.filter((criterion) => {
         const score = ratings[scorecardRatingKey(dimension, criterion)]?.score;
-        return (
-          score !== undefined && (SCORECARD_SCORE_OPTIONS as readonly number[]).includes(score)
-        );
+        return isValidQuestionScore(score, criterion.weight);
       }).length,
     0,
   );
@@ -2508,8 +2512,14 @@ function AssessorScorecard({
         [field]: field === 'score' ? (value ? Number(value) : undefined) : value,
       },
     }));
-  const setScore = (code: string, score: number) =>
-    setRatings((current) => ({ ...current, [code]: { ...current[code], score } }));
+  const setScore = (code: string, score: number | undefined) =>
+    setRatings((current) => ({
+      ...current,
+      [code]: {
+        ...current[code],
+        score: score === undefined ? undefined : Math.round(score * 100) / 100,
+      },
+    }));
   const toggleKnockout = (code: string) =>
     setRatings((current) => ({
       ...current,
@@ -2531,7 +2541,6 @@ function AssessorScorecard({
       return next;
     });
   // ---- Scorecard v2 view: mirrors the approved "Scorecard redesign" mockup ----
-  const scoreOptions = SCORECARD_SCORE_OPTIONS as readonly number[];
   const issueStats = (dimension: ScorecardDimension) => {
     let target = 0;
     let actual = 0;
@@ -2540,8 +2549,8 @@ function AssessorScorecard({
     for (const criterion of dimension.criteria) {
       const value = ratings[scorecardRatingKey(dimension, criterion)]?.score;
       target += criterion.weight;
-      if (value !== undefined && scoreOptions.includes(value)) {
-        actual += value * criterion.weight;
+      if (isValidQuestionScore(value, criterion.weight)) {
+        actual += value;
         ratedWeight += criterion.weight;
         answered += 1;
       }
@@ -2600,8 +2609,19 @@ function AssessorScorecard({
         : 'Not started';
   const bandTone = (pct: number, answered: number) =>
     !answered ? 'none' : pct >= 0.8 ? 'good' : pct >= 0.6 ? 'mid' : 'low';
-  const optionLabel = (option: number) =>
-    option === 0.25 ? '¼' : option === 0.5 ? '½' : option === 0.75 ? '¾' : String(option);
+  const formatPoints = (value: number) => String(Math.round(value * 100) / 100);
+  // Quick-pick buttons are shares of the question weight. With weight 1 they read 0 ¼ ½ ¾ 1;
+  // with weight 3 they read 0 · 0.75 · 1.5 · 2.25 · 3. Any other value goes in the points box.
+  const quickPickLabel = (fraction: number, weight: number) =>
+    weight === 1
+      ? fraction === 0.25
+        ? '¼'
+        : fraction === 0.5
+          ? '½'
+          : fraction === 0.75
+            ? '¾'
+            : String(fraction)
+      : formatPoints(fraction * weight);
   const canEditStructure = data.canEditWeights && !locked;
   const sectionLabel = (section: 'technical' | 'behavioral') =>
     section === 'technical'
@@ -2611,7 +2631,10 @@ function AssessorScorecard({
     dirtyConfig && weightProblems.length
       ? { tone: 'error', text: weightProblems.join(' ') }
       : dirtyConfig
-        ? { tone: 'muted', text: 'Save the scorecard settings before saving or submitting scores.' }
+        ? {
+            tone: 'muted',
+            text: 'Scorecard settings changed. They are saved together with your scores when you save a draft or submit.',
+          }
         : locked
           ? { tone: 'muted', text: 'Your scores are submitted and locked.' }
           : completedQuestionCount === totalQuestionCount
@@ -2718,7 +2741,7 @@ function AssessorScorecard({
               )}
               <div className="sc2-grid sc2-col-head">
                 <span>QUESTION</span>
-                <span>SCORE (0 = NOT MET · 1 = FULLY MET)</span>
+                <span>POINTS (0 TO Q. WEIGHT)</span>
                 <span className="sc2-right">Q. WEIGHT</span>
               </div>
               {dimension.criteria.map((criterion) => {
@@ -2805,24 +2828,62 @@ function AssessorScorecard({
                           </button>
                         </span>
                       </div>
-                      <div
-                        className="sc2-seg-group"
-                        role="group"
-                        aria-label={`${criterion.name} score`}
-                      >
-                        {scoreOptions.map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            className="sc2-seg"
-                            aria-pressed={rating?.score === option}
-                            aria-label={`${criterion.name}: ${option}`}
+                      <div className="sc2-points">
+                        <div
+                          className="sc2-seg-group"
+                          role="group"
+                          aria-label={`${criterion.name} quick score`}
+                        >
+                          {SCORECARD_QUICK_FRACTIONS.map((fraction) => {
+                            const points = Math.round(fraction * criterion.weight * 100) / 100;
+                            return (
+                              <button
+                                key={fraction}
+                                type="button"
+                                className="sc2-seg"
+                                aria-pressed={rating?.score === points}
+                                aria-label={`${criterion.name}: ${formatPoints(points)} of ${formatPoints(criterion.weight)}`}
+                                disabled={locked}
+                                onClick={() => {
+                                  clearNumericDraft(`points:${ratingKey}`);
+                                  setScore(ratingKey, points);
+                                }}
+                              >
+                                {quickPickLabel(fraction, criterion.weight)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <span className="sc2-points-entry">
+                          <input
+                            className={`sc2-input sc2-points-input${
+                              numericDrafts[`points:${ratingKey}`]?.valid === false
+                                ? ' invalid'
+                                : ''
+                            }`}
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="—"
+                            aria-label={`${criterion.name} points earned (0 to ${formatPoints(criterion.weight)})`}
+                            value={numericInputValue(`points:${ratingKey}`, rating?.score)}
                             disabled={locked}
-                            onClick={() => setScore(ratingKey, option)}
-                          >
-                            {optionLabel(option)}
-                          </button>
-                        ))}
+                            onChange={(event) =>
+                              setNumericDraft(
+                                `points:${ratingKey}`,
+                                event.target.value,
+                                0,
+                                criterion.weight,
+                                true,
+                                (value) => setScore(ratingKey, value),
+                              )
+                            }
+                            onBlur={() => {
+                              if (numericDrafts[`points:${ratingKey}`]?.valid !== false)
+                                clearNumericDraft(`points:${ratingKey}`);
+                            }}
+                          />
+                          <span className="sc2-points-max">/ {formatPoints(criterion.weight)}</span>
+                        </span>
                       </div>
                       <div className="sc2-right">
                         <input
@@ -2881,8 +2942,8 @@ function AssessorScorecard({
               <div className="sc2-issue-foot">
                 <span>
                   Target = sum of question weights (
-                  <span className="sc2-num">{formatScore(stats.target)}</span>). Actual = Σ score ×
-                  question weight (<span className="sc2-num">{formatScore(stats.actual)}</span>).
+                  <span className="sc2-num">{formatScore(stats.target)}</span>). Actual = Σ points
+                  entered (<span className="sc2-num">{formatScore(stats.actual)}</span>).
                 </span>
                 <span className="sc2-num sc2-strong">
                   Issue score {stats.answered ? formatCategoryScore(stats.runningPct * 5) : '—'} / 5
@@ -3114,7 +3175,7 @@ function AssessorScorecard({
             className="sc2-btn sc2-btn-secondary"
             disabled={
               locked ||
-              dirtyConfig ||
+              (dirtyConfig && weightProblems.length > 0) ||
               hasInvalidNumericDraft ||
               saveConfig.isPending ||
               saveRatings.isPending
@@ -3128,11 +3189,16 @@ function AssessorScorecard({
             className="sc2-btn sc2-btn-primary"
             disabled={
               locked ||
-              dirtyConfig ||
+              (dirtyConfig && weightProblems.length > 0) ||
               hasInvalidNumericDraft ||
               saveConfig.isPending ||
-              preview.completeCount === 0 ||
+              completedQuestionCount < totalQuestionCount ||
               saveRatings.isPending
+            }
+            title={
+              completedQuestionCount < totalQuestionCount
+                ? `${totalQuestionCount - completedQuestionCount} question(s) still need points.`
+                : undefined
             }
             onClick={() => saveRatings.mutate({ submit: true })}
           >

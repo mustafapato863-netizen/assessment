@@ -27,7 +27,7 @@ export interface ScorecardConfig {
 }
 
 export interface ScorecardRating {
-  /** 0 = not met, 1 = fully met (allowed steps: SCORECARD_SCORE_OPTIONS). */
+  /** Points earned on the question: 0 up to the question weight (e.g. 2.5 of 3). Not multiplied by the weight. */
   score?: number;
   evidence?: string;
   /** Set by the assessor on this question. Any knockout forces NOT_READY, whatever the scores. */
@@ -37,14 +37,26 @@ export interface ScorecardRating {
 export type ScorecardRatings = Record<string, ScorecardRating>;
 
 /**
- * Each question is scored 0 (not met) to 1 (fully met) in quarter steps. An
- * issue's target is the sum of its question weights (default 1 each, so the
- * number of questions); its actual is the sum of score x question weight. The
- * issue score on the 0-5 scale is actual / target x 5.
+ * Each question's weight is its maximum points (default 1). The assessor
+ * enters the points earned directly, from 0 up to that weight, in steps of
+ * 0.01 (e.g. 2.5 of 3). An issue's target is the sum of its question weights;
+ * its actual is the sum of the points entered. The issue score on the 0-5
+ * scale is actual / target x 5.
  */
-export const SCORECARD_MAX_RATING = 1;
-export const SCORECARD_QUESTION_TARGET = SCORECARD_MAX_RATING;
-export const SCORECARD_SCORE_OPTIONS = [0, 0.25, 0.5, 0.75, 1] as const;
+export const SCORECARD_DEFAULT_QUESTION_WEIGHT = 1;
+/** Quick-pick fractions of the question weight shown as buttons (0, 1/4, 1/2, 3/4, full). */
+export const SCORECARD_QUICK_FRACTIONS = [0, 0.25, 0.5, 0.75, 1] as const;
+
+/** Points are valid when 0 <= points <= question weight, with at most two decimals. */
+export function isValidQuestionScore(score: unknown, questionWeight: number): score is number {
+  return (
+    typeof score === 'number' &&
+    Number.isFinite(score) &&
+    score >= 0 &&
+    score <= questionWeight + 1e-9 &&
+    Math.abs(Math.round(score * 100) - score * 100) < 1e-6
+  );
+}
 /** Overall score bands (0-5) mapped to result codes. */
 export const SCORECARD_READY_NOW_THRESHOLD = 4;
 export const SCORECARD_READY_WITH_DEVELOPMENT_THRESHOLD = 3;
@@ -330,9 +342,9 @@ export const scorecardConfigSchema = z.object({
 export const scorecardRatingsSchema = z.record(
   z.string().min(1).max(60),
   z.object({
-    // Stored drafts from the earlier 0-5 scale still parse; new saves are
-    // limited to 0-1 by the API. Out-of-range scores count as unanswered.
-    score: z.number().finite().min(0).max(5).optional(),
+    // Points earned, 0 up to the question weight (checked by the API against
+    // the config). Out-of-range scores count as unanswered.
+    score: z.number().finite().min(0).max(1000).optional(),
     evidence: z.string().max(4000).optional(),
     knockout: z.boolean().optional(),
   }),
@@ -395,10 +407,9 @@ export function calculateScorecard(
   const completeSubmissions = submissions.filter(
     (submission) =>
       submission.submitted &&
-      criterionEntries.every((criterion) => {
-        const score = submission.ratings[criterion.ratingKey]?.score;
-        return Number.isFinite(score) && score! >= 0 && score! <= SCORECARD_MAX_RATING;
-      }),
+      criterionEntries.every((entry) =>
+        isValidQuestionScore(submission.ratings[entry.ratingKey]?.score, entry.criterion.weight),
+      ),
   );
   if (!completeSubmissions.length) {
     return {
@@ -420,17 +431,11 @@ export function calculateScorecard(
           criterion,
           score: submission.ratings[scorecardRatingKey(group, criterion)]!.score as number,
         }));
-        const weightedTarget =
-          rated.reduce((sum, item) => sum + item.criterion.weight, 0) * SCORECARD_QUESTION_TARGET;
-        const weightedActual = rated.reduce(
-          (sum, item) => sum + item.score * item.criterion.weight,
-          0,
-        );
-        const attainment = weightedTarget ? weightedActual / weightedTarget : 0;
+        // Target = sum of question weights; actual = sum of points entered.
+        const target = rated.reduce((sum, item) => sum + item.criterion.weight, 0);
+        const actual = rated.reduce((sum, item) => sum + item.score, 0);
+        const attainment = target ? actual / target : 0;
         const score = Math.min(1, attainment) * 5;
-        const target =
-          rated.reduce((sum, item) => sum + item.criterion.weight, 0) * SCORECARD_QUESTION_TARGET;
-        const actual = rated.reduce((sum, item) => sum + item.score * item.criterion.weight, 0);
         return {
           group,
           score,

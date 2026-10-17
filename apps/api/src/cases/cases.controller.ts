@@ -259,7 +259,7 @@ export class CasesController {
   ) {
     const parsed = scorecardSubmissionSchema.safeParse(input);
     if (!parsed.success)
-      throw new BadRequestException('Each question is scored 0, 0.25, 0.5, 0.75 or 1.');
+      throw new BadRequestException('Each question takes 0 up to its weight in points.');
     return this.casesService.saveScorecard(caseId, parsed.data.ratings, parsed.data.submit, actor);
   }
 
