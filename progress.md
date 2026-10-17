@@ -423,3 +423,4 @@
 - Pending: owner runs `pnpm validate`; Playwright E2E not re-run (smoke journey needs separate assessor / HR / Business accounts).
 - ALLOW_ADMIN_SELF_APPROVAL (owner request, build/test phase): when true, a System Admin may decide approval steps despite segregation-of-duties conflicts; each bypass writes an ADMIN_SELF_APPROVAL audit event. Non-admin rules unchanged. Laptop .env = true; .env.example = false. Turn off before real use.
 - Added `Start AssessFlow.bat` (one-click: Docker, postgres/redis, pnpm dev, opens browser).
+- 2026-10-17: `pnpm validate` green on the laptop after all of the above (typecheck, all unit tests, production build).
