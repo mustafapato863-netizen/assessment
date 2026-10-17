@@ -91,12 +91,13 @@ node scripts/audit-scorecard-results.mjs
 
 ## Configuration notes
 
-| Variable                   | Purpose                                                                                                                         |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_ENV=production`      | **Required in any shared environment.** Outside production, requests without a token get a local all-roles demo user.           |
-| `AUTH_JWT_SECRET`          | Required in production (32+ random characters). Locally a development fallback is used.                                         |
-| `TRUST_PROXY`              | Which proxies may set `X-Forwarded-For` (default: private networks). Use a hop count such as `1` behind a public load balancer. |
-| `VITE_FEATURE_CALIBRATION` | Shows the calibration module.                                                                                                   |
+| Variable                    | Purpose                                                                                                                                                                                  |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_ENV=production`       | **Required in any shared environment.** Outside production, requests without a token get a local all-roles demo user.                                                                    |
+| `AUTH_JWT_SECRET`           | Required in production (32+ random characters). Locally a development fallback is used.                                                                                                  |
+| `TRUST_PROXY`               | Which proxies may set `X-Forwarded-For` (default: private networks). Use a hop count such as `1` behind a public load balancer.                                                          |
+| `VITE_FEATURE_CALIBRATION`  | Shows the calibration module.                                                                                                                                                            |
+| `ALLOW_ADMIN_SELF_APPROVAL` | `true` lets the System Admin run a case end-to-end alone (score, finalize, recommend, approve both steps). Each bypass is audited as `ADMIN_SELF_APPROVAL`. Set `false` before real use. |
 
 ## Workspace map
 

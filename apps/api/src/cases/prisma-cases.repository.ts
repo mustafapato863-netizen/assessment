@@ -1779,10 +1779,12 @@ export class PrismaCasesRepository {
           select: { approverId: true },
         }),
       ]);
-      ApprovalsDomain.assertSegregationOfDuties({
+      const { adminSelfApproval } = ApprovalsDomain.assertSegregationOfDuties({
         actor: getActorContext(),
         stepRole: step.role,
         correlationId: `corr-${randomUUID()}`,
+        allowAdminSelfApproval:
+          process.env.ALLOW_ADMIN_SELF_APPROVAL?.trim().toLowerCase() === 'true',
         conflicts: [
           ...submittedScorecards.map((item) => ({
             actorId: item.assessorId,
@@ -1802,6 +1804,21 @@ export class PrismaCasesRepository {
           ),
         ],
       });
+      if (adminSelfApproval.length) {
+        // Flag every bypass so self-approved cases stay distinguishable later.
+        await tx.auditEvent.create({
+          data: this.auditData(
+            step.caseId,
+            'ADMIN_SELF_APPROVAL',
+            'ApprovalStep',
+            stepId,
+            'Admin self-approval (segregation of duties bypassed)',
+            `Admin self-approval: ${step.role} step decided by an admin who ${[
+              ...new Set(adminSelfApproval.map((item) => item.reason)),
+            ].join(', ')}. Enabled by ALLOW_ADMIN_SELF_APPROVAL.`,
+          ),
+        });
+      }
       await tx.approvalStep.update({
         where: { id: stepId },
         data: {

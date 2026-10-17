@@ -66,6 +66,44 @@ describe('Approval segregation of duties', () => {
   });
 });
 
+describe('ALLOW_ADMIN_SELF_APPROVAL', () => {
+  const conflicts = [
+    { actorId: 'admin-1', reason: 'scored the candidate' },
+    { actorId: 'admin-1', reason: 'decided the other approval step' },
+  ];
+  const run = (roles: AppRole[], allow: boolean) =>
+    ApprovalsDomain.assertSegregationOfDuties({
+      actor: { id: 'admin-1', roles },
+      stepRole: 'BUSINESS',
+      conflicts,
+      correlationId: 'corr-test',
+      allowAdminSelfApproval: allow,
+    });
+
+  it('lets an admin decide despite conflicts and reports the bypass when enabled', () => {
+    expect(run(['Admin'], true).adminSelfApproval).toHaveLength(2);
+  });
+
+  it('still blocks the admin when the setting is off', () => {
+    expect(codeOf(() => run(['Admin'], false))).toBe('SEGREGATION_OF_DUTIES');
+  });
+
+  it('never relaxes the rules for non-admin approvers', () => {
+    expect(codeOf(() => run(['BusinessApprover'], true))).toBe('SEGREGATION_OF_DUTIES');
+  });
+
+  it('reports no bypass for a normal approval', () => {
+    const result = ApprovalsDomain.assertSegregationOfDuties({
+      actor: { id: 'hr-9', roles: ['HR'] },
+      stepRole: 'HR',
+      conflicts,
+      correlationId: 'corr-test',
+      allowAdminSelfApproval: true,
+    });
+    expect(result.adminSelfApproval).toEqual([]);
+  });
+});
+
 describe('Role task queues and assigned scope', () => {
   it('includes role queues in the task assignees an actor works', () => {
     expect(taskAssigneeIdsFor({ id: 'u1', name: 'U', roles: ['BusinessApprover'] })).toEqual([

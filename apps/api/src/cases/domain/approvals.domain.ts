@@ -61,7 +61,13 @@ export class ApprovalsDomain {
     stepRole: string;
     conflicts: ApprovalConflict[];
     correlationId: string;
-  }) {
+    /**
+     * ALLOW_ADMIN_SELF_APPROVAL: lets a System Admin run the whole cycle alone
+     * (build/test phase, single operator). The bypass is returned so the caller
+     * can record it in the audit trail. Turn it off before real use.
+     */
+    allowAdminSelfApproval?: boolean;
+  }): { adminSelfApproval: ApprovalConflict[] } {
     const { actor, stepRole, conflicts, correlationId } = params;
     const allowedRoles = APPROVAL_STEP_ROLES[stepRole.toUpperCase()];
     if (!allowedRoles || !allowedRoles.some((role) => actor.roles.includes(role))) {
@@ -73,7 +79,11 @@ export class ApprovalsDomain {
         },
       });
     }
-    const conflict = conflicts.find((item) => item.actorId === actor.id);
+    const own = conflicts.filter((item) => item.actorId === actor.id);
+    if (own.length && params.allowAdminSelfApproval && actor.roles.includes('Admin')) {
+      return { adminSelfApproval: own };
+    }
+    const conflict = own[0];
     if (conflict) {
       throw new ForbiddenException({
         error: {
@@ -83,5 +93,6 @@ export class ApprovalsDomain {
         },
       });
     }
+    return { adminSelfApproval: [] };
   }
 }
