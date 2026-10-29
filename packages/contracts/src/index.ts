@@ -72,7 +72,8 @@ export type ResultCode = (typeof resultCodes)[number];
 export const createCaseSchema = z
   .object({
     candidateType: z.enum(candidateTypes).default('INTERNAL_EMPLOYEE'),
-    employeeId: z.string().min(1),
+    // Staff number. Required for internal employees so every person has one record.
+    employeeId: z.string().trim().min(1, 'Enter the employee ID (staff number)').max(60),
     employeeName: z.string().min(2).max(120),
     candidateEmail: z.string().email().max(254).optional().or(z.literal('')),
     department: z.string().min(2).max(120),
@@ -106,6 +107,13 @@ export const createCaseSchema = z
       });
     }
     if (data.candidateType === 'INTERNAL_EMPLOYEE') {
+      if (!data.employeeId || data.employeeId.toLowerCase() === 'emp-new') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['employeeId'],
+          message: 'Enter the employee ID (staff number)',
+        });
+      }
       if (!data.currentRole || data.currentRole.trim().length < 2) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -173,6 +181,12 @@ export const adminEditRequestSchema = z.object({
   expectedVersion: z.number().int().positive(),
 });
 export type AdminEditRequestInput = z.infer<typeof adminEditRequestSchema>;
+
+export const updateEmployeeNameSchema = z.object({
+  displayName: z.string().trim().min(2, 'Enter the employee name.').max(120),
+  reason: z.string().trim().min(10, 'Give a reason of at least 10 characters.').max(500),
+});
+export type UpdateEmployeeNameInput = z.infer<typeof updateEmployeeNameSchema>;
 
 export const planMethodSchema = z.object({
   methodCode: z.string().min(1).max(40),

@@ -63,7 +63,8 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
     }
     const parsed = createCaseSchema.safeParse({
       ...form,
-      employeeId: form.employeeId?.trim() || 'emp-new',
+      employeeId:
+        form.employeeId?.trim() || (form.candidateType === 'NEW_CANDIDATE' ? 'emp-new' : ''),
     });
     if (!parsed.success) {
       setErrors(
@@ -157,10 +158,11 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
           {form.candidateType === 'INTERNAL_EMPLOYEE' && (
             <Field
               label="Employee ID (staff number)"
+              required
               value={form.employeeId ?? ''}
               onChange={(value) => update('employeeId', value)}
               error={errors.employeeId}
-              placeholder="Links repeat assessments of the same person"
+              placeholder="Staff number, e.g. 10452"
             />
           )}
           {form.candidateType === 'INTERNAL_EMPLOYEE' && (

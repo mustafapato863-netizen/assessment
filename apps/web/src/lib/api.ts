@@ -5,6 +5,7 @@ import type {
   AttachmentSummary,
   AdminReopenStageInput,
   AdminEditRequestInput,
+  UpdateEmployeeNameInput,
   CalibrationMatrixResponse,
   CloseCaseInput,
   CopilotBiasCheckInput,
@@ -369,6 +370,12 @@ export const api = {
   reopenCompletedStage: (id: string, input: AdminReopenStageInput) =>
     request<AssessmentCaseDetail>(`/cases/${id}/stages/reopen`, {
       method: 'POST',
+      headers: commandHeaders(),
+      body: JSON.stringify(input),
+    }),
+  updateEmployeeName: (caseId: string, input: UpdateEmployeeNameInput) =>
+    request<AssessmentCaseDetail>(`/cases/${caseId}/employee-name`, {
+      method: 'PATCH',
       headers: commandHeaders(),
       body: JSON.stringify(input),
     }),

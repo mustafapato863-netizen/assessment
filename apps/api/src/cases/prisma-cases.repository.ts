@@ -8,6 +8,7 @@ import {
 import {
   caseStatuses,
   adminEditRequestSchema,
+  updateEmployeeNameSchema,
   closeCaseSchema,
   adminReopenStageSchema,
   createAttachmentSchema,
@@ -57,6 +58,7 @@ import {
   type AttachmentScanStatus,
   type AdminReopenStageInput,
   type AdminEditRequestInput,
+  type UpdateEmployeeNameInput,
   type z as ZodNamespace,
 } from '@assessflow/contracts';
 import {
@@ -422,6 +424,59 @@ export class PrismaCasesRepository {
     return this.get(caseId);
   }
 
+  async updateEmployeeName(
+    caseId: string,
+    input: UpdateEmployeeNameInput,
+    actor: AuthActor,
+  ): Promise<AssessmentCaseDetail> {
+    if (!actor.roles.includes('Admin'))
+      throw new ForbiddenException(
+        this.error('ADMIN_REQUIRED', 'Only an Admin can correct an employee name.'),
+      );
+    const parsed = this.parsed(
+      updateEmployeeNameSchema,
+      input,
+      'Enter the employee name and a reason of at least 10 characters.',
+    );
+    await this.prisma.$transaction(async (tx) => {
+      const record = await tx.assessmentCase.findUnique({
+        where: { id: caseId },
+        include: { employee: true },
+      });
+      if (!record)
+        throw new NotFoundException(
+          this.error('CASE_NOT_FOUND', 'This assessment case could not be found.'),
+        );
+      const previousName = record.employee.displayName;
+      if (previousName === parsed.displayName) return;
+      await tx.employeeReference.update({
+        where: { id: record.employeeId },
+        data: { displayName: parsed.displayName },
+      });
+      // The name belongs to the employee, so every one of their cases records the correction.
+      const linkedCases = await tx.assessmentCase.findMany({
+        where: { employeeId: record.employeeId },
+        select: { id: true },
+      });
+      await tx.auditEvent.createMany({
+        data: linkedCases.map((linked) => ({
+          ...this.auditData(
+            linked.id,
+            'EMPLOYEE_NAME_CORRECTED',
+            'EmployeeReference',
+            record.employeeId,
+            parsed.reason,
+            undefined,
+            actor,
+          ),
+          previousData: { displayName: previousName },
+          newData: { displayName: parsed.displayName },
+        })),
+      });
+    });
+    return this.get(caseId);
+  }
+
   async updateReopenedRequest(
     caseId: string,
     input: AdminEditRequestInput,
@@ -682,72 +737,83 @@ export class PrismaCasesRepository {
       );
     const data = parsed.data;
     const organization = await this.organization();
-    // Without a real staff number every request used to share the placeholder
-    // "emp-new", so all of them pointed at ONE employee record whose name was
-    // overwritten by the latest request. Each request without an ID now gets its own.
-    const providedEmployeeId = data.employeeId?.trim();
+    // Internal employees must have a staff number (enforced by createCaseSchema).
+    // A staff number that already belongs to a different name is refused, so one
+    // person's record can never be silently renamed by another request.
     const employeeExternalId =
-      data.candidateType === 'NEW_CANDIDATE'
-        ? `candidate-${randomUUID()}`
-        : providedEmployeeId && providedEmployeeId.toLowerCase() !== 'emp-new'
-          ? providedEmployeeId
-          : `emp-${randomUUID()}`;
-    const currentRole = data.currentRole?.trim() || 'External candidate';
-    const employee = await this.prisma.employeeReference.upsert({
-      where: {
-        organizationId_externalId: {
-          organizationId: organization.id,
-          externalId: employeeExternalId,
-        },
-      },
-      update: {
-        displayName: data.employeeName,
-        department: data.department,
-        currentRole,
-        currentLevel: data.currentLevel,
-        email: data.candidateEmail || undefined,
-        employmentState: data.candidateType === 'NEW_CANDIDATE' ? 'CANDIDATE' : 'ACTIVE',
-      },
-      create: {
+      data.candidateType === 'NEW_CANDIDATE' ? `candidate-${randomUUID()}` : data.employeeId.trim();
+    const employeeKey = {
+      organizationId_externalId: {
         organizationId: organization.id,
         externalId: employeeExternalId,
-        displayName: data.employeeName,
-        email: data.candidateEmail || undefined,
-        department: data.department,
-        currentRole,
-        currentLevel: data.currentLevel,
-        employmentState: data.candidateType === 'NEW_CANDIDATE' ? 'CANDIDATE' : 'ACTIVE',
       },
+    };
+    const currentRole = data.currentRole?.trim() || 'External candidate';
+    const caseId = await this.prisma.$transaction(async (tx) => {
+      if (data.candidateType === 'INTERNAL_EMPLOYEE') {
+        const existing = await tx.employeeReference.findUnique({
+          where: employeeKey,
+          select: { displayName: true },
+        });
+        const normalize = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+        if (existing && normalize(existing.displayName) !== normalize(data.employeeName))
+          throw new BadRequestException(
+            this.error(
+              'EMPLOYEE_ID_NAME_MISMATCH',
+              `Employee ID ${employeeExternalId} is already registered as "${existing.displayName}". Check the ID, or ask an Admin to correct the employee record.`,
+              { employeeId: [`Already registered as "${existing.displayName}"`] },
+            ),
+          );
+      }
+      // An existing record is left as it is: the request's own department, role and
+      // email are kept on the case, so older cases never change.
+      const employee = await tx.employeeReference.upsert({
+        where: employeeKey,
+        update: {},
+        create: {
+          organizationId: organization.id,
+          externalId: employeeExternalId,
+          displayName: data.employeeName,
+          email: data.candidateEmail || undefined,
+          department: data.department,
+          currentRole,
+          currentLevel: data.currentLevel,
+          employmentState: data.candidateType === 'NEW_CANDIDATE' ? 'CANDIDATE' : 'ACTIVE',
+        },
+      });
+      const created = await tx.assessmentCase.create({
+        data: {
+          caseCode: `AF-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`,
+          organizationId: organization.id,
+          employeeId: employee.id,
+          candidateType: data.candidateType,
+          candidateEmail: data.candidateEmail || null,
+          assessmentReason: data.assessmentReason,
+          stage: 'REQUEST',
+          status: 'DRAFT',
+          ownerName: 'Requester',
+          priority: data.priority,
+          currentRoleSnapshot: currentRole,
+          targetRoleSnapshot: data.targetRole,
+          targetLevelSnapshot: data.targetLevel,
+          departmentSnapshot: data.department,
+          justification: data.justification,
+        },
+      });
+      await tx.auditEvent.create({
+        data: this.auditData(
+          created.id,
+          'CASE_CREATED',
+          'AssessmentCase',
+          created.id,
+          'Created assessment draft',
+          undefined,
+          actor,
+        ),
+      });
+      return created.id;
     });
-    const created = await this.prisma.assessmentCase.create({
-      data: {
-        caseCode: `AF-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`,
-        organizationId: organization.id,
-        employeeId: employee.id,
-        candidateType: data.candidateType,
-        candidateEmail: data.candidateEmail || null,
-        assessmentReason: data.assessmentReason,
-        stage: 'REQUEST',
-        status: 'DRAFT',
-        ownerName: 'Requester',
-        priority: data.priority,
-        currentRoleSnapshot: currentRole,
-        targetRoleSnapshot: data.targetRole,
-        targetLevelSnapshot: data.targetLevel,
-        departmentSnapshot: data.department,
-        justification: data.justification,
-      },
-    });
-    await this.audit(
-      created.id,
-      'CASE_CREATED',
-      'AssessmentCase',
-      created.id,
-      'Created assessment draft',
-      undefined,
-      actor,
-    );
-    return this.get(created.id);
+    return this.get(caseId);
   }
 
   async submit(caseId: string, expectedVersion: number): Promise<AssessmentCaseDetail> {

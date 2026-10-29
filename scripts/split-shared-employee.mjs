@@ -45,25 +45,9 @@ function findName(value, depth = 0) {
   return null;
 }
 
-async function recoverName(caseId) {
-  const outbox = await prisma.notificationOutbox.findMany({
-    where: { aggregateId: caseId },
-    orderBy: { occurredAt: 'asc' },
-    take: 20,
-  });
-  for (const item of outbox) {
-    const name = findName(item.payload);
-    if (name) return { name, from: 'notification' };
-  }
-  const audits = await prisma.auditEvent.findMany({
-    where: { caseId },
-    orderBy: { createdAt: 'asc' },
-    take: 50,
-  });
-  for (const item of audits) {
-    const name = findName(item.previousData) ?? findName(item.newData);
-    if (name) return { name, from: 'audit' };
-  }
+async function recoverName(_caseId) {
+  // Names are no longer guessed from history: the audit trail picked up role words
+  // such as "Employee". Older cases get a placeholder and are corrected with --set.
   return null;
 }
 

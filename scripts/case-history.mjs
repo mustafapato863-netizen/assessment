@@ -4,6 +4,7 @@
  * (new request, reassessment of an earlier case, seed/import) with its first audit events.
  *
  * Usage (repo root):  node scripts/case-history.mjs --name=elrawy
+ *                     node scripts/case-history.mjs --code=AF-2026-886CDC4C
  */
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -14,7 +15,8 @@ if (typeof process.loadEnvFile === 'function') {
   } catch {}
 }
 const name = process.argv.find((arg) => arg.startsWith('--name='))?.slice(7);
-if (!name) {
+const code = process.argv.find((arg) => arg.startsWith('--code='))?.slice(7);
+if (!name && !code) {
   console.error('Usage: node scripts/case-history.mjs --name=<part of the employee name>');
   process.exit(1);
 }
@@ -26,7 +28,9 @@ const when = (d) => (d ? new Date(d).toISOString().replace('T', ' ').slice(0, 16
 
 try {
   const cases = await prisma.assessmentCase.findMany({
-    where: { employee: { displayName: { contains: name, mode: 'insensitive' } } },
+    where: code
+      ? { caseCode: code }
+      : { employee: { displayName: { contains: name, mode: 'insensitive' } } },
     include: {
       employee: { select: { displayName: true, externalId: true } },
       sourceReassessmentLinks: true,
@@ -50,6 +54,9 @@ try {
       caseCode: c.caseCode,
       employeeId: c.employee?.externalId ?? '—',
       department: c.departmentSnapshot,
+      currentRole: c.currentRoleSnapshot,
+      targetRole: c.targetRoleSnapshot,
+      justification: (c.justification ?? '').replace(/\s+/g, ' ').slice(0, 160),
       status: c.status,
       created: when(c.createdAt),
       origin: source

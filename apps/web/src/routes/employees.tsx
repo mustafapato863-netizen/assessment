@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import './employees.css';
 import { api } from '../lib/api';
+import { getActiveUser } from '../lib/auth';
 import { ErrorBanner, LoadingRows } from '../components/ui';
 import type { AssessmentCaseDetail } from '@assessflow/contracts';
 import { formatCaseId } from './workQueue';
@@ -34,6 +35,11 @@ export function EmployeesPage() {
   const [dept, setDept] = useState('');
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState(readSelected);
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
+  const [nameReason, setNameReason] = useState('');
+  const queryClient = useQueryClient();
+  const isAdmin = getActiveUser().role === 'SYS_ADMIN';
 
   const { data: rawCases, isLoading, isError } = useQuery({
     queryKey: ['cases'],
@@ -41,10 +47,25 @@ export function EmployeesPage() {
   });
   const cases = useMemo(() => (rawCases ?? []).map(mapAssessmentCase), [rawCases]);
 
+  const nameMutation = useMutation({
+    mutationFn: (input: { caseId: string; displayName: string; reason: string }) =>
+      api.updateEmployeeName(input.caseId, {
+        displayName: input.displayName,
+        reason: input.reason,
+      }),
+    onSuccess: () => {
+      setEditingName(false);
+      setNameReason('');
+      void queryClient.invalidateQueries({ queryKey: ['cases'] });
+      void queryClient.invalidateQueries({ queryKey: ['case'] });
+    },
+  });
+
   useEffect(() => {
     const sync = () => {
       setSelectedId(readSelected());
       setPage(1);
+      setEditingName(false);
     };
     window.addEventListener('hashchange', sync);
     return () => window.removeEventListener('hashchange', sync);
@@ -68,6 +89,8 @@ export function EmployeesPage() {
       queryFn: () => api.caseDetail(item.id),
     })),
   });
+
+  const primaryCaseId = selected?.cases[0]?.id;
 
   return (
     <div className="em">
@@ -231,6 +254,81 @@ export function EmployeesPage() {
                     </span>
                   </div>
                 </div>
+                {isAdmin &&
+                  primaryCaseId &&
+                  (editingName ? (
+                    <form
+                      className="em-rename"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        nameMutation.mutate({
+                          caseId: primaryCaseId,
+                          displayName: nameDraft,
+                          reason: nameReason,
+                        });
+                      }}
+                    >
+                      <label>
+                        <small>Employee name</small>
+                        <input
+                          type="text"
+                          value={nameDraft}
+                          minLength={2}
+                          maxLength={120}
+                          required
+                          onChange={(event) => setNameDraft(event.target.value)}
+                        />
+                      </label>
+                      <label>
+                        <small>Reason for the correction</small>
+                        <input
+                          type="text"
+                          value={nameReason}
+                          minLength={10}
+                          maxLength={500}
+                          required
+                          placeholder="At least 10 characters"
+                          onChange={(event) => setNameReason(event.target.value)}
+                        />
+                      </label>
+                      {nameMutation.isError && (
+                        <p className="em-rename__error" role="alert">
+                          {nameMutation.error instanceof Error
+                            ? nameMutation.error.message
+                            : 'The name could not be saved.'}
+                        </p>
+                      )}
+                      <div className="em-rename__actions">
+                        <button
+                          type="button"
+                          className="em-tab"
+                          onClick={() => setEditingName(false)}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          className="em-tab em-tab--primary"
+                          disabled={nameMutation.isPending}
+                        >
+                          {nameMutation.isPending ? 'Saving…' : 'Save name'}
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <button
+                      type="button"
+                      className="em-tab em-rename__open"
+                      onClick={() => {
+                        setNameDraft(selected.name);
+                        setNameReason('');
+                        nameMutation.reset();
+                        setEditingName(true);
+                      }}
+                    >
+                      Correct name
+                    </button>
+                  ))}
                 <h2>History · {caseLabel(selected.cases.length)}</h2>
                 <ul className="em-tl">
                   {selected.cases.map((item, index) => {

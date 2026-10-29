@@ -15,6 +15,7 @@ import {
   type AssessmentCaseSummary,
   type AssessmentReason,
   type AdminEditRequestInput,
+  type UpdateEmployeeNameInput,
   type AdminReopenStageInput,
   type AttachmentScanStatus,
   type AttachmentSummary,
@@ -381,6 +382,20 @@ export class CasesService {
       actor.name,
     );
     return this.withActions(record);
+  }
+
+  updateEmployeeName(
+    caseId: string,
+    input: UpdateEmployeeNameInput,
+    actor: AuthActor = getActorContext(),
+  ): AssessmentCaseDetail | Promise<AssessmentCaseDetail> {
+    if (this.repository) return this.repository.updateEmployeeName(caseId, input, actor);
+    throw new BadRequestException(
+      this.error(
+        'DATABASE_REQUIRED',
+        'Employee names can only be corrected with the database enabled.',
+      ),
+    );
   }
 
   updateReopenedRequest(

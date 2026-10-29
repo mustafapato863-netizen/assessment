@@ -102,3 +102,36 @@
   .em-open { grid-column: 3; grid-row: 1; }
   .em-detail { max-height: 70vh; }
 }
+
+/* Admin: correct an employee name */
+.em-rename {
+  display: grid;
+  gap: 10px;
+  margin: 12px 0 16px;
+  padding: 12px;
+  border: 1px solid var(--line, #e2e8f0);
+  border-radius: 10px;
+}
+.em-rename label {
+  display: grid;
+  gap: 4px;
+}
+.em-rename input {
+  padding: 8px 10px;
+  border: 1px solid var(--line, #cbd5e1);
+  border-radius: 8px;
+  font: inherit;
+}
+.em-rename__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.em-rename__error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 13px;
+}
+.em-rename__open {
+  margin: 8px 0 12px;
+}

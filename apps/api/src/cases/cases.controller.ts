@@ -29,6 +29,7 @@ import type {
   SubmitRecommendationInput,
   UpdateDevelopmentInput,
   UpdateAssessorRecommendationInput,
+  UpdateEmployeeNameInput,
 } from '@assessflow/contracts';
 import {
   scorecardConfigSchema,
@@ -150,6 +151,16 @@ export class CasesController {
     @Actor() actor: AuthActor,
   ) {
     return this.casesService.updateReopenedRequest(caseId, input, actor);
+  }
+
+  @Patch('cases/:caseId/employee-name')
+  @Roles('Admin')
+  updateEmployeeName(
+    @Param('caseId') caseId: string,
+    @Body() input: UpdateEmployeeNameInput,
+    @Actor() actor: AuthActor,
+  ) {
+    return this.casesService.updateEmployeeName(caseId, input, actor);
   }
 
   @Post('cases/:caseId/submit')
