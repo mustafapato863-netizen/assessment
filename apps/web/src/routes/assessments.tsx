@@ -203,19 +203,27 @@ export default function Assessments({
                     {item.department} · <span title={item.caseId}>{formatCaseId(item.caseId)}</span>
                   </span>
                 </div>
-                <div className="as-cell">
+                <div className="as-cell" data-label="Reason">
                   <span>{item.reason}</span>
                   <span className="as-sub">{item.position}</span>
                 </div>
-                <span className={`as-chip as-chip--${chip.tone}`} title={chip.text}>
+                <span
+                  data-label="Stage"
+                  className={`as-chip as-chip--${chip.tone}`}
+                  title={chip.text}
+                >
                   {chip.text}
                 </span>
-                <span>{item.owner}</span>
-                <div className="as-cell">
+                <span data-label="Owner">{item.owner}</span>
+                <div className="as-cell" data-label="Requested">
                   <strong className="as-date">{when.date}</strong>
                   <span className="as-sub">{when.ago}</span>
                 </div>
-                <a className="as-open" href={item.href} aria-label={`Open case ${item.employeeName}`}>
+                <a
+                  className="as-open"
+                  href={item.href}
+                  aria-label={`Open case ${item.employeeName}`}
+                >
                   →
                 </a>
               </li>

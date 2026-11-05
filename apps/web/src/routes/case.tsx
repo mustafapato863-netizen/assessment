@@ -479,26 +479,44 @@ export function CasePage({
       </section>
 
       {/* Stepper with Interactive Stage Navigation */}
-      <section className="stepper panel interactive" aria-label="Assessment progress">
-        {['Request', 'Eligibility', 'Plan', 'Assessment', 'Result', 'Decision', 'Follow-up'].map(
-          (label, index) => (
-            <div
-              className={`step interactive ${index < activeIndex ? 'complete' : index === activeIndex ? 'current' : ''} ${activeStageTab === label ? 'active-focus' : ''}`}
-              key={label}
-              onClick={() => handleSelectStage(label)}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleSelectStage(label)}
-              title={`View ${label} stage details`}
-            >
-              <div className="step-marker">
-                {index < activeIndex ? <Check size={14} /> : index + 1}
+      <section
+        className="stepper panel interactive stepper-with-head"
+        aria-label="Assessment progress"
+      >
+        <div className="stepper-head">
+          <span className="stepper-head-label">Workflow Progress & Stage Filter</span>
+          <button
+            type="button"
+            aria-pressed={activeStageTab === 'ALL'}
+            className={`stage-tab-button ${activeStageTab === 'ALL' ? 'active' : ''}`}
+            onClick={() => setActiveStageTab('ALL')}
+          >
+            <FileText size={14} />
+            Complete Dossier (All Stages)
+          </button>
+        </div>
+        <div className="stepper-track">
+          {['Request', 'Eligibility', 'Plan', 'Assessment', 'Result', 'Decision', 'Follow-up'].map(
+            (label, index) => (
+              <div
+                className={`step interactive ${index < activeIndex ? 'complete' : index === activeIndex ? 'current' : ''} ${activeStageTab === label ? 'active-focus' : ''}`}
+                key={label}
+                onClick={() => handleSelectStage(label)}
+                role="button"
+                aria-pressed={activeStageTab === label}
+                tabIndex={0}
+                onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleSelectStage(label)}
+                title={`View ${label} stage details`}
+              >
+                <div className="step-marker">
+                  {index < activeIndex ? <Check size={14} /> : index + 1}
+                </div>
+                <span>{label}</span>
+                {index < 6 && <i />}
               </div>
-              <span>{label}</span>
-              {index < 6 && <i />}
-            </div>
-          ),
-        )}
+            ),
+          )}
+        </div>
       </section>
 
       {/* Executive Action Bar */}
@@ -546,33 +564,6 @@ export function CasePage({
       </div>
       {submitDraft.isError && <ErrorBanner message={submitDraft.error.message} />}
 
-      {/* Stage Tab Selector */}
-      <div className="stage-tab-bar" role="tablist" aria-label="Stage view selector">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeStageTab === 'ALL'}
-          className={`stage-tab-button ${activeStageTab === 'ALL' ? 'active' : ''}`}
-          onClick={() => setActiveStageTab('ALL')}
-        >
-          <FileText size={14} />
-          Complete Dossier (All Stages)
-        </button>
-        {['Request', 'Eligibility', 'Plan', 'Assessment', 'Result', 'Decision', 'Follow-up'].map(
-          (st) => (
-            <button
-              key={st}
-              type="button"
-              role="tab"
-              aria-selected={activeStageTab === st}
-              className={`stage-tab-button ${activeStageTab === st ? 'active' : ''}`}
-              onClick={() => handleSelectStage(st)}
-            >
-              {st}
-            </button>
-          ),
-        )}
-      </div>
       <div className="case-layout">
         <div className={`case-main ${adminReadOnly ? 'admin-reopened-readonly' : ''}`}>
           {caseDetail.adminEditStage && (

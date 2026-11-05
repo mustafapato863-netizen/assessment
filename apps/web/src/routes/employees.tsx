@@ -41,7 +41,11 @@ export function EmployeesPage() {
   const queryClient = useQueryClient();
   const isAdmin = getActiveUser().role === 'SYS_ADMIN';
 
-  const { data: rawCases, isLoading, isError } = useQuery({
+  const {
+    data: rawCases,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ['cases'],
     queryFn: () => api.cases(),
   });
@@ -77,10 +81,7 @@ export function EmployeesPage() {
     () => [...new Set(employees.map((employee) => employee.department))].sort(),
     [employees],
   );
-  const filtered = useMemo(
-    () => searchEmployees(employees, { q, dept }),
-    [employees, q, dept],
-  );
+  const filtered = useMemo(() => searchEmployees(employees, { q, dept }), [employees, q, dept]);
   const { items, page: current, pages } = paginate(filtered, page, PAGE_SIZE);
   const selected = employees.find((employee) => employee.id === selectedId) || filtered[0] || null;
   const selectedCaseDetails = useQueries({
@@ -95,12 +96,15 @@ export function EmployeesPage() {
   return (
     <div className="em">
       {isError && <ErrorBanner message="Employee records could not load." />}
-      <header>
-        <h1>Employees</h1>
-        <p>
-          {stats.people} people with {stats.cases} assessment cases. Select someone to see their
-          history.
-        </p>
+      <header className="page-heading">
+        <div>
+          <span className="eyebrow">TALENT SCOPE</span>
+          <h1>Employees</h1>
+          <p className="pipeline-note">
+            {stats.people} people with {stats.cases} assessment cases. Select someone to see their
+            history.
+          </p>
+        </div>
       </header>
 
       <section className="em-kpis" aria-label="Employee summary">
@@ -192,13 +196,18 @@ export function EmployeesPage() {
                       <strong>{employee.name}</strong>
                       <span className="em-sub">{employee.position}</span>
                     </div>
-                    <span>{employee.department}</span>
+                    <span data-label="Department">{employee.department}</span>
                     <span
+                      data-label="Cases"
                       className={`em-chip ${employee.cases.length > 1 ? 'em-chip--indigo' : 'em-chip--gray'}`}
                     >
                       {caseLabel(employee.cases.length)}
                     </span>
-                    <span className={`em-chip em-chip--${chip.tone}`} title={chip.text}>
+                    <span
+                      data-label="Latest stage"
+                      className={`em-chip em-chip--${chip.tone}`}
+                      title={chip.text}
+                    >
                       {chip.text}
                     </span>
                     <button
@@ -334,7 +343,8 @@ export function EmployeesPage() {
                   {selected.cases.map((item, index) => {
                     const chip = stageChip(item);
                     const when = formatRequested(item.requestedAt);
-                    const detail: AssessmentCaseDetail | undefined = selectedCaseDetails[index]?.data;
+                    const detail: AssessmentCaseDetail | undefined =
+                      selectedCaseDetails[index]?.data;
                     const activity = [...(detail?.activity ?? [])].sort(
                       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
                     );
@@ -348,16 +358,40 @@ export function EmployeesPage() {
                           <span className={`em-chip em-chip--${chip.tone}`}>{chip.text}</span>
                         </div>
                         <div className="em-detail-grid">
-                          <span><small>Requested</small><strong>{when.date} · {when.ago}</strong></span>
-                          <span><small>Owner</small><strong>{detail?.owner ?? item.owner}</strong></span>
-                          <span><small>Priority</small><strong>{detail?.priority ?? '—'}</strong></span>
-                          <span><small>Candidate</small><strong>{detail?.candidateType === 'NEW_CANDIDATE' ? 'New candidate' : 'Internal employee'}</strong></span>
+                          <span>
+                            <small>Requested</small>
+                            <strong>
+                              {when.date} · {when.ago}
+                            </strong>
+                          </span>
+                          <span>
+                            <small>Owner</small>
+                            <strong>{detail?.owner ?? item.owner}</strong>
+                          </span>
+                          <span>
+                            <small>Priority</small>
+                            <strong>{detail?.priority ?? '—'}</strong>
+                          </span>
+                          <span>
+                            <small>Candidate</small>
+                            <strong>
+                              {detail?.candidateType === 'NEW_CANDIDATE'
+                                ? 'New candidate'
+                                : 'Internal employee'}
+                            </strong>
+                          </span>
                           {detail?.candidateType === 'NEW_CANDIDATE' && (
-                            <span><small>Hiring outcome</small><strong>{detail.hiringOutcome.replace(/_/g, ' ')}</strong></span>
+                            <span>
+                              <small>Hiring outcome</small>
+                              <strong>{detail.hiringOutcome.replace(/_/g, ' ')}</strong>
+                            </span>
                           )}
                           <span className="em-detail-grid__wide">
                             <small>Role change</small>
-                            <strong>{detail?.currentRole || '—'} → {detail?.targetRole || item.position}{detail?.targetLevel ? ` · ${detail.targetLevel}` : ''}</strong>
+                            <strong>
+                              {detail?.currentRole || '—'} → {detail?.targetRole || item.position}
+                              {detail?.targetLevel ? ` · ${detail.targetLevel}` : ''}
+                            </strong>
                           </span>
                         </div>
 
@@ -375,7 +409,9 @@ export function EmployeesPage() {
                               {detail.eligibility.criteria.map((criterion) => (
                                 <li key={criterion.code}>
                                   <span>{criterion.label}</span>
-                                  <b className={`em-result em-result--${criterion.result.toLowerCase()}`}>
+                                  <b
+                                    className={`em-result em-result--${criterion.result.toLowerCase()}`}
+                                  >
                                     {criterion.result.replace(/_/g, ' ')}
                                   </b>
                                 </li>
@@ -392,10 +428,14 @@ export function EmployeesPage() {
                             <ol className="em-activity-list">
                               {activity.map((event) => (
                                 <li key={event.id}>
-                                  <span className={`em-activity-dot em-activity-dot--${event.tone}`} />
+                                  <span
+                                    className={`em-activity-dot em-activity-dot--${event.tone}`}
+                                  />
                                   <div>
                                     <b>{event.action}</b>
-                                    <span className="em-sub">{event.actor} · {new Date(event.timestamp).toLocaleString()}</span>
+                                    <span className="em-sub">
+                                      {event.actor} · {new Date(event.timestamp).toLocaleString()}
+                                    </span>
                                   </div>
                                 </li>
                               ))}

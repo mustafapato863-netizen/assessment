@@ -1,9 +1,9 @@
 .in {
-  --accent: #4338ca;
-  --ink: #14172b;
-  --muted: #5b6078;
-  --line: #e6e8f0;
-  --track: #eef0f5;
+  --accent: var(--indigo);
+  --ink: var(--text);
+  --muted: var(--secondary);
+  --line: var(--border);
+  --track: #eef0f7;
   --hot: #c2410c;
   display: flex;
   flex-direction: column;
@@ -58,7 +58,7 @@
 }
 
 .in-btn {
-  min-height: 42px;
+  min-height: var(--control-height);
   padding: 0 18px;
   border: 0;
   border-radius: 10px;
@@ -77,7 +77,7 @@
   gap: 12px;
   padding: 16px 20px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   background: #fff;
 }
 
@@ -91,7 +91,7 @@
 }
 
 .in-select select {
-  min-height: 42px;
+  min-height: var(--control-height);
   padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -125,7 +125,7 @@
   gap: 4px;
   padding: 16px 20px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   background: #fff;
 }
 
@@ -159,7 +159,7 @@
   gap: 16px;
   padding: 14px 20px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   background: #fff;
 }
 
@@ -176,7 +176,7 @@
   height: 100%;
   padding: 20px 24px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   background: #fff;
 }
 

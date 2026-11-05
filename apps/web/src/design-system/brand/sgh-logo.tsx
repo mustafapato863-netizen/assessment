@@ -19,9 +19,7 @@ export function SghHeartIcon({
   glow?: boolean;
 }) {
   return (
-    <div
-      className={`relative inline-flex items-center justify-center shrink-0 ${className}`.trim()}
-    >
+    <div className={['sgh-heart-icon', className].filter(Boolean).join(' ')}>
       <SghHeartSvg size={size} glow={glow} />
     </div>
   );
@@ -35,12 +33,13 @@ export function SghLogo({
   brandName = 'Saudi German Health',
   subtitle = 'Assessment & Talent Workflow',
 }: SghLogoProps) {
+  void brandName;
   const sizeMap = {
-    xs: { icon: 24, text: 'text-xs', sub: 'text-[9px]' },
-    sm: { icon: 30, text: 'text-sm', sub: 'text-[10px]' },
-    md: { icon: 38, text: 'text-base', sub: 'text-[11px]' },
-    lg: { icon: 48, text: 'text-lg', sub: 'text-xs' },
-    xl: { icon: 64, text: 'text-2xl', sub: 'text-sm' },
+    xs: { icon: 24, titleClass: 'sgh-logo-title--xs', subClass: 'sgh-logo-sub--xs' },
+    sm: { icon: 30, titleClass: 'sgh-logo-title--sm', subClass: 'sgh-logo-sub--sm' },
+    md: { icon: 38, titleClass: 'sgh-logo-title--md', subClass: 'sgh-logo-sub--md' },
+    lg: { icon: 48, titleClass: 'sgh-logo-title--lg', subClass: 'sgh-logo-sub--lg' },
+    xl: { icon: 64, titleClass: 'sgh-logo-title--xl', subClass: 'sgh-logo-sub--xl' },
   }[size];
 
   if (variant === 'icon-only') {
@@ -49,18 +48,18 @@ export function SghLogo({
 
   if (variant === 'full') {
     return (
-      <div className={`flex flex-col items-center text-center gap-2 ${className}`.trim()}>
-        <SghHeartIcon size={sizeMap.icon * 1.3} glow={true} className="mb-1" />
-        <div className="flex flex-col items-center">
+      <div className={['sgh-logo-full', className].filter(Boolean).join(' ')}>
+        <SghHeartIcon size={sizeMap.icon * 1.3} glow={true} className="sgh-logo-full__icon" />
+        <div className="sgh-logo-horiz__copy">
           <span
-            className={`font-extrabold tracking-tight leading-tight ${sizeMap.text}`}
+            className={`sgh-logo-title ${sizeMap.titleClass}`}
             style={{ color: 'var(--color-ink-950, #0f172a)' }}
           >
             Saudi German <span style={{ color: '#00A3E0' }}>Health</span>
           </span>
           {showSubtitle && (
             <span
-              className={`font-medium tracking-wide mt-0.5 ${sizeMap.sub}`}
+              className={`sgh-logo-sub ${sizeMap.subClass}`}
               style={{ color: 'var(--color-ink-500, #64748b)' }}
             >
               {subtitle}
@@ -73,11 +72,11 @@ export function SghLogo({
 
   // Horizontal Variant
   return (
-    <div className={`flex items-center gap-3 ${className}`.trim()}>
+    <div className={['sgh-logo-horiz', className].filter(Boolean).join(' ')}>
       <SghHeartIcon size={sizeMap.icon} glow={false} />
-      <div className="flex flex-col min-w-0">
+      <div className="sgh-logo-horiz__copy">
         <div
-          className={`font-extrabold tracking-tight leading-tight truncate ${sizeMap.text}`}
+          className={`sgh-logo-title ${sizeMap.titleClass}`}
           style={{ color: 'var(--color-ink-950, #0f172a)' }}
         >
           Saudi German{' '}
@@ -94,7 +93,7 @@ export function SghLogo({
         </div>
         {showSubtitle && (
           <span
-            className={`font-medium tracking-wide truncate ${sizeMap.sub}`}
+            className={`sgh-logo-sub ${sizeMap.subClass}`}
             style={{ color: 'var(--color-ink-500, #64748b)' }}
           >
             {subtitle}

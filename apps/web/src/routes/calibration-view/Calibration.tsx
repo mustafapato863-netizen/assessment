@@ -558,9 +558,11 @@ export default function Calibration({
                   )}
                   <span className="cb-sub">{c.targetRole}</span>
                 </div>
-                <span>{c.department}</span>
-                <span>{levelMove(c)}</span>
-                <span className="cb-sub cb-bold">{boxOf(c) ? `Box ${boxOf(c)}` : 'Unplaced'}</span>
+                <span data-label="Department">{c.department}</span>
+                <span data-label="Level move">{levelMove(c)}</span>
+                <span data-label="Box" className="cb-sub cb-bold">
+                  {boxOf(c) ? `Box ${boxOf(c)}` : 'Unplaced'}
+                </span>
                 <ReadinessChip value={c.readiness} />
               </li>
             ))}

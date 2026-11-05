@@ -200,7 +200,7 @@ export function AiCopilotCard({
                 >
                   {synthesizeMutation.isPending ? (
                     <>
-                      <LoaderCircle size={15} className="spinner" /> Synthesizing Evidence...
+                      <LoaderCircle size={15} className="spin" /> Synthesizing Evidence...
                     </>
                   ) : (
                     <>
@@ -449,7 +449,7 @@ export function AiCopilotCard({
                   onClick={() => biasCheckMutation.mutate(biasInputText)}
                 >
                   {biasCheckMutation.isPending ? (
-                    <LoaderCircle size={14} className="spinner" />
+                    <LoaderCircle size={14} className="spin" />
                   ) : (
                     <ShieldAlert size={14} />
                   )}
@@ -596,7 +596,7 @@ export function AiCopilotCard({
                   onClick={() => actionsMutation.mutate()}
                 >
                   {actionsMutation.isPending ? (
-                    <LoaderCircle size={15} className="spinner" />
+                    <LoaderCircle size={15} className="spin" />
                   ) : (
                     <Lightbulb size={15} />
                   )}

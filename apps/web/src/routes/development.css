@@ -1,10 +1,10 @@
 /* development.css — كل الـ classes بتبدأ بـ dv- */
 .dv {
-  --accent: #4338ca;
-  --ink: #14172b;
-  --muted: #5b6078;
-  --line: #e6e8f0;
-  --row-line: #eef0f5;
+  --accent: var(--indigo);
+  --ink: var(--text);
+  --muted: var(--secondary);
+  --line: var(--border);
+  --row-line: #f0f1f6;
   --good: #0f766e;
   display: flex;
   flex-direction: column;
@@ -58,7 +58,7 @@
   gap: 4px;
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   padding: 16px 20px;
 }
 .dv-kpi--on {
@@ -89,7 +89,7 @@
 .dv-card {
   background: #fff;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   overflow: hidden;
 }
 .dv-card__head {
@@ -299,7 +299,7 @@
 }
 
 .dv-btn {
-  min-height: 42px;
+  min-height: var(--control-height);
   padding: 0 16px;
   border-radius: 10px;
   font: inherit;
@@ -361,7 +361,7 @@
 .dv-note {
   background: #ecfdf5;
   border: 1px solid #a7f3d0;
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   padding: 18px 24px;
   color: #115e59;
   display: flex;

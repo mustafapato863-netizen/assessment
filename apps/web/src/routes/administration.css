@@ -1,13 +1,13 @@
 .administration-page {
-  --admin-indigo: #4338ca;
-  --admin-bg: #f6f7fb;
-  --admin-border: #e6e8f0;
-  --admin-muted: #5b6078;
+  --admin-indigo: var(--indigo);
+  --admin-bg: var(--canvas);
+  --admin-border: var(--border);
+  --admin-muted: var(--secondary);
   display: flex;
   flex-direction: column;
   gap: 24px;
   min-width: 0;
-  color: #14172b;
+  color: var(--text);
   font-size: 14px;
 }
 
@@ -61,7 +61,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 42px;
+  min-height: var(--control-height);
   padding: 10px 14px;
   border: 1px solid var(--admin-border);
   border-radius: 10px;
@@ -107,7 +107,7 @@
 .administration-card {
   min-width: 0;
   border: 1px solid var(--admin-border);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   background: #fff;
 }
 .administration-kpi {
@@ -575,7 +575,7 @@
   overflow: auto;
   padding: 24px;
   border: 1px solid var(--admin-border);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   background: #fff;
   box-shadow: 0 24px 70px rgb(20 23 43 / 22%);
 }
@@ -662,7 +662,7 @@
   width: min(100%, 440px);
   padding: 28px;
   border: 1px solid var(--admin-border);
-  border-radius: 16px;
+  border-radius: var(--radius-card);
   background: #fff;
   box-shadow: 0 12px 40px rgb(20 23 43 / 7%);
 }

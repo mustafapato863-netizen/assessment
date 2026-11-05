@@ -380,9 +380,7 @@ export function Sidebar({
             >
               {casesData ? `${cyclePercent}%` : '—'}
             </b>
-            <small>
-              of {casesData ? cycleCases.length : '—'} cases at decision or later
-            </small>
+            <small>of {casesData ? cycleCases.length : '—'} cases at decision or later</small>
           </div>
           <div className="cycle-progress" aria-hidden="true">
             {cycleStages.map((stage) => (
@@ -433,15 +431,6 @@ export function Sidebar({
           <ChevronDown size={15} />
         </div>
       )}
-
-      <button
-        className="collapse-button"
-        aria-label="Toggle sidebar"
-        onClick={() => document.querySelector<HTMLButtonElement>('[data-sidebar-toggle]')?.click()}
-      >
-        <PanelLeftClose size={17} />
-        <span>Collapse sidebar</span>
-      </button>
     </aside>
   );
 }
@@ -673,13 +662,20 @@ export function AppShell({
   return (
     <div className="app-shell">
       <Sidebar
-        collapsed={collapsed}
+        collapsed={collapsed && !mobileMenuOpen}
         mobileOpen={mobileOpen}
         t={t}
         onClose={() => setMobileMenuOpen(false)}
         activeUser={activeUser}
         onOpenSettings={() => setSettingsOpen(true)}
       />
+      {mobileOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
+      )}
       <div className="app-main">
         <OfflineBanner />
         <Topbar

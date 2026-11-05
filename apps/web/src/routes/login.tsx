@@ -144,7 +144,7 @@ export function LoginPage() {
                 <div className="sgh-brand-pane-glow-1" aria-hidden="true" />
                 <div className="sgh-brand-pane-glow-2" aria-hidden="true" />
 
-                <div className="relative z-10">
+                <div className="sgh-layer-z10">
                   {/* Brand Header */}
                   <div className="sgh-brand-header">
                     <SghAnimatedLogo size={50} showText={false} />
@@ -184,7 +184,7 @@ export function LoginPage() {
                 </div>
 
                 {/* Footer Security Badge */}
-                <div className="sgh-brand-footer relative z-10">
+                <div className="sgh-brand-footer sgh-layer-z10">
                   <p className="sgh-footer-security-text">
                     Enterprise Grade • Role-based Clinical Assessment
                   </p>
@@ -204,19 +204,17 @@ export function LoginPage() {
                 {/* Mobile Brand (visible when screen < 960px) */}
                 <div className="sgh-mobile-brand">
                   <SghLogo size="sm" variant="horizontal" showSubtitle={false} />
-                  <div className="h-5 w-px bg-white/15 mx-1" aria-hidden="true" />
+                  <div className="sgh-brand-divider" aria-hidden="true" />
                   <div>
-                    <p className="m-0 text-sm font-extrabold text-white">AssessFlow</p>
-                    <p className="m-0 text-[9px] font-bold uppercase tracking-wider text-[#00A3E0]">
-                      Saudi German Health
-                    </p>
+                    <p className="sgh-brand-title">AssessFlow</p>
+                    <p className="sgh-brand-subtitle">Saudi German Health</p>
                   </div>
                 </div>
 
                 {/* Form Header */}
                 <header className="sgh-form-header">
                   <div className="sgh-workspace-badge">
-                    <ShieldCheck size={14} className="text-[#00A3E0]" />
+                    <ShieldCheck size={14} className="sgh-icon-cyan" />
                     <span>Saudi German Health • Secure Assessment Workspace</span>
                   </div>
 
@@ -229,7 +227,7 @@ export function LoginPage() {
                 {/* Error Callout */}
                 {error && (
                   <div className="sgh-error-callout" role="alert">
-                    <AlertCircle size={18} className="shrink-0 text-red-400 mt-0.5" />
+                    <AlertCircle size={18} className="sgh-error-icon" />
                     <span>{error}</span>
                   </div>
                 )}

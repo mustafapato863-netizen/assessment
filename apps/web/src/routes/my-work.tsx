@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
-import { ErrorBanner, LoadingRows, PageHeading } from '../components/ui';
+import { ErrorBanner, LoadingRows } from '../components/ui';
 import { mapWorkItems } from './my-work-data';
 import {
   countByStage,
@@ -15,7 +15,13 @@ import {
 import './my-work.css';
 
 function initials(name: string) {
-  return name.split(' ').filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join('')
+    .toUpperCase();
 }
 
 function KpiCard({
@@ -100,17 +106,46 @@ function MyWork({ items = [], now = new Date() }: { items?: WorkItem[]; now?: Da
           <h1>My work</h1>
           <p>
             {kpis.openCases} cases need you.
-            {kpis.overdue > 0 ? ` ${kpis.overdue} are overdue, so start there.` : ' Nothing is overdue.'}
+            {kpis.overdue > 0
+              ? ` ${kpis.overdue} are overdue, so start there.`
+              : ' Nothing is overdue.'}
           </p>
         </div>
-        <a className="mw-btn mw-btn--primary" href="#/cases/new">New assessment</a>
+        <a className="mw-btn mw-btn--primary" href="#/cases/new">
+          New assessment
+        </a>
       </header>
 
       <section className="mw-kpis" aria-label="Summary">
-        <KpiCard label="Open cases" value={kpis.openCases} hint={`${kpis.tasks} tasks in total`} active={filter === 'all'} onClick={() => setFilter('all')} />
-        <KpiCard label="Overdue" value={kpis.overdue} hint="Past their due date" tone="warn" active={filter === 'overdue'} onClick={() => setFilter('overdue')} />
-        <KpiCard label="Committee approvals" value={kpis.approvals} hint={kpis.approvals ? 'Waiting for you' : 'Nothing waiting'} active={filter === 'approval'} onClick={() => setFilter('approval')} />
-        <KpiCard label="Evaluations" value={kpis.evaluations} hint={kpis.evaluations ? 'Waiting for you' : 'Nothing waiting'} active={filter === 'evaluation'} onClick={() => setFilter('evaluation')} />
+        <KpiCard
+          label="Open cases"
+          value={kpis.openCases}
+          hint={`${kpis.tasks} tasks in total`}
+          active={filter === 'all'}
+          onClick={() => setFilter('all')}
+        />
+        <KpiCard
+          label="Overdue"
+          value={kpis.overdue}
+          hint="Past their due date"
+          tone="warn"
+          active={filter === 'overdue'}
+          onClick={() => setFilter('overdue')}
+        />
+        <KpiCard
+          label="Committee approvals"
+          value={kpis.approvals}
+          hint={kpis.approvals ? 'Waiting for you' : 'Nothing waiting'}
+          active={filter === 'approval'}
+          onClick={() => setFilter('approval')}
+        />
+        <KpiCard
+          label="Evaluations"
+          value={kpis.evaluations}
+          hint={kpis.evaluations ? 'Waiting for you' : 'Nothing waiting'}
+          active={filter === 'evaluation'}
+          onClick={() => setFilter('evaluation')}
+        />
       </section>
 
       <div className="mw-grid">
@@ -141,8 +176,13 @@ function MyWork({ items = [], now = new Date() }: { items?: WorkItem[]; now?: Da
             {visible.map((item) => {
               const chip = getStatusChip(item, now);
               return (
-                <li key={item.id} className={`mw-row${chip.tone === 'overdue' ? ' is-overdue' : ''}`}>
-                  <span className="mw-avatar" aria-hidden="true">{initials(item.name)}</span>
+                <li
+                  key={item.id}
+                  className={`mw-row${chip.tone === 'overdue' ? ' is-overdue' : ''}`}
+                >
+                  <span className="mw-avatar" aria-hidden="true">
+                    {initials(item.name)}
+                  </span>
                   <div className="mw-who">
                     <strong>{item.name}</strong>
                     <span className="mw-muted">
@@ -150,7 +190,11 @@ function MyWork({ items = [], now = new Date() }: { items?: WorkItem[]; now?: Da
                     </span>
                   </div>
                   <span className={`mw-chip mw-chip--${chip.tone}`}>{chip.text}</span>
-                  <a className="mw-btn mw-btn--ghost" href={item.action.href} aria-label={`${item.action.label} for ${item.name}`}>
+                  <a
+                    className="mw-btn mw-btn--ghost"
+                    href={item.action.href}
+                    aria-label={`${item.action.label} for ${item.name}`}
+                  >
                     {item.action.label} →
                   </a>
                 </li>
@@ -168,7 +212,9 @@ function MyWork({ items = [], now = new Date() }: { items?: WorkItem[]; now?: Da
                 {first.stage} stage
                 {firstLate !== null && firstLate > 0 ? ` · overdue by ${firstLate} days` : ''}
               </span>
-              <a className="mw-btn mw-btn--light" href={first.action.href}>{first.action.label} →</a>
+              <a className="mw-btn mw-btn--light" href={first.action.href}>
+                {first.action.label} →
+              </a>
             </div>
           )}
 
@@ -176,7 +222,10 @@ function MyWork({ items = [], now = new Date() }: { items?: WorkItem[]; now?: Da
             <h2>By stage</h2>
             <ul className="mw-stages">
               {Object.entries(stages).map(([stage, count]) => (
-                <li key={stage}><span>{stage}</span><b>{count}</b></li>
+                <li key={stage}>
+                  <span>{stage}</span>
+                  <b>{count}</b>
+                </li>
               ))}
             </ul>
           </div>
@@ -196,30 +245,35 @@ export default function MyWorkPage() {
 
   if (overview.isError || cases.isError) {
     return (
-      <>
-        <PageHeading
-          eyebrow="ASSESSMENT WORKSPACE"
-          title="My work"
-          subtitle="Review your open actions and continue each case from its next step."
-        />
+      <div className="mw">
+        <header className="mw-head">
+          <div>
+            <h1>My work</h1>
+            <p>Review your open actions and continue each case from its next step.</p>
+          </div>
+        </header>
         <ErrorBanner
           message="My work could not be loaded. Check the connection and try again."
-          onRetry={() => { void overview.refetch(); void cases.refetch(); }}
+          onRetry={() => {
+            void overview.refetch();
+            void cases.refetch();
+          }}
         />
-      </>
+      </div>
     );
   }
 
   if (overview.isLoading || cases.isLoading) {
     return (
-      <>
-        <PageHeading
-          eyebrow="ASSESSMENT WORKSPACE"
-          title="My work"
-          subtitle="Review your open actions and continue each case from its next step."
-        />
+      <div className="mw">
+        <header className="mw-head">
+          <div>
+            <h1>My work</h1>
+            <p>Review your open actions and continue each case from its next step.</p>
+          </div>
+        </header>
         <LoadingRows />
-      </>
+      </div>
     );
   }
 
