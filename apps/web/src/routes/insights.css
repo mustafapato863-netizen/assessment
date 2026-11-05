@@ -64,8 +64,8 @@
   justify-content: space-between;
   gap: 16px;
   padding: 20px 24px;
-  background: linear-gradient(135deg, #ffffff 0%, #ffffff 62%, #ecfdf5 100%);
-  border: 1px solid rgba(203, 213, 225, 0.9);
+  background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 58%, #ecfdf5 100%);
+  border: 1px solid rgba(186, 230, 253, 0.9);
   border-left: 4px solid #00a859;
   border-radius: 16px;
   box-shadow: var(--shadow-sm);
@@ -142,14 +142,26 @@
 .in-clear {
   grid-column: 1 / -1;
   justify-self: start;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: #0084ce;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 4px 12px;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #ecfdf5 100%);
+  color: #0284c7;
   font: inherit;
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
+  transition: all 150ms var(--ease-spring);
+}
+.in-clear:hover {
+  background: linear-gradient(135deg, #0084ce 0%, #00a859 100%);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 4px 10px rgba(0, 132, 206, 0.22);
 }
 
 /* PRO_Project KpiCard */
@@ -332,23 +344,31 @@
 }
 
 .in-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-top: 8px;
-  padding: 4px 10px;
-  border: 0;
+  min-height: 30px;
+  padding: 5px 12px;
+  border: 1px solid #bae6fd;
   border-radius: 8px;
-  background: var(--brand-soft);
-  color: var(--accent);
+  background: linear-gradient(135deg, #f0f9ff 0%, #ecfdf5 100%);
+  color: #0284c7;
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   text-decoration: none !important;
   transition: all var(--motion-fast) var(--ease-spring);
 }
 
 .in-link:hover {
-  background: rgba(0, 163, 224, 0.16);
-  transform: translateX(2px);
+  background: linear-gradient(135deg, #0084ce 0%, #00a859 100%);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 4px 10px rgba(0, 132, 206, 0.22);
+  transform: translateY(-1px);
   text-decoration: none !important;
 }
 

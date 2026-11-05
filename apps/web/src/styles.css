@@ -7,16 +7,16 @@
     Roboto, sans-serif;
   font-family: var(--font-sans);
   color: #0f172a;
-  background: #e2e8f0;
+  background: #e0f2fe;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 
   /* Official Saudi German Health (SGH) Brand Tokens — aligned with PRO_Project */
-  --background: #e2e8f0;
+  --background: #e0f2fe;
   --foreground: #0f172a;
   --card: #ffffff;
   --card-foreground: #0f172a;
-  --app-bg-gradient: linear-gradient(135deg, #dde5ee 0%, #e3eaf2 34%, #dbece5 68%, #cde7dc 100%);
+  --app-bg-gradient: linear-gradient(135deg, #d8f0fc 0%, #e2f5fe 35%, #daf3ec 70%, #ceeee0 100%);
 
   --sgh-cyan: #00a3e0;
   --sgh-cyan-light: #38bdf8;
@@ -51,7 +51,7 @@
   --sgh-glow-button: 0 1px 2px rgba(0, 132, 206, 0.2);
 
   /* Semantic Surface & Brand Mappings — PRO_Project tokens */
-  --canvas: #e2e8f0;
+  --canvas: #e0f2fe;
   --surface: #ffffff;
   --surface-subtle: #f8fafc;
   --brand-soft: #e6f4fb;
@@ -121,12 +121,14 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
-a,
+a {
+  color: inherit;
+  text-decoration: none !important;
+}
 a:visited,
 a:hover,
 a:active,
 a:focus {
-  color: inherit;
   text-decoration: none !important;
 }
 button,
@@ -760,8 +762,8 @@ button:disabled {
   gap: 16px;
   margin-bottom: 24px;
   padding: 20px 24px;
-  background: linear-gradient(135deg, #ffffff 0%, #ffffff 62%, #ecfdf5 100%);
-  border: 1px solid rgba(203, 213, 225, 0.9);
+  background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 58%, #ecfdf5 100%);
+  border: 1px solid rgba(186, 230, 253, 0.9);
   border-left: 4px solid #00a859;
   border-radius: 16px;
   box-shadow: var(--shadow-sm);
@@ -864,15 +866,24 @@ button:disabled {
 }
 .link-button,
 .back-button {
-  min-height: 30px;
-  padding: 0;
-  color: #0084ce;
-  background: transparent;
+  min-height: 32px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  color: #0284c7;
+  background: linear-gradient(135deg, #f0f9ff 0%, #ecfdf5 100%);
+  border: 1px solid #bae6fd;
+  font-size: 12.5px;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   text-decoration: none !important;
 }
 .link-button:hover,
 .back-button:hover {
-  color: #0069b4;
+  color: #ffffff;
+  background: linear-gradient(135deg, #0084ce 0%, #00a859 100%);
+  border-color: transparent;
+  box-shadow: 0 4px 10px rgba(0, 132, 206, 0.22);
+  transform: translateY(-1px);
 }
 .back-button {
   margin-bottom: 18px;
@@ -7466,17 +7477,33 @@ td span + small {
 }
 .sc2-link {
   all: unset;
+  box-sizing: border-box;
   cursor: pointer;
-  font: 600 13px var(--font-sans);
-  color: var(--indigo);
+  font: 700 12.5px var(--font-sans);
+  color: #0284c7;
+  background: linear-gradient(135deg, #f0f9ff 0%, #ecfdf5 100%);
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  padding: 5px 12px;
   min-height: 32px;
   display: inline-flex;
   align-items: center;
+  gap: 6px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
   text-decoration: none !important;
-  transition: color var(--motion-fast) var(--ease-spring);
+  transition:
+    background 150ms var(--ease-spring),
+    color 150ms var(--ease-spring),
+    border-color 150ms var(--ease-spring),
+    transform 150ms var(--ease-spring),
+    box-shadow 150ms var(--ease-spring);
 }
 .sc2-link:hover {
-  color: var(--indigo-deep);
+  color: #ffffff;
+  background: linear-gradient(135deg, #0084ce 0%, #00a859 100%);
+  border-color: transparent;
+  box-shadow: 0 4px 10px rgba(0, 132, 206, 0.22);
+  transform: translateY(-1px);
   text-decoration: none !important;
 }
 .sc2-link:focus-visible {

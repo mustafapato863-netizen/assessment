@@ -48,8 +48,8 @@
   gap: 16px;
   flex-wrap: wrap;
   padding: 20px 24px;
-  background: linear-gradient(135deg, #ffffff 0%, #ffffff 62%, #ecfdf5 100%);
-  border: 1px solid rgba(203, 213, 225, 0.9);
+  background: linear-gradient(135deg, #ffffff 0%, #f0f9ff 58%, #ecfdf5 100%);
+  border: 1px solid rgba(186, 230, 253, 0.9);
   border-left: 4px solid #00a859;
   border-radius: 16px;
   box-shadow: var(--shadow-sm);
@@ -342,18 +342,38 @@
 .admin-text-button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--admin-indigo);
+  min-height: 30px;
+  padding: 4px 10px;
+  border: 1px solid #bae6fd;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #ecfdf5 100%);
+  color: #0284c7;
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 700;
+  white-space: nowrap;
   cursor: pointer;
+  transition: all 150ms var(--ease-spring);
+}
+.admin-text-button:hover {
+  background: linear-gradient(135deg, #0084ce 0%, #00a859 100%);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 4px 10px rgba(0, 132, 206, 0.22);
+  transform: translateY(-1px);
 }
 .admin-text-button.danger {
-  color: #b42318;
+  color: #be123c;
+  background: #fff1f2;
+  border-color: #fecdd3;
+}
+.admin-text-button.danger:hover {
+  color: #ffffff;
+  background: #e11d48;
+  border-color: transparent;
+  box-shadow: 0 4px 10px rgba(225, 29, 72, 0.22);
 }
 .admin-table-message {
   padding: 20px 0;

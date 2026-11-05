@@ -219,17 +219,19 @@
 .em-open {
   width: 36px;
   height: 36px;
-  border: 1px solid var(--line);
+  border: 1px solid #bae6fd;
   border-radius: 10px;
-  background: #fff;
-  color: var(--accent);
+  background: linear-gradient(135deg, #f0f9ff 0%, #ecfdf5 100%);
+  color: #0284c7;
   font-weight: 700;
   cursor: pointer;
   transition: all var(--motion-fast) var(--ease-spring);
 }
 .em-open:hover {
-  background: var(--brand-soft);
-  border-color: rgba(0, 163, 224, 0.42);
+  background: linear-gradient(135deg, #0084ce 0%, #00a859 100%);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 4px 10px rgba(0, 132, 206, 0.22);
   transform: translateX(2px);
 }
 
@@ -274,19 +276,38 @@
   gap: 8px;
 }
 .em-tab {
-  border: 0;
-  border-radius: 99px;
-  padding: 6px 14px;
-  background: #f3f4fb;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 5px 12px;
+  background: #f8fafc;
   font: inherit;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
-  color: var(--ink);
+  color: #334155;
+  white-space: nowrap;
   cursor: pointer;
+  transition:
+    background-color 150ms,
+    color 150ms,
+    border-color 150ms,
+    box-shadow 150ms;
+}
+.em-tab:hover:not(:disabled) {
+  background: #f0f9ff;
+  color: #0084ce;
+  border-color: #bae6fd;
 }
 .em-tab--primary {
-  background: var(--accent);
-  color: #fff;
+  background: #0084ce;
+  border-color: #0069b4;
+  color: #ffffff;
+  font-weight: 700;
+  box-shadow: var(--shadow-xs);
+}
+.em-tab--primary:hover:not(:disabled) {
+  background: #0069b4;
+  border-color: #005a9c;
+  color: #ffffff;
 }
 .em-tab:disabled {
   opacity: 0.5;
@@ -464,9 +485,35 @@
   background: #dc2626;
 }
 .em-tl a {
-  font-weight: 600;
-  color: var(--accent);
-  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 5px 12px;
+  border-radius: 8px;
+  border: 1px solid #bae6fd;
+  background: linear-gradient(135deg, #f0f9ff 0%, #ecfdf5 100%);
+  color: #0284c7;
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  text-decoration: none !important;
+  transition:
+    background 150ms var(--ease-spring),
+    color 150ms var(--ease-spring),
+    border-color 150ms var(--ease-spring),
+    transform 150ms var(--ease-spring),
+    box-shadow 150ms var(--ease-spring);
+}
+.em-tl a:hover {
+  color: #ffffff;
+  background: linear-gradient(135deg, #0084ce 0%, #00a859 100%);
+  border-color: transparent;
+  box-shadow: 0 4px 10px rgba(0, 132, 206, 0.22);
+  transform: translateY(-1px);
+  text-decoration: none !important;
 }
 .em-note {
   margin: 8px 0 0;

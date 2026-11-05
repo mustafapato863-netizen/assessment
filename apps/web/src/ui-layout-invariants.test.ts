@@ -21,7 +21,7 @@ describe('Frontend UI & Layout Invariants', () => {
   it('defines canonical :root tokens and synchronizes collapsed sidebar grid track', () => {
     expect(stylesCss).toContain('--font: var(--font-sans);');
     expect(stylesCss).toContain('--font-mono:');
-    expect(stylesCss).toContain('--background: #e2e8f0;');
+    expect(stylesCss).toContain('--background: #e0f2fe;');
     expect(stylesCss).toContain('--app-bg-gradient:');
     expect(stylesCss).toContain('--primary: #0084ce;');
     expect(stylesCss).toContain('--radius-card: 16px;');
