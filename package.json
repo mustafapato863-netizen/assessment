@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "test:dev-ports": "node --test scripts/dev-ports.test.mjs",
+    "test:bootstrap-admin": "node --test scripts/bootstrap-admin-core.test.mjs",
+    "bootstrap:admin": "node scripts/bootstrap-admin.mjs",
     "build": "pnpm -r --workspace-concurrency 1 build",
     "build:api": "pnpm --filter @assessflow/contracts build && pnpm --filter @assessflow/database build && pnpm --filter @assessflow/api build",
     "start": "node apps/api/dist/main.js",

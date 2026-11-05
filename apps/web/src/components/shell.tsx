@@ -2,7 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  ArrowRight,
   BarChart3,
+  Building2,
   ChevronDown,
   ClipboardCheck,
   LayoutDashboard,
@@ -11,9 +13,10 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  Scale,
   Search,
   Settings2,
-  Sparkles,
+  TrendingUp,
   User,
   UserCheck,
   Users,
@@ -86,6 +89,8 @@ export function NavItem({
   collapsed: boolean;
   onClick: () => void;
 }) {
+  // A zero count (for example "My work 0") shows no badge.
+  const hasCount = Boolean(item.count) && item.count !== '0';
   return (
     <button
       className={`nav-item ${active ? 'active' : ''} ${collapsed ? 'collapsed' : ''}`}
@@ -95,7 +100,7 @@ export function NavItem({
     >
       <item.icon size={18} />
       {!collapsed && <span>{item.label}</span>}
-      {!collapsed && item.count && <span className="nav-count">{item.count}</span>}
+      {!collapsed && hasCount && <span className="nav-count">{item.count}</span>}
     </button>
   );
 }
@@ -171,6 +176,27 @@ export function Sidebar({
       )
     : undefined;
 
+  // Cycle progress: live cases (cancelled ones left out) grouped by stage.
+  // Decision = Recommendation and Approval, the same stages the cases list calls "decision".
+  const cycleCases = (casesData ?? []).filter((caseItem) => caseItem.status !== 'CANCELLED');
+  const cycleStageCount = (stages: string[]) =>
+    cycleCases.filter((caseItem) => stages.includes(caseItem.stage)).length;
+  const cycleDecisionCount = cycleStageCount(['RECOMMENDATION', 'APPROVAL']);
+  const cycleFollowUpCount = cycleStageCount(['FOLLOW_UP']);
+  const cycleClosedCount = cycleStageCount(['CLOSED']);
+  const cycleDoneCount = cycleDecisionCount + cycleFollowUpCount + cycleClosedCount;
+  const cyclePercent = cycleCases.length
+    ? Math.round((cycleDoneCount / cycleCases.length) * 100)
+    : 0;
+  const cycleSegmentPercent = (count: number) =>
+    cycleCases.length ? (count / cycleCases.length) * 100 : 0;
+  // Each key is also the segment class in the bar and the swatch colour (seg-<key>).
+  const cycleStages = [
+    { key: 'decision', label: 'Decision', count: cycleDecisionCount },
+    { key: 'follow-up', label: 'Follow-up', count: cycleFollowUpCount },
+    { key: 'closed', label: 'Closed', count: cycleClosedCount },
+  ];
+
   const standardItems: Array<{
     id: View;
     label: string;
@@ -197,7 +223,7 @@ export function Sidebar({
     {
       id: 'development',
       label: t.development,
-      icon: Sparkles,
+      icon: TrendingUp,
       count: developmentCount,
       path: '/development',
     },
@@ -210,7 +236,7 @@ export function Sidebar({
     // Calibration is for the calibration committee (matches the /calibration RoleGate).
     ...(PILOT_FLAGS.calibration &&
     ['SYS_ADMIN', 'HR_ADMIN', 'MANAGER', 'ASSESSOR'].includes(user?.role ?? '')
-      ? [{ id: 'calibration' as View, label: t.calibration, icon: Sparkles, path: '/calibration' }]
+      ? [{ id: 'calibration' as View, label: t.calibration, icon: Scale, path: '/calibration' }]
       : []),
   ];
   const items: Array<{
@@ -292,10 +318,10 @@ export function Sidebar({
 
       <div className="workspace-switch">
         <div className="workspace-icon">
-          <Sparkles size={19} />
+          <Building2 size={19} />
         </div>
         <div className="workspace-copy">
-          <strong>{t.workspace}</strong>
+          <strong>Egypt</strong>
           <small>{t.cycle}</small>
         </div>
         <span className="online-dot" />
@@ -341,16 +367,48 @@ export function Sidebar({
 
       {!collapsed && (
         <div className="sidebar-cycle">
-          <div className="cycle-orb orb-one" />
-          <div className="cycle-orb orb-two" />
-          <span>LIVE CYCLE</span>
-          <strong>Leadership assessment</strong>
-          <div className="cycle-footer">
-            <small>FY26</small>
-            <b>68%</b>
+          <div className="cycle-header">
+            <strong>Cycle progress</strong>
+            <span className="cycle-live">
+              <i aria-hidden="true" />
+              Live
+            </span>
           </div>
-          <div className="cycle-progress">
-            <i />
+          <div className="cycle-headline">
+            <b
+              title={`${cycleDoneCount} of ${cycleCases.length} cases at Decision, Follow-up or Closed`}
+            >
+              {casesData ? `${cyclePercent}%` : '—'}
+            </b>
+            <small>
+              of {casesData ? cycleCases.length : '—'} cases at decision or later
+            </small>
+          </div>
+          <div className="cycle-progress" aria-hidden="true">
+            {cycleStages.map((stage) => (
+              <i
+                key={stage.key}
+                className={`seg-${stage.key}`}
+                style={{ width: `${cycleSegmentPercent(stage.count)}%` }}
+              />
+            ))}
+          </div>
+          <ul className="cycle-stages">
+            {cycleStages.map((stage) => (
+              <li className="cycle-stage" key={stage.key}>
+                <small className="cycle-stage-name">
+                  <i className={`cycle-swatch seg-${stage.key}`} aria-hidden="true" />
+                  {stage.label}
+                </small>
+                <b>{casesData ? String(stage.count) : '—'}</b>
+              </li>
+            ))}
+          </ul>
+          <div className="cycle-footer">
+            <a className="cycle-view" href="#/cases">
+              View cases
+              <ArrowRight size={12} aria-hidden="true" />
+            </a>
           </div>
         </div>
       )}

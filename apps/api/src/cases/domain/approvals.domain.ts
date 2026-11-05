@@ -1,3 +1,4 @@
+import { currentCorrelationId } from '../../common/correlation.context';
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import {
   decideApprovalSchema,
@@ -28,7 +29,7 @@ export class ApprovalsDomain {
           code: 'VALIDATION_ERROR',
           message: 'A recommendation code and rationale of at least 20 characters are required.',
           fieldErrors: parsed.error.flatten().fieldErrors,
-          correlationId: `corr-${Date.now()}`,
+          correlationId: currentCorrelationId(),
         },
       });
     }
@@ -43,7 +44,7 @@ export class ApprovalsDomain {
           code: 'VALIDATION_ERROR',
           message: 'A valid decision and expected version are required.',
           fieldErrors: parsed.error.flatten().fieldErrors,
-          correlationId: `corr-${Date.now()}`,
+          correlationId: currentCorrelationId(),
         },
       });
     }

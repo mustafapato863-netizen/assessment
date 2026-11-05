@@ -338,14 +338,6 @@ export function TasksPage({
                   className="task-row task-row-large task-card-interactive"
                   key={caseItem.id}
                   onClick={() => onOpenCase(caseItem.id)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      onOpenCase(caseItem.id);
-                    }
-                  }}
                 >
                   <div className={`task-icon ${isUrgent ? 'high' : 'normal'}`}>
                     {isUrgent ? <AlertTriangle size={17} /> : <Clock3 size={17} />}
@@ -359,7 +351,11 @@ export function TasksPage({
                         flexWrap: 'wrap',
                       }}
                     >
-                      <strong style={{ fontSize: '14px' }}>{caseItem.employeeName}</strong>
+                      <strong style={{ fontSize: '14px' }}>
+                        <button type="button" className="task-row-open">
+                          {caseItem.employeeName}
+                        </button>
+                      </strong>
                       <span style={{ color: 'var(--secondary)', fontSize: '12px' }}>
                         {caseItem.targetRole}
                       </span>

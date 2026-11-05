@@ -1,3 +1,4 @@
+import { currentCorrelationId } from '../../common/correlation.context';
 import { BadRequestException } from '@nestjs/common';
 import {
   closeCaseSchema,
@@ -17,7 +18,7 @@ export class DevelopmentDomain {
           code: 'VALIDATION_ERROR',
           message: 'Action title and owner are required.',
           fieldErrors: parsed.error.flatten().fieldErrors,
-          correlationId: `corr-${Date.now()}`,
+          correlationId: currentCorrelationId(),
         },
       });
     }
@@ -32,7 +33,7 @@ export class DevelopmentDomain {
           code: 'VALIDATION_ERROR',
           message: 'A reassessment reason of at least 10 characters is required.',
           fieldErrors: parsed.error.flatten().fieldErrors,
-          correlationId: `corr-${Date.now()}`,
+          correlationId: currentCorrelationId(),
         },
       });
     }
@@ -47,7 +48,7 @@ export class DevelopmentDomain {
           code: 'VALIDATION_ERROR',
           message: 'A closure reason and expected version are required.',
           fieldErrors: parsed.error.flatten().fieldErrors,
-          correlationId: `corr-${Date.now()}`,
+          correlationId: currentCorrelationId(),
         },
       });
     }

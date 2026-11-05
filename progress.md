@@ -433,3 +433,11 @@
 - UI: segmented score buttons, Flag knockout toggle, issue total shows actual/target plus % and /5, weight budget indicator. Old 0-5 drafts count as unanswered.
 - Design proposal artifact: 'Scorecard redesign'.
 - Scorecard view rebuilt to match the approved mockup exactly (sc2-* styles, IBM Plex Sans/Mono, summary strip, section split, tabs with weight budget, issue rows with weight/progress/actual-target, question grid QUESTION | SCORE | Q. WEIGHT, knockout flag and evidence note under each question). Question text/issue name editing and add/remove moved behind 'Edit questions'.
+
+## Session: 2026-11-02 - Role redesign, phase 1 (documentation only)
+
+- Approved five-role model (product owner: Ibrahim): Admin, Assessor, HR Talent Manager, Line Manager, Executive. Replaces the 8 web roles and 11 API roles. Employee role removed (employees do not sign in).
+- Approval route is now two steps: HR Talent Manager (step 1), then the employee's Line Manager (step 2). Business Approver step removed.
+- Updated docs: `docs/role-access-model.md` (rewritten; supersedes the 2026-10-17 model), `docs/workflow-state-machine.md`, `gate-1-business-decisions.md` (BIZ-004, 005, 006, 010, 011, 013), `gate-2-scope-acceptance.md`, `gate-3-architecture.md`, `README.md`, `AssessFlow_Frontend_UI_UX_Spec_v1.1.md` section 8, `phases/phase-01-entra-rbac.md`.
+- No code changed. Code still implements the 2026-10-17 roles until phases 2-4 (see "Implementation impact" in `docs/role-access-model.md`).
+- Open questions recorded in `docs/role-access-model.md`: scheduling owner, reopen owner, reassessment trigger, employee acknowledgement, HR Governance mapping, audit-trail access, and the Admin segregation rule.

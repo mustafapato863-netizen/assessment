@@ -1,3 +1,4 @@
+import { currentCorrelationId } from '../../common/correlation.context';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import {
   eligibilityDecisionSchema,
@@ -42,7 +43,7 @@ export class EligibilityDomain {
           code: 'VALIDATION_ERROR',
           message: 'A valid eligibility decision and version are required.',
           fieldErrors: parsed.error.flatten().fieldErrors,
-          correlationId: `corr-${Date.now()}`,
+          correlationId: currentCorrelationId(),
         },
       });
     }
@@ -51,7 +52,7 @@ export class EligibilityDomain {
         error: {
           code: 'REASON_REQUIRED',
           message: 'A reason is required when the employee is not eligible.',
-          correlationId: `corr-${Date.now()}`,
+          correlationId: currentCorrelationId(),
         },
       });
     }
@@ -68,7 +69,7 @@ export class EligibilityDomain {
         error: {
           code: 'CONCURRENCY_CONFLICT',
           message: 'This case changed in another session. Refresh before trying again.',
-          correlationId: `corr-${Date.now()}`,
+          correlationId: currentCorrelationId(),
         },
       });
     }
@@ -77,7 +78,7 @@ export class EligibilityDomain {
         error: {
           code: 'INVALID_TRANSITION',
           message: 'This case is not ready for an eligibility decision.',
-          correlationId: `corr-${Date.now()}`,
+          correlationId: currentCorrelationId(),
         },
       });
     }

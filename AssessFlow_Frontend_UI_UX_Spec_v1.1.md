@@ -193,17 +193,15 @@ Evidence, result, recommendation, and configuration forms use a full-width edito
 
 This matrix is a UI baseline; the permissions workbook and API scope remain authoritative.
 
+Amended 2026-11-02 for the five-role model. The table below replaces the earlier role rows; see `docs/role-access-model.md`. The Employee role is removed: employees do not sign in.
+
 | Role | Default home | Allowed context | Protected behavior |
 |---|---|---|---|
-| Employee | Development actions and disclosed feedback | Own permitted history, assigned actions, reassessment dates | Independent evidence, private notes, routing comments, and undisclosed result are hidden |
-| Requester / Manager | Team requests, tasks, and follow-up | Scoped direct/indirect reports according to policy | Cannot view assessor-private evidence or approve own request unless policy allows |
-| HR / Talent Reviewer | Eligibility queue and policy exceptions | Assigned organization scope | Override controls require separate permission and reason |
-| Assessment Coordinator | Plans, events, and missing inputs | Assigned cases/events | Cannot finalize result unless separately granted |
-| Assessor | Assigned events and evidence drafts | Minimum employee/target context required for assessment | Cannot see peer submissions before independent submission unless policy explicitly permits |
-| Panel Lead / Result Finalizer | Evidence readiness and result queue | Consolidated authorized evidence | Reopen requires separate permission, reason, and revision warning |
-| Business Owner / Approver | Approval inbox and decision snapshot | Result summary, recommendation, route, relevant policy | No unrelated employee relations or private assessor content |
-| Administrator / Governance | Versioned configuration and audit operations | Configuration metadata; evidence only by explicit separate permission | Admin role alone does not grant unrestricted case/evidence access |
-| Auditor | Audit/access/export history | Read-only records within audit mandate | No workflow command controls |
+| Admin | Overview | Organization-wide: accounts, roles, scopes, settings, and every workflow step | Cannot approve a case they scored, finalized, or recommended |
+| Assessor | My assessments | Only the cases and sessions assigned to them | Never approves; no account management; cannot see unassigned cases; cannot see peer submissions before independent submission unless policy explicitly permits |
+| HR Talent Manager | Overview | Organization or assigned departments | No account or settings management; cannot approve a case they scored or finalized |
+| Line Manager | My team | Direct reports only | Read-only after submitting a request; sees results only after the HR step is approved |
+| Executive | Insights | Organization-wide, read-only | Changes nothing; can open any case to read it |
 
 Every hidden or read-only field must distinguish among: not applicable, not yet available, hidden by policy, outside organization scope, and insufficient permission.
 

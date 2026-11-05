@@ -1,8 +1,8 @@
 // ---------------------------------------------------------------------------
 // AssessFlow Real Authentication
 // ---------------------------------------------------------------------------
-// Credentials are stored client-side for demo/MVP. Replace with a real JWT
-// backend when deploying to production.
+// Sign-in is checked by the API (POST /auth/login). This module only keeps the
+// signed-in user and its token in localStorage.
 // ---------------------------------------------------------------------------
 
 export interface AppUser {
@@ -26,28 +26,7 @@ export interface AppUser {
   mustChangePassword?: boolean;
 }
 
-// -----------------------------------------------------------------------
-// Registered accounts (in a real deployment these come from the backend)
-// -----------------------------------------------------------------------
-export const REGISTERED_USERS: Array<AppUser & { passwordHash: string }> = [
-  {
-    id: 'user-admin',
-    email: 'admin@me.com',
-    // Password stored as plain text for MVP demo only — replace with bcrypt
-    passwordHash: 'Admin@123456',
-    name: 'Admin',
-    role: 'SYS_ADMIN',
-    roleTitle: 'System Administrator',
-    actorId: 'admin',
-    avatarInitials: 'AD',
-    avatarColor: 'avatar-purple',
-    department: 'Security & Governance',
-  },
-];
-
 const SESSION_KEY = 'assessflow:session';
-const DEVELOPMENT_ADMIN_EMAIL = 'admin@me.com';
-const DEVELOPMENT_ADMIN_PASSWORD = 'Admin@123456';
 
 interface StoredSession {
   user: AppUser;
@@ -65,12 +44,8 @@ export function getSession(): AppUser | null {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as AppUser | StoredSession;
-    if ('user' in parsed && parsed.user && parsed.token) return parsed.user;
-    // Validate that the stored user still exists in registered list
-    const legacyUser = parsed as AppUser;
-    const found = REGISTERED_USERS.find((u) => u.id === legacyUser.id);
-    if (!found) return null;
-    return legacyUser;
+    // Only a session issued by the API (with its token) counts as signed in.
+    return 'user' in parsed && parsed.user && parsed.token ? parsed.user : null;
   } catch {
     return null;
   }
@@ -143,68 +118,10 @@ export async function login(email: string, password: string): Promise<AppUser> {
     listeners.forEach((fn) => fn(user));
     return user;
   } catch (error) {
-    // Keep the original local demo administrator usable while the first company
-    // account is provisioned. This exception only works on localhost.
-    if (
-      typeof window !== 'undefined' &&
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') &&
-      trimmedEmail === DEVELOPMENT_ADMIN_EMAIL &&
-      password === DEVELOPMENT_ADMIN_PASSWORD
-    ) {
-      const account = REGISTERED_USERS[0]!;
-      const { passwordHash: _passwordHash, ...user } = account;
-      try {
-        localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-      } catch {
-        // ignore storage errors
-      }
-      listeners.forEach((fn) => fn(user));
-      return user;
-    }
     throw error instanceof Error
       ? error
       : new Error('Invalid email or password. Please try again.');
   }
-}
-
-// ---------------------------------------------------------------------------
-// Register a new user (admin-driven)
-// ---------------------------------------------------------------------------
-export function registerUser(
-  email: string,
-  password: string,
-  name: string,
-  role: AppUser['role'],
-  roleTitle: string,
-  department: string,
-): AppUser {
-  const existing = REGISTERED_USERS.find((u) => u.email.toLowerCase() === email.toLowerCase());
-  if (existing) {
-    throw new Error('An account with this email already exists.');
-  }
-  const initials = name
-    .split(' ')
-    .map((w) => w[0] ?? '')
-    .join('')
-    .toUpperCase()
-    .slice(0, 2);
-  const colors = ['avatar-purple', 'avatar-blue', 'avatar-amber', 'avatar-emerald', 'avatar-slate'];
-  const color = colors[REGISTERED_USERS.length % colors.length] ?? 'avatar-purple';
-  const newUser = {
-    id: `user-${Date.now()}`,
-    email,
-    passwordHash: password,
-    name,
-    role,
-    roleTitle,
-    actorId: email.split('@')[0] ?? 'user',
-    avatarInitials: initials,
-    avatarColor: color,
-    department,
-  };
-  REGISTERED_USERS.push(newUser);
-  const { passwordHash: _, ...publicUser } = newUser;
-  return publicUser;
 }
 
 // ---------------------------------------------------------------------------

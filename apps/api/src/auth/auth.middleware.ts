@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'node:crypto';
 import { APP_ROLES, AppRole, AuthActor, normalizeRole } from './auth.types';
 import { actorStorage } from './actor.context';
+import { isDevHeaderAuthEnabled } from './dev-auth';
 import { verifyEntraJwt } from './jwt.util';
 
 /**
@@ -28,9 +29,11 @@ function resolveCorrelationId(req: Request, res: Response): string {
  *   { error: { code: 'UNAUTHORIZED', message, correlationId } }
  *
  * When ENTRA_ISSUER_URL or ENTRA_CLIENT_ID is unset:
- * - Local development stub path with zero config
- * - Reads identity from headers: x-actor-id (default: demo-user), x-actor-name, x-actor-roles
- * - If x-actor-roles is not specified, grants all app roles to maintain seamless local dev
+ * - Only with DEV_AUTH_HEADERS=true (never in production): reads identity from headers
+ *   x-actor-id (default: demo-user), x-actor-name, x-actor-roles. Without x-actor-roles,
+ *   all app roles are granted to keep local development seamless.
+ * - Otherwise the request gets an anonymous actor with no roles, and the guard refuses
+ *   anything that needs a signed-in user.
  *
  * In all cases:
  * - Propagates verified actor into AsyncLocalStorage (actorStorage) for downstream access
@@ -121,8 +124,11 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
       res.status(401).json(errorPayload);
       return;
     }
+  } else if (!isDevHeaderAuthEnabled()) {
+    // No demo identity without the local opt-in. The guard decides what the request may do.
+    actor = { id: 'anonymous', name: 'Anonymous', roles: [] };
   } else {
-    // Stub path: zero config local development
+    // Local development stub path, enabled by DEV_AUTH_HEADERS=true
     const rawActorId = req.headers['x-actor-id'] ?? req.headers['X-Actor-ID'];
     const actorIdCandidate = Array.isArray(rawActorId) ? rawActorId[0] : rawActorId;
     const actorId =

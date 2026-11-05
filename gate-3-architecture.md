@@ -1,7 +1,7 @@
 # AssessFlow Gate 3 — Target Architecture and Deployment Boundary
 
 **Status:** Approved 2026-09-04 by `admin` (Technical + Identity/HRIS + Security owners)
-**Pilot boundary (from Gate 2):** single company; Product, Engineering, People; all three reasons; sequential HR→Business
+**Pilot boundary (from Gate 2):** single company; Product, Engineering, People; all three reasons; sequential HR→Line Manager (amended 2026-11-02; see docs/role-access-model.md)
 **Purpose:** Confirm modular monolith as the initial architecture, define host-platform versus standalone ownership, and produce architecture decision records, integration boundaries, environment model, and ownership map.  
 **Dependencies:** Gate 1 (BIZ-009, BIZ-013, BIZ-014)  
 **Owner:** Technical Owner + Identity/HRIS Owner + Security/Privacy Owner  

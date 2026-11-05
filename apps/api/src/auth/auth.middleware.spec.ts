@@ -73,7 +73,43 @@ describe('authMiddleware', () => {
     process.env = { ...originalEnv };
   });
 
-  describe('Auth OFF Path (zero-config local dev)', () => {
+  describe('DEV_AUTH_HEADERS off (default)', () => {
+    it('attaches an anonymous actor with no roles when no headers are sent', () => {
+      const { req, res, next } = createMockReqRes();
+
+      authMiddleware(req, res, next);
+
+      expect(next).toHaveBeenCalledOnce();
+      expect((req as any).actor).toEqual({ id: 'anonymous', name: 'Anonymous', roles: [] });
+    });
+
+    it('ignores x-actor-id and x-actor-roles headers', () => {
+      const { req, res, next } = createMockReqRes({
+        headers: { 'x-actor-id': 'custom-dev-1', 'x-actor-roles': 'Admin' },
+      });
+
+      authMiddleware(req, res, next);
+
+      expect((req as any).actor.id).toBe('anonymous');
+      expect((req as any).actor.roles).toEqual([]);
+    });
+
+    it('stays off in production even when DEV_AUTH_HEADERS=true', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.DEV_AUTH_HEADERS = 'true';
+      const { req, res, next } = createMockReqRes({ headers: { 'x-actor-roles': 'Admin' } });
+
+      authMiddleware(req, res, next);
+
+      expect((req as any).actor.roles).toEqual([]);
+    });
+  });
+
+  describe('DEV_AUTH_HEADERS on (local development)', () => {
+    beforeEach(() => {
+      process.env.DEV_AUTH_HEADERS = 'true';
+    });
+
     it('defaults to demo-user with all roles when headers are absent', () => {
       const { req, res, next } = createMockReqRes();
 

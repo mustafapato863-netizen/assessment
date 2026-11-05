@@ -26,7 +26,7 @@ export const copy = {
   access: 'Manage access',
   calibration: 'Calibration',
   workspace: 'Assessment Workspace',
-  cycle: 'FY26 Talent Cycle · Egypt',
+  cycle: 'Talent cycle · Live',
   search: 'Search cases, employees, tasks…',
   greeting: 'Good morning, Sarah',
   subtitle: 'Here is what needs your attention today.',

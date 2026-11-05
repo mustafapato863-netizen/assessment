@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { Reflector } from '@nestjs/core';
-import { ExecutionContext, ForbiddenException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { RolesGuard } from './roles.guard';
 import { ROUTE_PERMISSIONS } from './permissions.map';
 import { APP_ROLES, AppRole, AuthActor } from './auth.types';
@@ -11,6 +11,7 @@ function createMockExecutionContext(options: {
   requiredRoles?: AppRole[];
   isPublic?: boolean;
   correlationId?: string;
+  headers?: Record<string, string>;
 }): ExecutionContext {
   const reflectorValues: Record<string, unknown> = {};
   if (options.requiredRoles) {
@@ -27,7 +28,7 @@ function createMockExecutionContext(options: {
     actor: options.actor,
     user: options.actor,
     correlationId: options.correlationId ?? 'corr-test-rbac',
-    headers: { 'x-correlation-id': options.correlationId ?? 'corr-test-rbac' },
+    headers: { 'x-correlation-id': options.correlationId ?? 'corr-test-rbac', ...options.headers },
   };
 
   return {
@@ -54,7 +55,91 @@ function createGuardWithReflector(metadata: {
   return new RolesGuard(reflector);
 }
 
+describe('RolesGuard header demo sign-in (DEV_AUTH_HEADERS)', () => {
+  const originalEnv = { ...process.env };
+  const demoAdminHeaders = { 'x-actor-id': 'dev-admin', 'x-actor-roles': 'Admin' };
+
+  beforeEach(() => {
+    delete process.env.ENTRA_ISSUER_URL;
+    delete process.env.ENTRA_CLIENT_ID;
+    delete process.env.DEV_AUTH_HEADERS;
+    process.env.NODE_ENV = 'development';
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  it('refuses a request with no token and no actor when the flag is off', () => {
+    const guard = createGuardWithReflector({ requiredRoles: ['Requester'] });
+    const context = createMockExecutionContext({});
+
+    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+  });
+
+  it('refuses a request whose role headers are sent while the flag is off', () => {
+    const guard = createGuardWithReflector({ requiredRoles: ['Requester'] });
+    const context = createMockExecutionContext({ headers: demoAdminHeaders });
+
+    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+  });
+
+  it('refuses an anonymous actor with no roles when the flag is off', () => {
+    const guard = createGuardWithReflector({ requiredRoles: ['Requester'] });
+    const context = createMockExecutionContext({
+      actor: { id: 'anonymous', name: 'Anonymous', roles: [] },
+      headers: demoAdminHeaders,
+    });
+
+    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+  });
+
+  it('keeps the admin-only 403 for an admin route without a token', () => {
+    const guard = createGuardWithReflector({ requiredRoles: ['Admin'] });
+    const context = createMockExecutionContext({});
+
+    expect(() => guard.canActivate(context)).toThrow(ForbiddenException);
+  });
+
+  it('uses the header demo actor when DEV_AUTH_HEADERS=true', () => {
+    process.env.DEV_AUTH_HEADERS = 'true';
+    const guard = createGuardWithReflector({ requiredRoles: ['Admin'] });
+    const context = createMockExecutionContext({ headers: demoAdminHeaders });
+
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
+  it('grants all demo roles when the flag is on and no roles header is sent', () => {
+    process.env.DEV_AUTH_HEADERS = 'true';
+    const guard = createGuardWithReflector({ requiredRoles: ['Requester'] });
+    const context = createMockExecutionContext({});
+
+    expect(guard.canActivate(context)).toBe(true);
+  });
+
+  it('refuses the header demo actor in production even when the flag is set', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.DEV_AUTH_HEADERS = 'true';
+    const guard = createGuardWithReflector({ requiredRoles: ['Requester'] });
+    const context = createMockExecutionContext({ headers: demoAdminHeaders });
+
+    expect(() => guard.canActivate(context)).toThrow(UnauthorizedException);
+  });
+});
+
 describe('RolesGuard & RACI Matrix', () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    // These tests hand the guard an already-authenticated actor. The guard only trusts
+    // such an actor in local development, so the flag is set to model that setup.
+    process.env.DEV_AUTH_HEADERS = 'true';
+  });
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
   it('allows access to public endpoints without role checks', () => {
     const guard = createGuardWithReflector({ isPublic: true, requiredRoles: ['Admin'] });
     const context = createMockExecutionContext({

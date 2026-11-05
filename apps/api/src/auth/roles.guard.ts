@@ -15,6 +15,7 @@ import { AppRole, AuthActor, normalizeRole } from './auth.types';
 import { ROLES_KEY, IS_PUBLIC_KEY } from './roles.decorator';
 import { setActorContext } from './actor.context';
 import { verifyAppToken } from './app-token.util';
+import { isDevHeaderAuthEnabled } from './dev-auth';
 import { PrismaService } from '../database/prisma.service';
 import { caseScopeWhere } from '../access/access-accounts.service';
 
@@ -59,6 +60,7 @@ export class RolesGuard implements CanActivate {
     const entraEnabled = Boolean(
       process.env.ENTRA_ISSUER_URL?.trim() && process.env.ENTRA_CLIENT_ID?.trim(),
     );
+    const devHeaderAuth = isDevHeaderAuthEnabled();
 
     if (
       adminOnlyRoute &&
@@ -75,8 +77,8 @@ export class RolesGuard implements CanActivate {
       });
     }
 
-    // The middleware has already verified Entra tokens. In local development,
-    // however, it attaches a permissive demo actor to every request, so a real
+    // The middleware has already verified Entra tokens. In local development with
+    // DEV_AUTH_HEADERS, it attaches a permissive demo actor to every request, so a real
     // AssessFlow bearer token must take precedence over that fallback actor.
     if (existingActor && entraEnabled && process.env.NODE_ENV !== 'production') {
       return this.authorize(existingActor, requiredRoles, correlationId, request);
@@ -91,15 +93,15 @@ export class RolesGuard implements CanActivate {
       });
     }
 
-    if (existingActor && process.env.NODE_ENV !== 'production') {
+    if (existingActor && devHeaderAuth) {
       return this.authorize(existingActor, requiredRoles, correlationId, request);
     }
 
-    if (process.env.NODE_ENV === 'production') {
+    if (!devHeaderAuth) {
       throw new UnauthorizedException('A valid AssessFlow sign-in is required.');
     }
 
-    // Keep the local demo actor available for development and account setup.
+    // Local development only (DEV_AUTH_HEADERS=true): the header-based demo actor.
     const actor = this.resolveLocalActor(request);
     (request as unknown as { actor?: AuthActor }).actor = actor;
     (request as unknown as { user?: AuthActor }).user = actor;

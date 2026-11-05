@@ -775,7 +775,7 @@ export function OverviewPage({
                   showAllAttentionTasks || attentionFilter !== 'all' ? attentionRows.length : 5,
                 )
                 .map((caseItem) => (
-                  <button
+                  <div
                     className="task-row"
                     key={caseItem.id}
                     onClick={() => onOpenCase(caseItem.id)}
@@ -784,7 +784,9 @@ export function OverviewPage({
                     <div className={`priority-dot ${caseItem.slaBreachRisk ? 'high' : ''}`} />
                     <div className="task-content">
                       <strong>
-                        {caseItem.actionName} · {caseItem.employeeName}
+                        <button type="button" className="task-row-open">
+                          {caseItem.actionName} · {caseItem.employeeName}
+                        </button>
                       </strong>
                       <span>
                         <CaseCodeDisplay caseCode={caseItem.caseCode} /> ·{' '}
@@ -792,7 +794,7 @@ export function OverviewPage({
                       </span>
                     </div>
                     <ArrowUpRight size={16} />
-                  </button>
+                  </div>
                 ))
             )}
           </div>

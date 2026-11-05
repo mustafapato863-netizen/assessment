@@ -209,8 +209,8 @@ button:disabled {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  color: var(--indigo);
-  background: var(--brand-soft);
+  color: #fff;
+  background: var(--indigo);
 }
 .workspace-copy strong {
   font-size: 12px;
@@ -257,17 +257,40 @@ button:disabled {
   background: #f8fafc;
 }
 .nav-item.active {
-  color: var(--indigo-hover);
-  background: #eef2ff;
+  color: #fff;
+  background: linear-gradient(115deg, var(--indigo), var(--indigo-deep));
   box-shadow: none;
   font-weight: 600;
 }
 .nav-item.active svg {
-  color: var(--indigo-hover);
+  color: #fff;
+}
+.nav-item:focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 2px;
+}
+.nav-item.active:focus-visible {
+  outline-color: #fff;
 }
 .nav-item span {
   flex: 1;
   font-size: 13px;
+}
+.nav-item .nav-count {
+  flex: 0 0 auto;
+  min-width: 22px;
+  padding: 2px 7px;
+  color: var(--secondary);
+  background: var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+}
+.nav-item.active .nav-count {
+  color: #fff;
+  background: rgb(255 255 255 / 20%);
 }
 .nav-item b {
   display: grid;
@@ -280,25 +303,35 @@ button:disabled {
   border-radius: 6px;
   font-size: 10px;
 }
+/* Same indigo values as the Overview "Next action" card (.overview-page), so the
+   sidebar accents match it. Those values keep white text above AA contrast. */
+.sidebar {
+  --indigo: #4338ca;
+  --indigo-deep: #312e81;
+}
 .sidebar-cycle {
+  --cycle-text: #fff;
+  --cycle-muted: rgb(255 255 255 / 75%);
+  --cycle-live: #9fe1cb;
+  --cycle-track: rgb(255 255 255 / 20%);
+  --cycle-seg-decision: #fff;
+  --cycle-seg-follow-up: rgb(255 255 255 / 75%);
+  --cycle-seg-closed: #9fe1cb;
+  --cycle-divider: rgb(255 255 255 / 20%);
   position: relative;
   overflow: hidden;
   display: grid;
   gap: 8px;
   margin-top: auto;
   padding: 14px 16px;
-  color: var(--text);
-  background: #f8fafc;
-  border: 1px solid var(--border);
+  color: var(--cycle-text);
+  background: linear-gradient(115deg, var(--indigo), var(--indigo-deep));
+  border: 1px solid var(--indigo);
   border-radius: 14px;
   box-shadow: none;
 }
-.sidebar-cycle::before,
-.cycle-orb {
-  display: none !important;
-}
 .sidebar-cycle span {
-  color: var(--indigo);
+  color: var(--cycle-muted);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -307,31 +340,137 @@ button:disabled {
 .sidebar-cycle strong {
   font-size: 13px;
   font-weight: 700;
-  color: var(--text);
+  color: var(--cycle-text);
 }
-.cycle-footer {
+.cycle-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  color: var(--muted);
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+.sidebar-cycle .cycle-header strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cycle-text);
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sidebar-cycle .cycle-live {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 5px;
+  color: var(--cycle-live);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.sidebar-cycle .cycle-live i {
+  width: 6px;
+  height: 6px;
+  background: var(--cycle-live);
+  border-radius: 50%;
+}
+.cycle-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+}
+.cycle-headline b {
+  color: var(--cycle-text);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+.sidebar-cycle .cycle-headline small {
+  color: var(--cycle-muted);
   font-size: 12px;
 }
-.cycle-footer b {
-  color: var(--indigo);
-  font-weight: 700;
-}
 .cycle-progress {
+  display: flex;
   height: 6px;
   overflow: hidden;
-  background: #e2e8f0;
+  background: var(--cycle-track);
   border-radius: 99px;
 }
 .cycle-progress i {
   display: block;
-  width: 68%;
   height: 100%;
-  background: var(--indigo);
-  border-radius: inherit;
+  min-width: 0;
+}
+.cycle-progress i + i {
+  margin-left: 2px;
+}
+.cycle-stages {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cycle-stage {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sidebar-cycle .cycle-stage-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--cycle-muted);
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.cycle-stage b {
+  color: var(--cycle-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+.cycle-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.sidebar-cycle .seg-decision {
+  background: var(--cycle-seg-decision);
+}
+.sidebar-cycle .seg-follow-up {
+  background: var(--cycle-seg-follow-up);
+}
+.sidebar-cycle .seg-closed {
+  background: var(--cycle-seg-closed);
+}
+.cycle-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid var(--cycle-divider);
+}
+.cycle-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--cycle-text);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: 4px;
+}
+.cycle-view:hover {
+  text-decoration: underline;
+}
+.cycle-view:focus-visible {
+  outline: 2px solid var(--cycle-text);
+  outline-offset: 3px;
 }
 .sidebar-user {
   display: flex;
@@ -775,8 +914,29 @@ button:disabled {
   border-radius: 8px;
   transition: background var(--motion-fast);
 }
+.task-row {
+  cursor: pointer;
+}
 .task-row:hover {
   background: #f8fafc;
+}
+/* The row is not interactive itself, so the case number's copy button can sit beside the title. */
+.task-row-open {
+  all: unset;
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.task-row-open:focus-visible {
+  outline: 2px solid var(--indigo);
+  outline-offset: 2px;
 }
 .priority-dot {
   width: 8px;

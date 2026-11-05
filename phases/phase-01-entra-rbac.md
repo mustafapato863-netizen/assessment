@@ -8,7 +8,7 @@ Do:
 1. Add Entra ID OIDC JWT verification behind env flags (`ENTRA_ISSUER_URL`, `ENTRA_CLIENT_ID`): when set,
    require + verify bearer tokens and derive `{ id, name, roles }` from claims; when unset, keep the current
    stub path unchanged (local dev must keep working with zero config).
-2. Add a roles guard: map app roles (Requester, HR, Coordinator, Assessor, PanelLead, BusinessApprover,
+2. Add a roles guard (amended 2026-11-02: the five roles Admin, Assessor, HR Talent Manager, Line Manager and Executive replace the list below; see `../docs/role-access-model.md`): map app roles (Requester, HR, Coordinator, Assessor, PanelLead, BusinessApprover,
    Admin, Auditor) to controller routes per `../AssessFlow_System_Design_Pack_v1.0/08_AssessFlow_Permissions_RACI_Matrix_v1.0.xlsx`
    (inspect with a script if needed); deny with structured 403 `{ error: { code: 'FORBIDDEN', … } }`.
    Zero new npm dependencies — hand-roll JWT claim checks with node:crypto, or reuse existing deps only.

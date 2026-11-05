@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Request, Response } from 'express';
 import { createRateLimiterMiddleware } from './security.middleware';
 import { authMiddleware } from '../auth/auth.middleware';
@@ -120,6 +120,10 @@ describe('API Error Correlation ID Invariant Verification', () => {
   });
 
   describe('403 Authorization Guard Errors', () => {
+    // The guard only trusts an already-authenticated actor in local development.
+    beforeEach(() => vi.stubEnv('DEV_AUTH_HEADERS', 'true'));
+    afterEach(() => vi.unstubAllEnvs());
+
     it('includes correlationId when role check fails', () => {
       const reflector = {
         getAllAndOverride: (key: string) => {

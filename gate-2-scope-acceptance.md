@@ -1,6 +1,6 @@
 # AssessFlow Gate 2 — MVP Scope and Acceptance Criteria
 
-**Status:** Approved 2026-09-04 by `admin` (Product/Business Owner + HR/Talent Policy Owner)
+**Status:** Approved 2026-09-04 by `admin` (Product/Business Owner + HR/Talent Policy Owner). Amended 2026-11-02 for the five-role model and the two-step approval route (see `docs/role-access-model.md`).
 **Pilot departments (final):** Product, Engineering, People (matches demo seed)
 **Purpose:** Define MVP scope, acceptance criteria, and explicit out-of-scope items based on BRD and workflow matrix.  
 **Dependencies:** Gate 1 (BIZ-001, BIZ-004, BIZ-010, BIZ-012 minimum)  
@@ -20,14 +20,14 @@ Keep the core flow: request → eligibility → plan → evidence → result →
 
 | Assessment Reason | Target Levels | Departments Included | Approval Route |
 |-------------------|---------------|----------------------|----------------|
-| Promotion         | L3-L6         | Product, Engineering, People | Sequential HR → Business; no self-approval; 14-day expiry |
-| Internal Mobility | L2-L5         | Product, Engineering, People | Sequential HR → Business; no self-approval; 14-day expiry |
-| Role Realignment  | L3-L6         | Product, Engineering, People | Sequential HR → Business; no self-approval; 14-day expiry |
+| Promotion         | L3-L6         | Product, Engineering, People | Sequential HR Talent Manager → Line Manager (amended 2026-11-02); no self-approval; 14-day expiry |
+| Internal Mobility | L2-L5         | Product, Engineering, People | Sequential HR Talent Manager → Line Manager (amended 2026-11-02); no self-approval; 14-day expiry |
+| Role Realignment  | L3-L6         | Product, Engineering, People | Sequential HR Talent Manager → Line Manager (amended 2026-11-02); no self-approval; 14-day expiry |
 
 ## Given-When-Then Acceptance Criteria
 
 ### Request Transition
-**Given:** Employee submits assessment request with justification  
+**Given:** Line Manager submits an assessment request with justification for their team  
 **When:** Request is saved as draft  
 **Then:** System shows "Draft" status, allows editing, and enables submit action  
 
@@ -38,13 +38,13 @@ Keep the core flow: request → eligibility → plan → evidence → result →
 ### Eligibility Transition
 **Given:** Case in PENDING_ELIGIBILITY status  
 **When:** HR/Talent records eligibility decision with policy version  
-**Then:** If ELIGIBLE: status → READY_FOR_PLANNING, stage → PLANNING, owner → Assessment Coordinator  
+**Then:** If ELIGIBLE: status → READY_FOR_PLANNING, stage → PLANNING, owner → HR Talent Manager  
 **Then:** If NOT_ELIGIBLE: status → NOT_ELIGIBLE, stage → ELIGIBILITY, owner → HR/Talent  
 
 ### Planning Transition
 **Given:** Case in READY_FOR_PLANNING status  
-**When:** Assessment Coordinator finalizes plan with methods and lead assessor  
-**Then:** Status → PLANNING, stage → PLANNING, owner remains Assessment Coordinator, plan version incremented  
+**When:** HR Talent Manager finalizes plan with methods and lead assessor  
+**Then:** Status → PLANNING, stage → PLANNING, owner remains HR Talent Manager, plan version incremented  
 
 ### Evidence Transition
 **Given:** Case in PLANNING status with scheduled assessment events  
@@ -53,13 +53,13 @@ Keep the core flow: request → eligibility → plan → evidence → result →
 
 ### Result Transition
 **Given:** Case in PLANNING status with all required evidence submitted  
-**When:** Assessment Coordinator finalizes result  
-**Then:** Status → PENDING_RESULT, stage → RESULT, owner → Assessment Coordinator, result revision created  
+**When:** HR Talent Manager finalizes result  
+**Then:** Status → PENDING_RESULT, stage → RESULT, owner → HR Talent Manager, result revision created  
 
 ### Recommendation Transition
 **Given:** Case in PENDING_RESULT status with finalized result  
-**When:** Business Owner/Approver enters recommendation  
-**Then:** Status → PENDING_RECOMMENDATION, stage → RECOMMENDATION, owner → Business Owner/Approver, recommendation revision created  
+**When:** Assessor proposes the recommendation  
+**Then:** Status → PENDING_RECOMMENDATION, stage → RECOMMENDATION, owner → Assessor, recommendation revision created  
 
 ### Approval Transition
 **Given:** Case in PENDING_RECOMMENDATION status with submitted recommendation  
@@ -68,7 +68,7 @@ Keep the core flow: request → eligibility → plan → evidence → result →
 
 ### Closure Transition
 **Given:** Case in APPROVED status with completed approval steps  
-**When:** Employee acknowledges feedback and any follow-up actions assigned  
+**When:** Line Manager records that the result was communicated and any follow-up actions are assigned (how an acknowledgement is recorded is open question 4 in docs/role-access-model.md)  
 **Then:** Status → CLOSED, stage → CLOSED, closedAt timestamp set, follow-up tasks created  
 
 ### Conditional Branches

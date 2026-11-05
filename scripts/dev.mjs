@@ -56,6 +56,8 @@ try {
     shell: process.platform === 'win32' && /\.cmd$/i.test(invokeExecutable),
     env: {
       ...process.env,
+      // Local development only: the header-based demo sign-in stays available under pnpm dev.
+      DEV_AUTH_HEADERS: process.env.DEV_AUTH_HEADERS ?? 'true',
       PORT: String(apiPort),
       WEB_PORT: String(webPort),
       DEV_AUTO_PORT: String(auto),

@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'node:crypto';
+import { runWithCorrelationId } from './correlation.context';
 
 /**
  * Global Security Headers & Request Correlation Middleware.
@@ -39,7 +40,7 @@ export function securityHeadersMiddleware(req: Request, res: Response, next: Nex
   req.headers['x-correlation-id'] = correlationId;
   (req as unknown as { correlationId?: string }).correlationId = correlationId;
 
-  next();
+  runWithCorrelationId(correlationId, () => next());
 }
 
 export const securityMiddleware = securityHeadersMiddleware;
