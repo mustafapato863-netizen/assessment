@@ -14,24 +14,25 @@
 .cb h1 {
   margin: 0;
   color: #0f172a;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.3;
-  letter-spacing: -0.02em;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
 }
 .cb h2 {
   margin: 0;
   color: #0f172a;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 16.5px;
+  font-weight: 800;
   letter-spacing: -0.015em;
 }
 .cb p {
-  margin: 4px 0 0;
-  max-width: 48rem;
-  color: #64748b;
-  font-size: 12.5px;
-  line-height: 1.6;
+  margin: 5px 0 0;
+  max-width: 54rem;
+  color: #334155;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.55;
 }
 .cb a {
   color: inherit;
@@ -39,8 +40,8 @@
 }
 .cb-sub,
 .cb-note {
-  font-size: 12px;
-  color: #64748b;
+  font-size: 12.5px;
+  color: #475569;
   line-height: 1.55;
 }
 .cb .cb-note {
@@ -54,12 +55,30 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
+  align-items: center;
+  gap: 16px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 62%, #ecfdf5 100%);
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-left: 4px solid #00a859;
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
 }
 .cb-top > div:first-child {
   min-width: 0;
   flex: 1 1 320px;
+}
+.cb-top .cb-empty__hint {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 6px 12px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
 }
 .cb-actions {
   display: flex;
@@ -76,13 +95,13 @@
   flex-shrink: 0;
   min-height: 36px;
   padding: 0 14px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #cbd5e1;
   border-radius: 8px;
   background: #ffffff;
-  color: #334155;
+  color: #0f172a;
   font: inherit;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   box-shadow: var(--shadow-xs);
   cursor: pointer;
   transition:
@@ -92,17 +111,17 @@
     box-shadow 150ms;
 }
 .cb-btn:hover {
-  background: #f8fafc;
-  color: #0084ce;
-  border-color: rgba(0, 163, 224, 0.5);
+  background: #ecfdf5;
+  color: #047857;
+  border-color: #00a859;
   box-shadow: var(--shadow-sm);
 }
 .cb-toggle {
   display: inline-flex;
   align-items: center;
   gap: 2px;
-  background: #f1f5f9;
-  border: 1px solid rgba(226, 232, 240, 0.85);
+  background: #e2e8f0;
+  border: 1px solid #cbd5e1;
   border-radius: 10px;
   padding: 3px;
   flex-shrink: 0;
@@ -115,7 +134,7 @@
   font: inherit;
   font-size: 12.5px;
   font-weight: 600;
-  color: #475569;
+  color: #334155;
   white-space: nowrap;
   cursor: pointer;
   transition:
@@ -128,11 +147,11 @@
   color: #0f172a;
 }
 .cb-toggle button.is-on {
-  background: #ffffff;
-  border-color: rgba(0, 163, 224, 0.35);
-  color: #0084ce;
+  background: #0084ce;
+  border-color: #0069b4;
+  color: #ffffff;
   font-weight: 700;
-  box-shadow: var(--shadow-xs);
+  box-shadow: 0 2px 6px rgba(0, 132, 206, 0.28);
 }
 
 .cb-card {

@@ -7,15 +7,16 @@
     Roboto, sans-serif;
   font-family: var(--font-sans);
   color: #0f172a;
-  background: #f8fafc;
+  background: #e2e8f0;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 
   /* Official Saudi German Health (SGH) Brand Tokens — aligned with PRO_Project */
-  --background: #f8fafc;
+  --background: #e2e8f0;
   --foreground: #0f172a;
   --card: #ffffff;
   --card-foreground: #0f172a;
+  --app-bg-gradient: linear-gradient(135deg, #dde5ee 0%, #e3eaf2 34%, #dbece5 68%, #cde7dc 100%);
 
   --sgh-cyan: #00a3e0;
   --sgh-cyan-light: #38bdf8;
@@ -50,7 +51,7 @@
   --sgh-glow-button: 0 1px 2px rgba(0, 132, 206, 0.2);
 
   /* Semantic Surface & Brand Mappings — PRO_Project tokens */
-  --canvas: #f8fafc;
+  --canvas: #e2e8f0;
   --surface: #ffffff;
   --surface-subtle: #f8fafc;
   --brand-soft: #e6f4fb;
@@ -66,14 +67,14 @@
   --teal: #059669;
   --teal-light: #ecfdf5;
   --text: #0f172a;
-  --muted: #64748b;
-  --muted-foreground: #64748b;
-  --secondary: #475569;
+  --muted: #475569;
+  --muted-foreground: #475569;
+  --secondary: #334155;
   --secondary-surface: #f1f5f9;
   --secondary-foreground: #1e293b;
-  --border: #e2e8f0;
-  --border-strong: #cbd5e1;
-  --input: #e2e8f0;
+  --border: #cbd5e1;
+  --border-strong: #94a3b8;
+  --input: #cbd5e1;
   --ring: #00a3e0;
   --success: #047857;
   --success-bg: #ecfdf5;
@@ -81,9 +82,9 @@
   --warning-bg: #fffbeb;
   --danger: #e11d48;
   --danger-bg: #fff1f2;
-  --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
-  --shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
-  --shadow-md: 0 4px 16px -2px rgba(15, 23, 42, 0.08), 0 2px 6px -2px rgba(15, 23, 42, 0.04);
+  --shadow-xs: 0 2px 5px -1px rgba(15, 23, 42, 0.06), 0 1px 2px -1px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 6px 18px -4px rgba(15, 23, 42, 0.07), 0 2px 6px -2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 10px 26px -4px rgba(15, 23, 42, 0.1), 0 4px 10px -2px rgba(15, 23, 42, 0.05);
   --shadow-lg: 0 12px 28px -4px rgba(15, 23, 42, 0.1), 0 4px 10px -4px rgba(15, 23, 42, 0.05);
   --shadow-xl: 0 20px 35px -6px rgba(15, 23, 42, 0.12), 0 8px 16px -6px rgba(15, 23, 42, 0.06);
   --brand-gradient: var(--sgh-gradient-brand);
@@ -110,8 +111,11 @@ html {
 body {
   margin: 0;
   min-width: 320px;
+  min-height: 100vh;
   overflow-x: hidden;
-  background: var(--background);
+  background-color: var(--background);
+  background-image: var(--app-bg-gradient);
+  background-attachment: fixed;
   color: var(--foreground);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -151,7 +155,7 @@ button:disabled {
   min-height: 100vh;
   display: grid;
   grid-template-columns: 264px minmax(0, 1fr);
-  background-color: var(--background);
+  background: transparent;
 }
 .app-shell:has(.sidebar.collapsed) {
   grid-template-columns: 82px minmax(0, 1fr);
@@ -634,10 +638,10 @@ button:disabled {
   gap: 12px;
   height: 64px;
   padding: 0 24px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
-  box-shadow: var(--shadow-xs);
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid #cbd5e1;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
 }
 .global-search {
   display: flex;
@@ -747,26 +751,37 @@ button:disabled {
 .page-content > * {
   animation: sgh-surface-in 220ms var(--ease-spring) both;
 }
-/* PRO_Project PageHeader */
+/* PRO_Project Elevated Light PageHeader Banner */
 .page-heading {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   margin-bottom: 24px;
+  padding: 20px 24px;
+  background: linear-gradient(135deg, #ffffff 0%, #ffffff 62%, #ecfdf5 100%);
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-left: 4px solid #00a859;
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
 }
 .page-heading > div:first-child {
   min-width: 0;
   flex: 1 1 320px;
 }
 .eyebrow {
-  display: block;
+  display: inline-flex;
+  align-items: center;
   margin-bottom: 6px;
-  color: #0084ce;
+  padding: 2px 8px;
+  color: #047857;
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  border-radius: 999px;
   font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .page-heading h1,
@@ -774,19 +789,20 @@ button:disabled {
 .empty-page h1 {
   margin: 0;
   color: #0f172a;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.3;
-  letter-spacing: -0.02em;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
 }
 .page-heading p,
 .case-header p,
 .empty-page p {
-  margin: 4px 0 0;
-  max-width: 48rem;
-  color: #64748b;
-  font-size: 12.5px;
-  line-height: 1.6;
+  margin: 6px 0 0;
+  max-width: 54rem;
+  color: #334155;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.55;
 }
 /* PRO_Project Button variants */
 .primary-button,
@@ -1070,8 +1086,8 @@ button:disabled {
 }
 .panel-title h2 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 700;
+  font-size: 16.5px;
+  font-weight: 800;
   color: #0f172a;
   letter-spacing: -0.015em;
 }
@@ -1333,9 +1349,11 @@ table {
   font-size: 13px;
 }
 th {
-  padding: 10px 12px 10px;
-  color: var(--muted);
-  font-size: 11px;
+  padding: 11px 12px;
+  color: #1e293b;
+  background: #f1f5f9;
+  border-bottom: 1px solid #cbd5e1;
+  font-size: 11.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-align: start;
@@ -2129,14 +2147,14 @@ td span + small {
 .pipeline-heading h2 {
   margin: 0;
   color: #0f172a;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 .pipeline-heading > span {
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 500;
+  color: #475569;
+  font-size: 12.5px;
+  font-weight: 600;
 }
 .pipeline-panel .pipeline-list {
   display: grid;
