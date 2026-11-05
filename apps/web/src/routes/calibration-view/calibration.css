@@ -59,15 +59,21 @@
   padding: 0 18px;
   border: 0;
   border-radius: 10px;
-  background: var(--accent);
+  background: var(--sgh-gradient-button);
   color: #fff;
   font: inherit;
   font-weight: 700;
+  box-shadow: var(--sgh-glow-button);
   cursor: pointer;
+  transition: all var(--motion-fast) var(--ease-spring);
+}
+.cb-btn:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
 }
 .cb-toggle {
   display: flex;
-  background: #f3f4fb;
+  background: #eef4f8;
   border-radius: 10px;
   padding: 4px;
 }
@@ -81,17 +87,20 @@
   font-weight: 600;
   color: var(--ink);
   cursor: pointer;
+  transition: all var(--motion-fast) var(--ease-spring);
 }
 .cb-toggle button.is-on {
-  background: var(--accent);
+  background: var(--sgh-gradient-button);
   color: #fff;
   font-weight: 700;
+  box-shadow: 0 2px 8px rgba(0, 105, 180, 0.22);
 }
 
 .cb-card {
   background: #fff;
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
 }
 .cb-pad {
   padding: 20px 24px;
@@ -105,15 +114,21 @@
 }
 .cb-link {
   border: 0;
-  background: none;
-  padding: 0;
+  background: var(--brand-soft);
+  padding: 4px 10px;
+  border-radius: 8px;
   font: inherit;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--accent);
   cursor: pointer;
+  text-decoration: none !important;
+  transition: all var(--motion-fast) var(--ease-spring);
 }
 .cb-link:hover {
-  text-decoration: underline;
+  background: rgba(0, 163, 224, 0.16);
+  transform: translateX(2px);
+  text-decoration: none !important;
 }
 
 /* كروت الجاهزية */
@@ -123,24 +138,43 @@
   gap: 16px;
 }
 .cb-kpi {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 4px;
   text-align: left;
-  background: #fff;
-  border: 1px solid var(--line);
+  background: var(--sgh-gradient-card);
+  border: 1px solid rgba(0, 132, 206, 0.16);
   border-radius: var(--radius-card);
-  padding: 16px 20px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow-sm);
   font: inherit;
   color: inherit;
   cursor: pointer;
+  transition:
+    transform var(--motion-standard) var(--ease-spring),
+    box-shadow var(--motion-standard) var(--ease-spring),
+    border-color var(--motion-standard) var(--ease-spring);
+}
+.cb-kpi::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sgh-gradient-brand);
+  opacity: 0.8;
 }
 .cb-kpi:hover {
-  border-color: var(--accent);
+  border-color: rgba(0, 163, 224, 0.45);
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
 }
 .cb-kpi.is-on {
   border: 2px solid var(--accent);
-  padding: 15px 19px;
+  padding: 17px 19px;
 }
 .cb-kpi__label {
   display: flex;
@@ -371,9 +405,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-decoration: none !important;
+  transition: color var(--motion-fast) var(--ease-spring);
 }
 .cb-cand__name:hover {
-  text-decoration: underline;
+  color: var(--accent);
+  text-decoration: none !important;
 }
 .cb-cand__meta {
   display: flex;

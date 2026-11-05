@@ -297,11 +297,8 @@ export function Sidebar({
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
       <div className="sidebar-header">
-        <div
-          className="brand-mark"
-          style={{ background: 'transparent', boxShadow: 'none', padding: 0 }}
-        >
-          <SghHeartSvg size={28} glow={true} />
+        <div className="brand-mark">
+          <SghHeartSvg size={26} glow={true} />
         </div>
         <div className="brand-copy">
           <strong>AssessFlow</strong>

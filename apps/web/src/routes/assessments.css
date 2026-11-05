@@ -45,17 +45,34 @@
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+  text-decoration: none !important;
+  transition:
+    transform var(--motion-fast) var(--ease-spring),
+    box-shadow var(--motion-fast) var(--ease-spring),
+    filter var(--motion-fast) var(--ease-spring),
+    border-color var(--motion-fast) var(--ease-spring);
 }
 .as-btn--primary {
-  background: var(--accent);
+  background: var(--sgh-gradient-button);
   color: #fff;
   border: 0;
+  box-shadow: var(--sgh-glow-button);
+}
+.as-btn--primary:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 105, 180, 0.34);
 }
 .as-btn--outline {
   background: #fff;
   color: var(--ink);
   border: 1px solid var(--line);
   font-weight: 600;
+}
+.as-btn--outline:hover {
+  border-color: rgba(0, 163, 224, 0.42);
+  background: #f5fbff;
+  transform: translateY(-1px);
 }
 
 /* كروت الأرقام */
@@ -65,27 +82,50 @@
   gap: 16px;
 }
 .as-kpi {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background: #fff;
-  border: 1px solid var(--line);
+  background: var(--sgh-gradient-card);
+  border: 1px solid rgba(0, 132, 206, 0.16);
   border-radius: var(--radius-card);
-  padding: 16px 20px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform var(--motion-standard) var(--ease-spring),
+    box-shadow var(--motion-standard) var(--ease-spring),
+    border-color var(--motion-standard) var(--ease-spring);
+}
+.as-kpi::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sgh-gradient-brand);
+  opacity: 0.8;
+}
+.as-kpi:hover {
+  transform: translateY(-3px);
+  border-color: rgba(0, 163, 224, 0.42);
+  box-shadow: var(--shadow-md);
 }
 .as-kpi--on {
   border: 2px solid var(--accent);
-  padding: 15px 19px;
+  padding: 17px 19px;
 }
 .as-kpi span {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--muted);
 }
 .as-kpi b {
   font-size: 34px;
   font-weight: 800;
   line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 .as-kpi small {
   font-size: 13px;
@@ -99,6 +139,7 @@
   background: #fff;
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 
@@ -113,18 +154,24 @@
   border: 0;
   border-radius: 99px;
   padding: 6px 14px;
-  background: #f3f4fb;
+  background: #eef4f8;
   font: inherit;
   font-size: 13px;
   font-weight: 600;
   color: var(--ink);
   cursor: pointer;
+  transition: all var(--motion-fast) var(--ease-spring);
+}
+.as-tab:hover:not(:disabled) {
+  background: var(--brand-soft);
+  color: var(--accent);
 }
 .as-tab.is-on,
 .as-tab--primary {
-  background: var(--accent);
+  background: var(--sgh-gradient-button);
   color: #fff;
   font-weight: 700;
+  box-shadow: 0 3px 10px rgba(0, 105, 180, 0.22);
 }
 .as-tab:disabled {
   opacity: 0.5;
@@ -139,7 +186,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  background: #eef0ff;
+  background: var(--brand-soft);
   color: var(--accent);
   font-size: 13px;
   font-weight: 700;
@@ -199,11 +246,11 @@
   box-sizing: border-box;
 }
 .as-row:not(.as-row--head):hover {
-  background: #f3f4fb;
+  background: #f4fafe;
 }
 .as-row--head {
   min-height: 44px;
-  background: #fafafd;
+  background: #f7fafc;
   border-top: 1px solid var(--line);
   font-size: 13px;
   font-weight: 700;
@@ -224,7 +271,8 @@
   width: 36px;
   height: 36px;
   border-radius: 99px;
-  background: #eef0ff;
+  background: var(--brand-soft);
+  border: 1px solid rgba(0, 163, 224, 0.2);
   color: var(--accent);
   font-weight: 700;
   font-size: 13px;
@@ -242,10 +290,13 @@
   justify-content: center;
   color: var(--accent);
   font-weight: 700;
-  text-decoration: none;
+  text-decoration: none !important;
+  transition: all var(--motion-fast) var(--ease-spring);
 }
 .as-open:hover {
-  background: #eef0ff;
+  background: var(--brand-soft);
+  border-color: rgba(0, 163, 224, 0.42);
+  transform: translateX(2px);
 }
 
 /* الـ chip: ميطلعش برا عموده أبداً */
@@ -262,8 +313,8 @@
   padding: 3px 10px;
 }
 .as-chip--indigo {
-  background: #eef0ff;
-  color: #4338ca;
+  background: var(--brand-soft);
+  color: var(--accent);
 }
 .as-chip--gray {
   background: #eef0f5;

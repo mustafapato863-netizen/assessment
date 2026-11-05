@@ -53,27 +53,50 @@
   gap: 16px;
 }
 .dv-kpi {
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  background: #fff;
-  border: 1px solid var(--line);
+  background: var(--sgh-gradient-card);
+  border: 1px solid rgba(0, 132, 206, 0.16);
   border-radius: var(--radius-card);
-  padding: 16px 20px;
+  padding: 18px 20px;
+  box-shadow: var(--shadow-sm);
+  transition:
+    transform var(--motion-standard) var(--ease-spring),
+    box-shadow var(--motion-standard) var(--ease-spring),
+    border-color var(--motion-standard) var(--ease-spring);
+}
+.dv-kpi::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--sgh-gradient-brand);
+  opacity: 0.8;
+}
+.dv-kpi:hover {
+  transform: translateY(-3px);
+  border-color: rgba(0, 163, 224, 0.42);
+  box-shadow: var(--shadow-md);
 }
 .dv-kpi--on {
   border: 2px solid var(--accent);
-  padding: 15px 19px;
+  padding: 17px 19px;
 }
 .dv-kpi span {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--muted);
 }
 .dv-kpi b {
   font-size: 34px;
   font-weight: 800;
   line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 .dv-kpi small {
   font-size: 13px;
@@ -90,6 +113,7 @@
   background: #fff;
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 .dv-card__head {
@@ -129,7 +153,8 @@
   width: 36px;
   height: 36px;
   border-radius: 99px;
-  background: #eef0ff;
+  background: var(--brand-soft);
+  border: 1px solid rgba(0, 163, 224, 0.2);
   color: var(--accent);
   font-weight: 700;
   font-size: 13px;
@@ -145,22 +170,28 @@
 }
 .dv-link {
   border: 0;
-  background: none;
-  padding: 0;
+  background: var(--brand-soft);
+  padding: 5px 11px;
+  border-radius: 8px;
   font: inherit;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--accent);
   cursor: pointer;
-  text-decoration: none;
+  text-decoration: none !important;
   white-space: nowrap;
+  transition: all var(--motion-fast) var(--ease-spring);
 }
 .dv-link:hover {
-  text-decoration: underline;
+  background: rgba(0, 163, 224, 0.16);
+  transform: translateX(2px);
+  text-decoration: none !important;
 }
 
 .dv-progress {
   margin: 0 24px 16px;
-  background: #f3f4fb;
+  background: #f2f9fd;
+  border: 1px solid rgba(0, 163, 224, 0.16);
   border-radius: 12px;
   padding: 14px 16px;
   display: flex;
@@ -173,15 +204,16 @@
 }
 .dv-bar {
   height: 8px;
-  background: #dde0f3;
+  background: rgba(0, 105, 180, 0.12);
   border-radius: 99px;
   overflow: hidden;
 }
 .dv-bar span {
   display: block;
   height: 100%;
-  background: var(--accent);
+  background: var(--sgh-gradient-brand);
   border-radius: 99px;
+  transition: width 0.55s var(--ease-spring);
 }
 
 .dv-card > h2 {
@@ -306,21 +338,31 @@
   font-weight: 700;
   cursor: pointer;
   border: 0;
+  transition: all var(--motion-fast) var(--ease-spring);
 }
 .dv-btn--primary {
-  background: var(--accent);
+  background: var(--sgh-gradient-button);
   color: #fff;
+  box-shadow: var(--sgh-glow-button);
+}
+.dv-btn--primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
 }
 .dv-btn--primary:disabled {
-  background: #dde0f3;
+  background: #dde5ed;
   color: #454a61;
+  box-shadow: none;
   cursor: not-allowed;
 }
 .dv-btn--ghost {
   align-self: flex-start;
   background: #fff;
-  border: 1px solid var(--accent);
+  border: 1px solid rgba(0, 132, 206, 0.35);
   color: var(--accent);
+}
+.dv-btn--ghost:hover {
+  background: var(--brand-soft);
 }
 
 /* قايمة الخطط */
@@ -343,10 +385,11 @@
   color: inherit;
   text-align: left;
   cursor: pointer;
+  transition: background var(--motion-fast) var(--ease-spring);
 }
 .dv-plan:hover,
 .dv-plan.is-on {
-  background: #f3f4fb;
+  background: #eef8fd;
 }
 .dv-plan.is-on {
   border-left-color: var(--accent);
