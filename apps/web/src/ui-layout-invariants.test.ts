@@ -21,10 +21,12 @@ describe('Frontend UI & Layout Invariants', () => {
   it('defines canonical :root tokens and synchronizes collapsed sidebar grid track', () => {
     expect(stylesCss).toContain('--font: var(--font-sans);');
     expect(stylesCss).toContain('--font-mono:');
+    expect(stylesCss).toContain('--background: #f8fafc;');
+    expect(stylesCss).toContain('--primary: #0084ce;');
     expect(stylesCss).toContain('--radius-card: 16px;');
-    expect(stylesCss).toContain('--radius-control: 10px;');
+    expect(stylesCss).toContain('--radius-control: 8px;');
     expect(stylesCss).toContain('--radius-avatar: 999px;');
-    expect(stylesCss).toContain('--control-height: 40px;');
+    expect(stylesCss).toContain('--control-height: 38px;');
     expect(stylesCss).toContain('--sgh-cyan-primary: #00a3e0;');
     expect(stylesCss).toContain('--sgh-emerald-primary: #00a859;');
     expect(stylesCss).toContain('--sgh-gradient-brand:');
