@@ -169,12 +169,13 @@ export function AccessAccountsPanel() {
         title="Company access and roles"
         action={<span className="soft-count">@saudigerman.com only</span>}
       />
-      <div style={{ padding: 16 }}>
+      <div>
         <div className="pipeline-note" role="note" style={{ marginBottom: 16 }}>
           <LockKeyhole size={15} />
           <span>
             Accounts sign in here with a company email ending in @saudigerman.com and a password set
-            by an Assessor or System Admin. Passwords are stored securely and never shown in this list.
+            by an Assessor or System Admin. Passwords are stored securely and never shown in this
+            list.
           </span>
         </div>
 

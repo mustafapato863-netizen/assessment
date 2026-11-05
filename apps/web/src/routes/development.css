@@ -59,7 +59,14 @@
   white-space: nowrap;
 }
 .dv-empty {
-  color: #64748b;
+  margin: 0;
+  padding: 20px 24px;
+  background: #ffffff;
+  border: 1px solid rgba(226, 232, 240, 0.85);
+  border-radius: 16px;
+  box-shadow: var(--shadow-xs);
+  color: #475569;
+  font-size: 13.5px;
 }
 .dv-good {
   color: #047857;

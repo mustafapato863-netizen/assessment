@@ -1062,6 +1062,7 @@ button:disabled {
   background: #ffffff;
   border: 1px solid rgba(226, 232, 240, 0.85);
   border-radius: 16px;
+  padding: 20px 24px;
   box-shadow: var(--shadow-xs);
   transition:
     box-shadow 180ms var(--ease-spring),
@@ -1070,7 +1071,7 @@ button:disabled {
 .task-panel,
 .pipeline-panel,
 .recent-panel {
-  padding: 20px;
+  padding: 20px 24px;
 }
 .panel-header {
   display: flex;
@@ -2497,31 +2498,35 @@ td span + small {
 
 .case-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(230px, 270px);
-  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 280px);
+  gap: 18px;
 }
 .case-main,
 .case-rail {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: 16px;
 }
 .case-summary,
 .decision-panel,
 .override-panel,
+.decision-summary-panel,
+.admin-reopen-panel,
 .next-panel,
-.case-rail .panel,
 .plan-panel,
 .events-panel,
 .evidence-panel,
 .result-panel,
 .development-panel {
-  padding: 18px;
+  padding: 20px 24px;
+}
+.case-rail .panel {
+  padding: 18px 20px;
 }
 .decision-panel,
 .result-panel,
 .override-panel {
-  border-top: 2px solid #e0e7ff;
+  border-top: 2px solid #bae6fd;
 }
 .summary-grid {
   display: grid;
@@ -2575,9 +2580,9 @@ td span + small {
   line-height: 1.55;
 }
 .panel-intro {
-  margin: -4px 0 16px;
-  color: var(--muted);
-  font-size: 12px;
+  margin: -2px 0 16px;
+  color: #475569;
+  font-size: 13px;
   line-height: 1.55;
 }
 .criteria-table {
@@ -2640,13 +2645,16 @@ td span + small {
   margin-top: 17px;
 }
 .admin-reopen-panel {
-  border-color: #c7d2fe;
-  background: linear-gradient(135deg, #fff, #f7f8ff);
+  padding: 20px 24px;
+  border-color: rgba(186, 230, 253, 0.9);
+  border-left: 4px solid #0084ce;
+  background: linear-gradient(135deg, #ffffff 0%, #f8fafc 60%, #f0f9ff 100%);
 }
 .admin-reopen-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 10px;
+  margin-top: 4px;
 }
 .admin-reopen-actions .secondary-button[aria-pressed='true'] {
   color: var(--indigo-deep);
@@ -3482,6 +3490,9 @@ td span + small {
     width: 30px;
     height: 30px;
   }
+  .panel:not(.settings-dialog-card):not(.user-dropdown-menu):not(.action-queue-section):not(
+      .ai-copilot-card
+    ),
   .task-panel,
   .pipeline-panel,
   .recent-panel,
@@ -3489,6 +3500,8 @@ td span + small {
   .case-summary,
   .decision-panel,
   .override-panel,
+  .decision-summary-panel,
+  .admin-reopen-panel,
   .next-panel,
   .case-rail .panel,
   .plan-panel,
@@ -4732,11 +4745,15 @@ td span + small {
   background: #ffffff;
   border: 1px solid var(--border);
   border-radius: 14px;
+  padding: 0;
   width: 100%;
   max-width: 620px;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   overflow: hidden;
   animation: modalPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.ai-copilot-card.panel {
+  padding: 0;
 }
 
 .settings-dialog-header {
@@ -5334,6 +5351,7 @@ td span + small {
   top: calc(100% + 8px);
   right: 0;
   width: 260px;
+  padding: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
