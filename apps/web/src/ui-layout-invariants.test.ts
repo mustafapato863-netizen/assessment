@@ -155,6 +155,11 @@ describe('Frontend UI & Layout Invariants', () => {
 
     expect(administrationCss).toMatch(/\.administration-heading\s*\{[^}]*padding:\s*20px 24px;/s);
     expect(administrationCss).toMatch(/\.administration-card\s*\{[^}]*padding:\s*20px 24px;/s);
+    expect(administrationCss).toContain('.administration-page .sr-only');
+    expect(stylesCss).toContain('.sr-only {');
+    expect(administrationCss).toMatch(/\.admin-account-grid\s*\{[^}]*padding:\s*14px 16px;/s);
+    expect(administrationCss).toMatch(/\.admin-row-actions\s*\{[^}]*flex-wrap:\s*nowrap;/s);
+    expect(administrationCss).toMatch(/\.admin-audit-grid\s*\{[^}]*padding:\s*12px 16px;/s);
 
     expect(calibrationCss).toMatch(/\.cb-top\s*\{[^}]*padding:\s*20px 24px;/s);
     expect(calibrationCss).toMatch(/\.cb-pad\s*\{\s*padding:\s*20px 24px;/s);
