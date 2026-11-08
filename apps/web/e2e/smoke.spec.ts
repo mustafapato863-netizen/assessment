@@ -142,7 +142,9 @@ test.describe('AssessFlow End-to-End Workflow Smoke Spec', () => {
     );
 
     // Click "Submit evidence"
-    const submitEvidenceBtn = evidencePanel.getByRole('button', { name: /Submit assessor evidence/i });
+    const submitEvidenceBtn = evidencePanel.getByRole('button', {
+      name: /Submit assessor evidence/i,
+    });
     await expect(submitEvidenceBtn).toBeVisible();
     await submitEvidenceBtn.click();
 
@@ -191,9 +193,7 @@ test.describe('AssessFlow End-to-End Workflow Smoke Spec', () => {
     await submitRecBtn.click();
 
     // Verify transition to PENDING_APPROVAL and approval steps visible
-    await expect(page.locator('.case-header-side .status-badge')).toContainText(
-      'Pending approval',
-    );
+    await expect(page.locator('.case-header-side .status-badge')).toContainText('Pending approval');
     await expect(page.getByText(/Sequential approval steps \(2\)/i)).toBeVisible();
 
     // -------------------------------------------------------------
@@ -201,7 +201,9 @@ test.describe('AssessFlow End-to-End Workflow Smoke Spec', () => {
     // -------------------------------------------------------------
     // Step 1: HR Approver (first pending step card in sequence order)
     await expect(page.getByText('Step 1: HR Approver')).toBeVisible();
-    const hrComment = page.getByPlaceholder('Provide context for approval, changes, or rejection…').nth(0);
+    const hrComment = page
+      .getByPlaceholder('Provide context for approval, changes, or rejection…')
+      .nth(0);
     await hrComment.fill('HR talent governance criteria fully validated.');
 
     const approveBtn1 = page.getByRole('button', { name: /^Approve$/i }).nth(0);

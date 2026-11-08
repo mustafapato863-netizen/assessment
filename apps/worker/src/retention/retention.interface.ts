@@ -12,12 +12,7 @@
  */
 
 export type RetentionCategory =
-  | 'CASE_RECORD'
-  | 'ASSESSOR_EVIDENCE'
-  | 'ACCESS_LOG'
-  | 'AUDIT_EVENT'
-  | 'EXPORT'
-  | string;
+  'CASE_RECORD' | 'ASSESSOR_EVIDENCE' | 'ACCESS_LOG' | 'AUDIT_EVENT' | 'EXPORT' | string;
 
 export interface RetentionPolicyItem {
   id?: string;
@@ -53,10 +48,7 @@ export interface RetentionReviewFlag {
 }
 
 export type RetentionPolicyEvaluationStatus =
-  | 'SKIPPED_LEGAL_HOLD'
-  | 'SKIPPED_INACTIVE'
-  | 'SKIPPED_INDEFINITE'
-  | 'EVALUATED';
+  'SKIPPED_LEGAL_HOLD' | 'SKIPPED_INACTIVE' | 'SKIPPED_INDEFINITE' | 'EVALUATED';
 
 export interface RetentionEvaluationSummary {
   category: RetentionCategory;
@@ -90,7 +82,10 @@ export interface RetentionRepository {
 /**
  * Standard BIZ-008 Baseline Policy Configurations.
  */
-export const BIZ_008_RETENTION_STANDARDS: Record<string, { days: number | null; defaultHold: boolean }> = {
+export const BIZ_008_RETENTION_STANDARDS: Record<
+  string,
+  { days: number | null; defaultHold: boolean }
+> = {
   CASE_RECORD: { days: 7 * 365, defaultHold: true }, // 2555 days (7 years)
   ASSESSOR_EVIDENCE: { days: 3 * 365, defaultHold: true }, // 1095 days (3 years)
   ACCESS_LOG: { days: 365, defaultHold: true }, // 365 days (1 year)

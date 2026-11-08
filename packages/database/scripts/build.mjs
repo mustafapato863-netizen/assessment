@@ -37,8 +37,15 @@ if (result.status === 0) {
 
 // Check if failure was specifically the Windows DLL file lock on rename
 const output = (result.stdout || '') + (result.stderr || '');
-if (output.includes('query_engine-windows.dll.node') && output.includes('EPERM') && existsSync(clientIndex) && existsSync(engineDll)) {
-  console.log('[Prisma Generate] Generated client and query engine already present (Windows DLL locked by active IDE process). Preserving existing generated client.');
+if (
+  output.includes('query_engine-windows.dll.node') &&
+  output.includes('EPERM') &&
+  existsSync(clientIndex) &&
+  existsSync(engineDll)
+) {
+  console.log(
+    '[Prisma Generate] Generated client and query engine already present (Windows DLL locked by active IDE process). Preserving existing generated client.',
+  );
   cleanTmpFiles();
   process.exit(0);
 }

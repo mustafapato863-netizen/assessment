@@ -13,9 +13,7 @@ if (typeof process.loadEnvFile === 'function') {
 
 const env = {
   ...process.env,
-  DATABASE_URL:
-    process.env.DATABASE_URL ??
-    'postgresql://postgres:123456@localhost:5432/asses_db',
+  DATABASE_URL: process.env.DATABASE_URL ?? 'postgresql://postgres:123456@localhost:5432/asses_db',
 };
 
 const prismaCli = resolve('node_modules', 'prisma', 'build', 'index.js');

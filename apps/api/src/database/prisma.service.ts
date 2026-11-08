@@ -89,7 +89,14 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       this.logger.log(`Executing Prisma push using schema: ${schemaPath}`);
       const result = spawnSync(
         process.execPath,
-        [prismaCli, 'db', 'push', `--schema=${schemaPath}`, '--accept-data-loss', '--skip-generate'],
+        [
+          prismaCli,
+          'db',
+          'push',
+          `--schema=${schemaPath}`,
+          '--accept-data-loss',
+          '--skip-generate',
+        ],
         {
           env: { ...process.env },
           stdio: 'inherit',

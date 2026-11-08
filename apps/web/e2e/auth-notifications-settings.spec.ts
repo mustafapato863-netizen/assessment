@@ -13,7 +13,9 @@ test.describe('Enterprise Auth, Notification Center, and Topbar Settings Specs',
     await expect(cards).toHaveCount(5);
 
     // Select Dr. Ahmed Mansour (Lead Assessor)
-    const assessorCard = page.locator('.demo-persona-card').filter({ hasText: 'Dr. Ahmed Mansour' });
+    const assessorCard = page
+      .locator('.demo-persona-card')
+      .filter({ hasText: 'Dr. Ahmed Mansour' });
     await expect(assessorCard).toBeVisible();
     await assessorCard.click();
 
@@ -99,6 +101,8 @@ test.describe('Enterprise Auth, Notification Center, and Topbar Settings Specs',
     // Verify dropdown closes and Topbar updates
     await expect(dropdown).not.toBeVisible();
     await expect(page.locator('.topbar-profile strong')).toHaveText('Mona Zaki');
-    await expect(page.locator('.topbar-profile small')).toHaveText('Talent & Leadership Development Lead');
+    await expect(page.locator('.topbar-profile small')).toHaveText(
+      'Talent & Leadership Development Lead',
+    );
   });
 });

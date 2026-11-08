@@ -36,7 +36,8 @@ export async function createCaseViaApi(
     assessmentReason: 'PROMOTION',
     targetRole: 'Senior Platform Engineer',
     targetLevel: 'L4',
-    justification: 'Consistent high delivery and cross-functional leadership in platform engineering.',
+    justification:
+      'Consistent high delivery and cross-functional leadership in platform engineering.',
     priority: 'NORMAL',
     ...payload,
   };
