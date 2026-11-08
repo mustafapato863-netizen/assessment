@@ -23,7 +23,9 @@ test.describe('AssessFlow Talent Calibration & 9-Box Matrix (UX-18)', () => {
     await engineeringButton.click();
 
     // Verify cross-department comparison table
-    await expect(page.getByRole('heading', { name: /Cross-Department Readiness Distribution/i })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: /Cross-Department Readiness Distribution/i }),
+    ).toBeVisible();
     await expect(page.getByRole('cell', { name: 'Engineering' })).toBeVisible();
 
     // Test filtering by another department (e.g. Product)

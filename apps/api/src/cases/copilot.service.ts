@@ -30,28 +30,32 @@ const BIAS_DICTIONARY: Array<{
     category: 'GENDER_CODED',
     explanation:
       'Interpersonal feedback should focus on mentorship effectiveness and stakeholder collaboration rather than gendered caregiving traits.',
-    objectiveAlternative: 'Supportive team mentor; fosters psychological safety and cross-functional rapport.',
+    objectiveAlternative:
+      'Supportive team mentor; fosters psychological safety and cross-functional rapport.',
   },
   {
     pattern: /\b(young and hungry|lacks energy|too old|old school|seasoned veteran)\b/i,
     category: 'AGE_BIAS',
     explanation:
       'Age-associated or generational generalizations should be replaced with measurable execution velocity and domain experience.',
-    objectiveAlternative: 'Demonstrates high initiative / Leverages deep architectural patterns from previous engagements.',
+    objectiveAlternative:
+      'Demonstrates high initiative / Leverages deep architectural patterns from previous engagements.',
   },
   {
     pattern: /\b(good vibe|bad vibe|gut feeling|doesn't feel like a leader|culture fit)\b/i,
     category: 'SUBJECTIVE_PERSONALITY',
     explanation:
       'Subjective intuition or "vibe" checks introduce confirmation bias. Ground evaluations in explicit competency rubric criteria.',
-    objectiveAlternative: 'Meets rubric criteria for cross-functional influence and strategic clarity.',
+    objectiveAlternative:
+      'Meets rubric criteria for cross-functional influence and strategic clarity.',
   },
   {
     pattern: /\b(just gets lucky|someone else probably did it|carried by the team)\b/i,
     category: 'VAGUE_ATTRIBUTION',
     explanation:
       'Dismissive attribution minimizes candidate agency without evidence. Validate candidate individual contributions through commit or spec logs.',
-    objectiveAlternative: 'Candidate spearheaded the delivery milestones documented in the technical architecture review.',
+    objectiveAlternative:
+      'Candidate spearheaded the delivery milestones documented in the technical architecture review.',
   },
 ];
 
@@ -59,7 +63,10 @@ const BIAS_DICTIONARY: Array<{
 export class CopilotService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async synthesize(caseId: string, _input: CopilotSynthesizeInput): Promise<CopilotSynthesizeResponse> {
+  async synthesize(
+    caseId: string,
+    _input: CopilotSynthesizeInput,
+  ): Promise<CopilotSynthesizeResponse> {
     let caseData: any = null;
 
     if (this.prisma.enabled) {
@@ -81,7 +88,9 @@ export class CopilotService {
       .map((e: any) => `${e.summary} Strengths: ${e.strengths ?? 'N/A'}. Gaps: ${e.gaps ?? 'N/A'}`)
       .join(' ');
 
-    const hasStrongDelivery = /deliver|lead|architect|success|master|exceed|scal/i.test(evidenceSummaries);
+    const hasStrongDelivery = /deliver|lead|architect|success|master|exceed|scal/i.test(
+      evidenceSummaries,
+    );
     const hasCriticalGaps = /gap|miss|fail|lack|risk|behind|inconsistent/i.test(evidenceSummaries);
 
     let suggestedOutcome: ResultCode = 'READY_WITH_DEVELOPMENT';
@@ -161,10 +170,7 @@ export class CopilotService {
     let sanitizedSuggestion = text;
     for (const warning of warnings) {
       const regex = new RegExp(`\\b${warning.phrase}\\b`, 'gi');
-      sanitizedSuggestion = sanitizedSuggestion.replace(
-        regex,
-        `[${warning.objectiveAlternative}]`,
-      );
+      sanitizedSuggestion = sanitizedSuggestion.replace(regex, `[${warning.objectiveAlternative}]`);
     }
 
     return {

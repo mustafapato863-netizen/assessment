@@ -47,18 +47,26 @@ jobs:
       - run: pnpm build
 
       - name: Boot Docker Compose services (PostgreSQL & Redis)
-        run: docker compose up -d
+        # The full compose file also publishes the web container on host port 3000.
+        # The smoke test starts the API on that same port, so only the datastores may come up.
+        run: docker compose up -d postgres redis
 
       - name: Wait for PostgreSQL and Redis readiness
         run: |
+          ready=0
           for i in $(seq 1 30); do
             echo "Checking database readiness ($i/30)..."
             if docker compose exec -T postgres pg_isready -U assessflow -d asses_db && docker compose exec -T redis redis-cli ping; then
               echo "PostgreSQL and Redis are ready!"
+              ready=1
               break
             fi
             sleep 2
           done
+          if [ "$ready" != 1 ]; then
+            echo "PostgreSQL or Redis did not become ready in time."
+            exit 1
+          fi
 
       - name: Push database schema
         run: pnpm --filter @assessflow/database db:push
@@ -106,6 +114,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @assessflow/contracts build
+      # The Prisma client is gitignored. Nest cannot typecheck `@assessflow/database` until it is generated.
+      - run: pnpm --filter @assessflow/database build
       - run: pnpm --filter @assessflow/api build
 
       - name: Verify OpenAPI v1.1 route parity

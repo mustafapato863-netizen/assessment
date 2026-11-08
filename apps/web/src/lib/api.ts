@@ -67,12 +67,7 @@ export type AccessRole =
   | 'EmployeeManager';
 
 export type AccessScope =
-  | 'NONE'
-  | 'ORGANIZATION'
-  | 'DEPARTMENTS'
-  | 'DIRECT_REPORTS'
-  | 'ASSIGNED'
-  | 'SELF';
+  'NONE' | 'ORGANIZATION' | 'DEPARTMENTS' | 'DIRECT_REPORTS' | 'ASSIGNED' | 'SELF';
 
 export interface AccessAccount {
   id: string;
@@ -207,6 +202,27 @@ export class ApiRequestError extends Error {
   }
 }
 
+/**
+ * Nest's default exception body is `{ message, error: "Unauthorized", statusCode }`.
+ * Domain errors use `{ error: { message, code, fieldErrors } }`. Read both.
+ */
+export function apiErrorMessage(payload: unknown): string {
+  const fallback = 'The request could not be completed.';
+  if (!payload || typeof payload !== 'object') return fallback;
+  const body = payload as { message?: unknown; error?: unknown };
+  const nested = body.error;
+  if (nested && typeof nested === 'object' && 'message' in nested) {
+    const message = (nested as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  if (typeof body.message === 'string' && body.message.trim()) return body.message;
+  if (Array.isArray(body.message)) {
+    const text = body.message.filter((item): item is string => typeof item === 'string').join(' ');
+    if (text.trim()) return text;
+  }
+  return fallback;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const currentBase = activeBaseUrl;
   const activeUser = getActiveUser();
@@ -238,12 +254,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     };
   };
   if (!response.ok) {
+    const error = payload.error && typeof payload.error === 'object' ? payload.error : undefined;
     throw new ApiRequestError(
-      payload.error?.message ?? 'The request could not be completed.',
-      payload.error?.code,
-      payload.error?.fieldErrors,
-      payload.error?.scanStatus,
-      payload.error?.scanReason,
+      apiErrorMessage(payload),
+      error?.code,
+      error?.fieldErrors,
+      error?.scanStatus,
+      error?.scanReason,
     );
   }
   return payload;

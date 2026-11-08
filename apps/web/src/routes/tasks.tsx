@@ -15,7 +15,13 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { copy, type Copy } from '../lib/labels';
-import { CaseCodeDisplay, LoadingRows, PageHeading, PanelHeader, StatusBadge } from '../components/ui';
+import {
+  CaseCodeDisplay,
+  LoadingRows,
+  PageHeading,
+  PanelHeader,
+  StatusBadge,
+} from '../components/ui';
 import { sortPriorityActionCases } from './overview-utils';
 
 type TaskFilter = 'ALL' | 'URGENT' | 'APPROVALS' | 'EVALUATIONS';
@@ -123,7 +129,10 @@ export function TasksPage({
 
   const [activeFilter, setActiveFilter] = useState<TaskFilter>('ALL');
 
-  const { data, isLoading: tasksLoading } = useQuery({ queryKey: ['overview'], queryFn: api.overview });
+  const { data, isLoading: tasksLoading } = useQuery({
+    queryKey: ['overview'],
+    queryFn: api.overview,
+  });
   const { data: cases, isLoading: casesLoading } = useQuery({
     queryKey: ['cases'],
     queryFn: () => api.cases(),
@@ -244,7 +253,11 @@ export function TasksPage({
         <PanelHeader
           icon={<Inbox size={17} />}
           title="Cases in Actionable Queue"
-          action={<span className="soft-count">{filteredCases.length} cases · {filteredTasks.length} open tasks</span>}
+          action={
+            <span className="soft-count">
+              {filteredCases.length} cases · {filteredTasks.length} open tasks
+            </span>
+          }
         />
 
         {/* Task Filter Tabs */}
@@ -311,18 +324,23 @@ export function TasksPage({
           <div className="task-list large-task-list">
             {sortPriorityActionCases(
               filteredCases.map((caseItem) => {
-                const caseTasks = filteredTasks.filter((task) => task.caseCode === caseItem.caseCode);
+                const caseTasks = filteredTasks.filter(
+                  (task) => task.caseCode === caseItem.caseCode,
+                );
                 const dueDetails = getTaskDueDetails(caseTasks);
-                const dueTimes = caseTasks.map(getDueTime).filter((value): value is number => value !== null);
+                const dueTimes = caseTasks
+                  .map(getDueTime)
+                  .filter((value): value is number => value !== null);
                 const earliestDueTime = dueTimes.length ? Math.min(...dueTimes) : null;
                 return {
                   caseItem,
                   caseTasks,
                   dueDetails,
                   slaBreachRisk: dueDetails.overdue || dueDetails.urgent,
-                  daysRemaining: earliestDueTime === null
-                    ? Number.MAX_SAFE_INTEGER
-                    : (earliestDueTime - Date.now()) / DAY_MS,
+                  daysRemaining:
+                    earliestDueTime === null
+                      ? Number.MAX_SAFE_INTEGER
+                      : (earliestDueTime - Date.now()) / DAY_MS,
                   stage: caseItem.stage,
                   requestedAt: caseItem.requestedAt,
                 };
@@ -330,9 +348,19 @@ export function TasksPage({
             ).map(({ caseItem, caseTasks, dueDetails }) => {
               const urgencyTask = caseTasks.some(isUrgentTask);
               const isUrgent = dueDetails.overdue || urgencyTask;
-              const taskAction = caseTasks.map(getTaskActionLabel).find((label) => label !== 'Review Case')
-                ?? getTaskActionLabel({ title: '', caseCode: caseItem.caseCode, dueLabel: 'No due date', priority: 'NORMAL' });
-              const taskDescriptions = [...new Set(caseTasks.map((task) => getTaskDescription(task, caseItem.employeeName)))];
+              const taskAction =
+                caseTasks.map(getTaskActionLabel).find((label) => label !== 'Review Case') ??
+                getTaskActionLabel({
+                  title: '',
+                  caseCode: caseItem.caseCode,
+                  dueLabel: 'No due date',
+                  priority: 'NORMAL',
+                });
+              const taskDescriptions = [
+                ...new Set(
+                  caseTasks.map((task) => getTaskDescription(task, caseItem.employeeName)),
+                ),
+              ];
               return (
                 <div
                   className="task-row task-row-large task-card-interactive"
@@ -378,7 +406,9 @@ export function TasksPage({
                       <span>· {caseItem.stage}</span>
                       {!dueDetails.overdue && <span>· {dueDetails.label}</span>}
                     </span>
-                    <small style={{ color: 'var(--secondary)', display: 'block', marginTop: '4px' }}>
+                    <small
+                      style={{ color: 'var(--secondary)', display: 'block', marginTop: '4px' }}
+                    >
                       {taskDescriptions.join(' · ')}
                     </small>
                   </div>

@@ -38,7 +38,10 @@ test.describe('AssessFlow Accessibility (WCAG 2.2 AA) & axe-core Scan Specs', ()
     );
 
     if (criticalOrSerious.length > 0) {
-      console.warn('axe-core findings in Case Workspace:', JSON.stringify(criticalOrSerious, null, 2));
+      console.warn(
+        'axe-core findings in Case Workspace:',
+        JSON.stringify(criticalOrSerious, null, 2),
+      );
     }
 
     expect(criticalOrSerious).toEqual([]);
@@ -111,7 +114,10 @@ test.describe('AssessFlow Accessibility (WCAG 2.2 AA) & axe-core Scan Specs', ()
     );
 
     if (criticalOrSerious.length > 0) {
-      console.warn('axe-core findings in Approval View:', JSON.stringify(criticalOrSerious, null, 2));
+      console.warn(
+        'axe-core findings in Approval View:',
+        JSON.stringify(criticalOrSerious, null, 2),
+      );
     }
 
     expect(criticalOrSerious).toEqual([]);

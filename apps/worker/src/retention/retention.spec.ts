@@ -8,10 +8,7 @@ import {
 } from './retention-math';
 import { InMemoryRetentionRepository } from './retention.repository';
 import { RetentionJobProcessor } from './retention.job';
-import type {
-  RetentionCandidateRow,
-  RetentionPolicyItem,
-} from './retention.interface';
+import type { RetentionCandidateRow, RetentionPolicyItem } from './retention.interface';
 
 describe('Retention Policy Math & Hold-First Enforcement', () => {
   // Fixed evaluation timestamp for deterministic mathematical assertions

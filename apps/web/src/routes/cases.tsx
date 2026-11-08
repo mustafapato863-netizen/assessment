@@ -15,7 +15,11 @@ export function CasesPage({ onNew }: { onNew?: () => void } = {}) {
   const canCreateRequest = ['SYS_ADMIN', 'HR_ADMIN', 'DEV_LEAD', 'ASSESSOR'].includes(
     getActiveUser().role,
   );
-  const { data: rawCases, isLoading, isError } = useQuery({
+  const {
+    data: rawCases,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ['cases'],
     queryFn: () => api.cases(),
   });

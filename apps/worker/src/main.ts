@@ -241,4 +241,3 @@ const shutdown = async () => {
 };
 process.once('SIGTERM', () => void shutdown());
 process.once('SIGINT', () => void shutdown());
-

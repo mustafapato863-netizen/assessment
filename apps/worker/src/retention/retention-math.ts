@@ -74,7 +74,11 @@ export function evaluateCategoryPolicy(
   }
 
   // Step 3: Skip policies with indefinite retention (null or <= 0 retentionDays)
-  if (policy.retentionDays === null || policy.retentionDays === undefined || policy.retentionDays <= 0) {
+  if (
+    policy.retentionDays === null ||
+    policy.retentionDays === undefined ||
+    policy.retentionDays <= 0
+  ) {
     return {
       category: policy.category,
       legalHold: false,

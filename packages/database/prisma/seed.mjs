@@ -435,7 +435,8 @@ export async function seedDatabase(client = prisma) {
           create: {
             revision: 1,
             resultCode: 'READY_WITH_DEVELOPMENT',
-            evidenceSummary: 'Strong technical performance with a development focus on stakeholder communication.',
+            evidenceSummary:
+              'Strong technical performance with a development focus on stakeholder communication.',
             finalizedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
             finalizedBy: 'assessor-nadia',
           },
@@ -445,7 +446,8 @@ export async function seedDatabase(client = prisma) {
             revision: 1,
             code: 'READY_WITH_DEVELOPMENT',
             status: 'APPROVED',
-            rationale: 'Proceed with the target role after completing the communication development actions.',
+            rationale:
+              'Proceed with the target role after completing the communication development actions.',
             requiresDevelopment: true,
             requiresReassessment: false,
             submittedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
@@ -549,7 +551,8 @@ export async function seedDatabase(client = prisma) {
           create: {
             revision: 1,
             resultCode: 'READY_NOW',
-            evidenceSummary: 'Demonstrated the required capability for the realigned specialist role.',
+            evidenceSummary:
+              'Demonstrated the required capability for the realigned specialist role.',
             finalizedAt: new Date(Date.now() - 40 * 24 * 60 * 60 * 1000),
             finalizedBy: 'assessor-nadia',
           },
@@ -559,7 +562,8 @@ export async function seedDatabase(client = prisma) {
             revision: 1,
             code: 'READY_NOW',
             status: 'APPROVED',
-            rationale: 'Ready for the realigned role with no additional development actions required.',
+            rationale:
+              'Ready for the realigned role with no additional development actions required.',
             requiresDevelopment: false,
             requiresReassessment: false,
             submittedAt: new Date(Date.now() - 38 * 24 * 60 * 60 * 1000),
@@ -612,7 +616,8 @@ export async function seedDatabase(client = prisma) {
       targetLevelSnapshot: 'L5',
       managerSnapshot: 'Dr. Reem Hassan',
       departmentSnapshot: 'Clinical Operations',
-      justification: 'Mobility request paused until the mandatory clinical certification is complete.',
+      justification:
+        'Mobility request paused until the mandatory clinical certification is complete.',
       eligibility: {
         create: {
           policyVersion: 'v2026.1',
@@ -663,7 +668,8 @@ export async function seedDatabase(client = prisma) {
       targetLevelSnapshot: 'L4',
       managerSnapshot: 'Mariam Saad',
       departmentSnapshot: 'Customer Experience',
-      justification: 'Role realignment review completed for the new customer journey team structure.',
+      justification:
+        'Role realignment review completed for the new customer journey team structure.',
       eligibility: {
         create: {
           policyVersion: 'v2026.1',
@@ -676,7 +682,8 @@ export async function seedDatabase(client = prisma) {
         create: {
           revision: 1,
           resultCode: 'READY_NOW',
-          evidenceSummary: 'Consistent customer outcomes and strong coaching behavior were demonstrated.',
+          evidenceSummary:
+            'Consistent customer outcomes and strong coaching behavior were demonstrated.',
           strengths: 'Customer advocacy and team coaching',
           gaps: 'Continue building reporting discipline',
           finalizedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
@@ -708,7 +715,8 @@ export async function seedDatabase(client = prisma) {
       targetLevelSnapshot: 'L5',
       managerSnapshot: 'Ahmed El Masry',
       departmentSnapshot: 'Finance',
-      justification: 'Reassessment is due after completion of the financial partnering development plan.',
+      justification:
+        'Reassessment is due after completion of the financial partnering development plan.',
       eligibility: {
         create: {
           policyVersion: 'v2026.1',
@@ -721,7 +729,8 @@ export async function seedDatabase(client = prisma) {
         create: {
           revision: 1,
           resultCode: 'READY_WITH_DEVELOPMENT',
-          evidenceSummary: 'Strong analytical capability with a reassessment required after development actions.',
+          evidenceSummary:
+            'Strong analytical capability with a reassessment required after development actions.',
           finalizedAt: new Date(Date.now() - 65 * 24 * 60 * 60 * 1000),
           finalizedBy: 'assessor-nadia',
         },
@@ -778,7 +787,8 @@ export async function seedDatabase(client = prisma) {
         create: {
           revision: 1,
           resultCode: 'READY_WITH_DEVELOPMENT',
-          evidenceSummary: 'Strong customer advocacy and coaching, with a development focus on workforce planning.',
+          evidenceSummary:
+            'Strong customer advocacy and coaching, with a development focus on workforce planning.',
           strengths: 'Customer advocacy and team coaching',
           gaps: 'Workforce planning and capacity forecasting',
           finalizedAt: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000),
@@ -790,7 +800,8 @@ export async function seedDatabase(client = prisma) {
           revision: 1,
           code: 'READY_WITH_DEVELOPMENT',
           status: 'DRAFT',
-          rationale: 'Recommend promotion after a focused workforce planning development assignment.',
+          rationale:
+            'Recommend promotion after a focused workforce planning development assignment.',
           requiresDevelopment: true,
           requiresReassessment: false,
           createdBy: 'hr-demo',
@@ -821,7 +832,8 @@ export async function seedDatabase(client = prisma) {
       targetLevelSnapshot: 'L5',
       managerSnapshot: 'Dr. Reem Hassan',
       departmentSnapshot: 'Clinical Operations',
-      justification: 'Promotion request submitted for review of clinical operations leadership readiness.',
+      justification:
+        'Promotion request submitted for review of clinical operations leadership readiness.',
       eligibility: {
         create: {
           policyVersion: 'v2026.1',

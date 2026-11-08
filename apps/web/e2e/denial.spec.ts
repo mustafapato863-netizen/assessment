@@ -38,7 +38,9 @@ test.describe('AssessFlow Denial & Invariant Specs', () => {
 
     // Now, without refreshing the page, the UI still holds version 2. Attempt "Mark not eligible" with reason
     await page.getByRole('button', { name: /Mark not eligible/i }).click();
-    await page.locator('#eligibility-reason').fill('Conflicting decision attempt from stale session.');
+    await page
+      .locator('#eligibility-reason')
+      .fill('Conflicting decision attempt from stale session.');
     await page.getByRole('button', { name: /Confirm decision/i }).click();
 
     // Verify UI displays conflict alert (409) with refresh prompt
@@ -81,19 +83,19 @@ test.describe('AssessFlow Denial & Invariant Specs', () => {
     const attachment = await attRes.json();
 
     // Previewing before anti-malware scan completes is rejected with 422 SCAN_NOT_CLEAN
-    const previewRes = await request.get(
-      `${API_BASE_URL}/attachments/${attachment.id}/preview`,
-      {
-        headers: { 'x-actor-id': 'e2e-tester' },
-      },
-    );
+    const previewRes = await request.get(`${API_BASE_URL}/attachments/${attachment.id}/preview`, {
+      headers: { 'x-actor-id': 'e2e-tester' },
+    });
     expect(previewRes.status()).toBe(422);
     const previewBody = await previewRes.json();
     expect(previewBody.error?.code).toBe('SCAN_NOT_CLEAN');
 
     // 3. UI validation: Drawer prevents submission when required fields are missing
     await page.goto('/');
-    await page.getByRole('button', { name: /New assessment/i }).first().click();
+    await page
+      .getByRole('button', { name: /New assessment/i })
+      .first()
+      .click();
     const drawer = page.getByRole('dialog');
     await expect(drawer).toBeVisible();
 
@@ -142,7 +144,9 @@ test.describe('AssessFlow Denial & Invariant Specs', () => {
       evidencePanel.getByText('This evidence record is sealed and read-only for audit integrity.'),
     ).toBeVisible();
     await expect(textarea).toBeDisabled();
-    await expect(evidencePanel.getByRole('button', { name: /Submit assessor evidence/i })).not.toBeVisible();
+    await expect(
+      evidencePanel.getByRole('button', { name: /Submit assessor evidence/i }),
+    ).not.toBeVisible();
 
     // 4. API lifecycle immutability verification:
     // Once the assessment moves forward (finalize result), any attempt to submit new evidence

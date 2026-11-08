@@ -1,7 +1,8 @@
 export const PILOT_FLAGS = {
   /**
    * UX-18 / Phase 2 Calibration Workspace.
-   * Enabled for Talent Calibration.
+   * The web Dockerfile, Playwright, and `.env.example` set
+   * VITE_FEATURE_CALIBRATION=true. Any other value hides the module.
    */
-  calibration: true,
+  calibration: import.meta.env.VITE_FEATURE_CALIBRATION === 'true',
 } as const;

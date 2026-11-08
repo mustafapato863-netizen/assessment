@@ -23,7 +23,12 @@ export class RetentionJobProcessor {
     for (const policy of policies) {
       let rows: any[] = [];
       // Hold-first check: if legal hold is enabled or inactive, avoid unnecessary DB queries
-      if (!policy.legalHoldEnabled && policy.active && policy.retentionDays && policy.retentionDays > 0) {
+      if (
+        !policy.legalHoldEnabled &&
+        policy.active &&
+        policy.retentionDays &&
+        policy.retentionDays > 0
+      ) {
         rows = await this.repository.findCandidates(policy.category, limit);
       }
 

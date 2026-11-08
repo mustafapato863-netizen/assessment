@@ -14,7 +14,7 @@
     "start:api": "node apps/api/dist/main.js",
     "typecheck": "pnpm --filter @assessflow/contracts build && pnpm --filter @assessflow/database build && pnpm -r typecheck",
     "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
+    "test": "pnpm -r test && node --test scripts/ci-workflow.test.mjs",
     "format:check": "prettier --check package.json README.md \"apps/**/*.{ts,tsx,css,json,html}\" packages/contracts/package.json packages/contracts/src packages/database/package.json packages/database/prisma/seed.ts packages/database/scripts infra/bicep/README.md \".github/**/*.yml\"",
     "validate": "pnpm typecheck && pnpm test && pnpm build"
   },

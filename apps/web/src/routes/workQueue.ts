@@ -1,7 +1,11 @@
 // workQueue.js — منطق صفحة My work (من غير أي UI)
 
 const DAY = 86400000;
-const startOfDay = (d: Date | string) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x.getTime(); };
+const startOfDay = (d: Date | string) => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x.getTime();
+};
 
 export interface WorkItem {
   id: string;
