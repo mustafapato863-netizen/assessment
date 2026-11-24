@@ -5,6 +5,7 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { isUuid } from '../common/uuid.util';
 import {
   caseStatuses,
   adminEditRequestSchema,
@@ -3053,6 +3054,11 @@ export class PrismaCasesRepository {
   }
 
   async getAttachment(attachmentId: string): Promise<AttachmentSummary> {
+    if (!isUuid(attachmentId)) {
+      throw new NotFoundException(
+        this.error('ATTACHMENT_NOT_FOUND', `Attachment '${attachmentId}' not found.`),
+      );
+    }
     const found = await this.prisma.attachment.findUnique({
       where: { id: attachmentId },
     });

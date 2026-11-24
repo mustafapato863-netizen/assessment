@@ -18,6 +18,7 @@ import { verifyAppToken } from './app-token.util';
 import { isDevHeaderAuthEnabled } from './dev-auth';
 import { PrismaService } from '../database/prisma.service';
 import { caseScopeWhere } from '../access/access-accounts.service';
+import { isUuid } from '../common/uuid.util';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -185,7 +186,7 @@ export class RolesGuard implements CanActivate {
     const params = request.params as Record<string, string | undefined>;
     const body = request.body as { caseId?: string } | undefined;
     let caseId = params.caseId ?? body?.caseId;
-    if (!caseId && params.eventId) {
+    if (!caseId && isUuid(params.eventId)) {
       caseId = (
         await this.prisma.assessmentEvent.findUnique({
           where: { id: params.eventId },
@@ -193,7 +194,7 @@ export class RolesGuard implements CanActivate {
         })
       )?.caseId;
     }
-    if (!caseId && params.stepId) {
+    if (!caseId && isUuid(params.stepId)) {
       caseId = (
         await this.prisma.approvalStep.findUnique({
           where: { id: params.stepId },
@@ -202,6 +203,7 @@ export class RolesGuard implements CanActivate {
       )?.caseId;
     }
     if (!caseId) return;
+    if (!isUuid(caseId)) return;
     const record = await this.prisma.assessmentCase.findUnique({
       where: { id: caseId },
       select: { adminEditStage: true },
@@ -221,7 +223,7 @@ export class RolesGuard implements CanActivate {
     const params = request.params as Record<string, string | undefined>;
     const body = request.body as { caseId?: string } | undefined;
     let caseId = params.caseId ?? body?.caseId;
-    if (!caseId && params.eventId) {
+    if (!caseId && isUuid(params.eventId)) {
       caseId = (
         await this.prisma?.assessmentEvent.findUnique({
           where: { id: params.eventId },
@@ -229,7 +231,7 @@ export class RolesGuard implements CanActivate {
         })
       )?.caseId;
     }
-    if (!caseId && params.stepId) {
+    if (!caseId && isUuid(params.stepId)) {
       caseId = (
         await this.prisma?.approvalStep.findUnique({
           where: { id: params.stepId },
@@ -238,6 +240,15 @@ export class RolesGuard implements CanActivate {
       )?.caseId;
     }
     if (!caseId && params.attachmentId) {
+      if (!isUuid(params.attachmentId)) {
+        throw new NotFoundException({
+          error: {
+            code: 'CASE_NOT_FOUND',
+            message: 'This assessment case could not be found.',
+            correlationId,
+          },
+        });
+      }
       caseId = (
         await this.prisma?.attachment.findUnique({
           where: { id: params.attachmentId },
@@ -246,6 +257,15 @@ export class RolesGuard implements CanActivate {
       )?.caseId;
     }
     if (!caseId) return;
+    if (!isUuid(caseId)) {
+      throw new NotFoundException({
+        error: {
+          code: 'CASE_NOT_FOUND',
+          message: 'This assessment case could not be found.',
+          correlationId,
+        },
+      });
+    }
     const match = await this.prisma?.assessmentCase.findFirst({
       where: { id: caseId, ...caseScopeWhere(actor) },
       select: { id: true },

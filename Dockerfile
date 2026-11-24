@@ -48,6 +48,9 @@ COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 COPY --from=builder /app/packages/database/scripts ./packages/database/scripts
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:8080/health || exit 1
+
 EXPOSE 8080
 
 CMD ["node", "apps/api/dist/main.js"]

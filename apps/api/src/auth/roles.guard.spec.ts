@@ -1,7 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Reflector } from '@nestjs/core';
-import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  ForbiddenException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { RolesGuard } from './roles.guard';
+import { createAppToken } from './app-token.util';
+import type { PrismaService } from '../database/prisma.service';
 import { ROUTE_PERMISSIONS } from './permissions.map';
 import { APP_ROLES, AppRole, AuthActor } from './auth.types';
 import { IS_PUBLIC_KEY, ROLES_KEY } from './roles.decorator';
@@ -274,6 +281,112 @@ describe('RolesGuard & RACI Matrix', () => {
           guard.canActivate(createMockExecutionContext({ actor: auditorActor })),
         ).toThrow(ForbiddenException);
       }
+    });
+  });
+});
+
+describe('RolesGuard invalid UUID scope ids', () => {
+  const originalEnv = { ...process.env };
+  const actor: AuthActor = {
+    id: '11111111-1111-4111-8111-111111111111',
+    name: 'Test Assessor',
+    roles: ['Assessor'],
+    scopeType: 'ORGANIZATION',
+    scopeValues: [],
+  };
+
+  afterEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  function createScopeGuard(prisma: unknown): RolesGuard {
+    const reflector = {
+      getAllAndOverride: (key: string) => {
+        if (key === IS_PUBLIC_KEY) return undefined;
+        if (key === ROLES_KEY) return ['Assessor'] as AppRole[];
+        return undefined;
+      },
+    } as unknown as Reflector;
+    return new RolesGuard(reflector, prisma as PrismaService);
+  }
+
+  function createScopeContext(attachmentId: string, token: string): ExecutionContext {
+    const req = {
+      method: 'GET',
+      path: `/api/v1/assessflow/cases/attachments/${attachmentId}`,
+      params: { attachmentId },
+      headers: {
+        authorization: `Bearer ${token}`,
+        'x-correlation-id': 'corr-test-uuid',
+      },
+      correlationId: 'corr-test-uuid',
+    };
+    return {
+      switchToHttp: () => ({ getRequest: () => req }),
+      getHandler: () => ({}),
+      getClass: () => ({}),
+    } as unknown as ExecutionContext;
+  }
+
+  function setup() {
+    process.env.NODE_ENV = 'development';
+    delete process.env.ENTRA_ISSUER_URL;
+    delete process.env.ENTRA_CLIENT_ID;
+    delete process.env.DEV_AUTH_HEADERS;
+    return createAppToken(actor);
+  }
+
+  it('returns a clean 404 without querying Prisma when the attachment id is not a UUID', async () => {
+    const token = setup();
+    const attachmentFindUnique = vi.fn(async () => {
+      throw new Error('must not query Prisma with a non-UUID id');
+    });
+    const prisma = {
+      enabled: true,
+      accessAccount: {
+        findUnique: async () => ({
+          ...actor,
+          displayName: actor.name,
+          email: 'assessor@example.com',
+          active: true,
+          mustChangePassword: false,
+        }),
+      },
+      attachment: { findUnique: attachmentFindUnique },
+      assessmentCase: { findFirst: vi.fn(async () => null) },
+    };
+    const guard = createScopeGuard(prisma);
+
+    await expect(
+      guard.canActivate(createScopeContext('not-a-uuid', token)),
+    ).rejects.toThrow(NotFoundException);
+    expect(attachmentFindUnique).not.toHaveBeenCalled();
+  });
+
+  it('queries Prisma normally when the attachment id is a UUID', async () => {
+    const token = setup();
+    const attachmentId = '22222222-2222-4222-8222-222222222222';
+    const attachmentFindUnique = vi.fn(async () => null);
+    const prisma = {
+      enabled: true,
+      accessAccount: {
+        findUnique: async () => ({
+          ...actor,
+          displayName: actor.name,
+          email: 'assessor@example.com',
+          active: true,
+          mustChangePassword: false,
+        }),
+      },
+      attachment: { findUnique: attachmentFindUnique },
+      assessmentCase: { findFirst: vi.fn(async () => null) },
+    };
+    const guard = createScopeGuard(prisma);
+
+    await expect(guard.canActivate(createScopeContext(attachmentId, token))).resolves.toBe(true);
+    expect(attachmentFindUnique).toHaveBeenCalledWith({
+      where: { id: attachmentId },
+      select: { caseId: true },
     });
   });
 });
