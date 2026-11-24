@@ -1,6 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   BiasWarning,
+  copilotBiasCheckSchema,
+  copilotSuggestActionsSchema,
+  copilotSynthesizeSchema,
   CopilotBiasCheckInput,
   CopilotBiasCheckResponse,
   CopilotSuggestActionsInput,
@@ -11,6 +14,8 @@ import {
   SuggestedAction,
 } from '@assessflow/contracts';
 import { PrismaService } from '../database/prisma.service';
+import { assertUuid } from '../common/uuid.util';
+import { currentCorrelationId } from '../common/correlation.context';
 
 const BIAS_DICTIONARY: Array<{
   pattern: RegExp;
@@ -30,28 +35,32 @@ const BIAS_DICTIONARY: Array<{
     category: 'GENDER_CODED',
     explanation:
       'Interpersonal feedback should focus on mentorship effectiveness and stakeholder collaboration rather than gendered caregiving traits.',
-    objectiveAlternative: 'Supportive team mentor; fosters psychological safety and cross-functional rapport.',
+    objectiveAlternative:
+      'Supportive team mentor; fosters psychological safety and cross-functional rapport.',
   },
   {
     pattern: /\b(young and hungry|lacks energy|too old|old school|seasoned veteran)\b/i,
     category: 'AGE_BIAS',
     explanation:
       'Age-associated or generational generalizations should be replaced with measurable execution velocity and domain experience.',
-    objectiveAlternative: 'Demonstrates high initiative / Leverages deep architectural patterns from previous engagements.',
+    objectiveAlternative:
+      'Demonstrates high initiative / Leverages deep architectural patterns from previous engagements.',
   },
   {
     pattern: /\b(good vibe|bad vibe|gut feeling|doesn't feel like a leader|culture fit)\b/i,
     category: 'SUBJECTIVE_PERSONALITY',
     explanation:
       'Subjective intuition or "vibe" checks introduce confirmation bias. Ground evaluations in explicit competency rubric criteria.',
-    objectiveAlternative: 'Meets rubric criteria for cross-functional influence and strategic clarity.',
+    objectiveAlternative:
+      'Meets rubric criteria for cross-functional influence and strategic clarity.',
   },
   {
     pattern: /\b(just gets lucky|someone else probably did it|carried by the team)\b/i,
     category: 'VAGUE_ATTRIBUTION',
     explanation:
       'Dismissive attribution minimizes candidate agency without evidence. Validate candidate individual contributions through commit or spec logs.',
-    objectiveAlternative: 'Candidate spearheaded the delivery milestones documented in the technical architecture review.',
+    objectiveAlternative:
+      'Candidate spearheaded the delivery milestones documented in the technical architecture review.',
   },
 ];
 
@@ -59,18 +68,41 @@ const BIAS_DICTIONARY: Array<{
 export class CopilotService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async synthesize(caseId: string, _input: CopilotSynthesizeInput): Promise<CopilotSynthesizeResponse> {
-    let caseData: any = null;
+  async synthesize(
+    caseId: string,
+    rawInput: CopilotSynthesizeInput = {},
+  ): Promise<CopilotSynthesizeResponse> {
+    const parsed = copilotSynthesizeSchema.safeParse(rawInput ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException(
+        parsed.error.issues[0]?.message ?? 'Invalid synthesize request.',
+      );
+    }
+
+    let caseData: {
+      employee?: { displayName: string } | null;
+      targetRoleSnapshot?: string | null;
+      evidence?: Array<{ summary: string; strengths?: string | null; gaps?: string | null }>;
+    } | null = null;
 
     if (this.prisma.enabled) {
+      assertUuid(caseId, 'CASE_NOT_FOUND', 'This assessment case could not be found.');
       caseData = await this.prisma.assessmentCase.findUnique({
         where: { id: caseId },
         include: {
-          employee: true,
-          evidence: true,
-          resultRevisions: { orderBy: { revision: 'desc' }, take: 1 },
+          employee: { select: { displayName: true } },
+          evidence: { select: { summary: true, strengths: true, gaps: true } },
         },
       });
+      if (!caseData) {
+        throw new NotFoundException({
+          error: {
+            code: 'CASE_NOT_FOUND',
+            message: 'This assessment case could not be found.',
+            correlationId: currentCorrelationId(),
+          },
+        });
+      }
     }
 
     const candidateName = caseData?.employee?.displayName ?? 'Candidate';
@@ -78,10 +110,12 @@ export class CopilotService {
     const evidenceList = caseData?.evidence ?? [];
 
     const evidenceSummaries = evidenceList
-      .map((e: any) => `${e.summary} Strengths: ${e.strengths ?? 'N/A'}. Gaps: ${e.gaps ?? 'N/A'}`)
+      .map((e) => `${e.summary} Strengths: ${e.strengths ?? 'N/A'}. Gaps: ${e.gaps ?? 'N/A'}`)
       .join(' ');
 
-    const hasStrongDelivery = /deliver|lead|architect|success|master|exceed|scal/i.test(evidenceSummaries);
+    const hasStrongDelivery = /deliver|lead|architect|success|master|exceed|scal/i.test(
+      evidenceSummaries,
+    );
     const hasCriticalGaps = /gap|miss|fail|lack|risk|behind|inconsistent/i.test(evidenceSummaries);
 
     let suggestedOutcome: ResultCode = 'READY_WITH_DEVELOPMENT';
@@ -133,9 +167,16 @@ export class CopilotService {
     };
   }
 
-  checkBias(input: CopilotBiasCheckInput): CopilotBiasCheckResponse {
+  checkBias(rawInput: CopilotBiasCheckInput): CopilotBiasCheckResponse {
+    const parsed = copilotBiasCheckSchema.safeParse(rawInput);
+    if (!parsed.success) {
+      throw new BadRequestException(
+        parsed.error.issues[0]?.message ??
+          'Provide evaluation text (1–10,000 characters) to inspect.',
+      );
+    }
     const warnings: BiasWarning[] = [];
-    const text = input.text;
+    const text = parsed.data.text;
 
     for (const rule of BIAS_DICTIONARY) {
       const globalPattern = new RegExp(rule.pattern.source, 'gi');
@@ -161,10 +202,7 @@ export class CopilotService {
     let sanitizedSuggestion = text;
     for (const warning of warnings) {
       const regex = new RegExp(`\\b${warning.phrase}\\b`, 'gi');
-      sanitizedSuggestion = sanitizedSuggestion.replace(
-        regex,
-        `[${warning.objectiveAlternative}]`,
-      );
+      sanitizedSuggestion = sanitizedSuggestion.replace(regex, `[${warning.objectiveAlternative}]`);
     }
 
     return {
@@ -178,9 +216,18 @@ export class CopilotService {
 
   async suggestActions(
     caseId: string,
-    input: CopilotSuggestActionsInput,
+    rawInput: CopilotSuggestActionsInput = {},
   ): Promise<CopilotSuggestActionsResponse> {
-    const limit = input.limit ?? 3;
+    if (this.prisma.enabled) {
+      assertUuid(caseId, 'CASE_NOT_FOUND', 'This assessment case could not be found.');
+    }
+    const parsed = copilotSuggestActionsSchema.safeParse(rawInput ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException(
+        parsed.error.issues[0]?.message ?? 'Invalid development suggestion request.',
+      );
+    }
+    const limit = parsed.data.limit ?? 3;
 
     const actionPool: SuggestedAction[] = [
       {

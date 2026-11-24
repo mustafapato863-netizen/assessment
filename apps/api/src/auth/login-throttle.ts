@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { currentCorrelationId } from '../common/correlation.context';
 
 interface Window {
   failures: number;
@@ -19,13 +20,6 @@ export interface LoginThrottleOptions {
 
 /**
  * Brute-force protection for sign-in and password change.
- *
- * Counts failures per account and per client IP inside a rolling window and
- * locks either key for a cooling-off period once the limit is reached. A
- * successful sign-in clears the account counter.
- *
- * In-memory: correct for a single API instance. With several replicas, move the
- * counters to Redis or the AccessAccount table so the limit is shared.
  */
 export class LoginThrottle {
   private readonly accounts = new Map<string, Window>();
@@ -49,12 +43,15 @@ export class LoginThrottle {
       ip ? this.lockedUntil(this.ips, ip, now) : 0,
     );
     if (lockedUntil > now) {
-      const minutes = Math.max(1, Math.ceil((lockedUntil - now) / 60_000));
+      const retryAfterSeconds = Math.max(1, Math.ceil((lockedUntil - now) / 1000));
+      const minutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
       throw new HttpException(
         {
           error: {
             code: 'SIGN_IN_LOCKED',
             message: `Too many failed attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+            retryAfterSeconds,
+            correlationId: currentCorrelationId(),
           },
         },
         HttpStatus.TOO_MANY_REQUESTS,
@@ -71,11 +68,12 @@ export class LoginThrottle {
     this.accounts.delete(this.normalize(accountKey));
   }
 
-  private normalize(key: string) {
-    return key.trim().toLowerCase();
+  private normalize(key: unknown): string {
+    return typeof key === 'string' ? key.trim().toLowerCase() : '';
   }
 
   private lockedUntil(store: Map<string, Window>, key: string, now: number) {
+    if (!key) return 0;
     const entry = store.get(key);
     if (!entry) return 0;
     if (entry.lockedUntil <= now && now - entry.firstFailureAt > this.windowMs) {
@@ -86,6 +84,7 @@ export class LoginThrottle {
   }
 
   private bump(store: Map<string, Window>, key: string, max: number, now: number) {
+    if (!key) return;
     let entry = store.get(key);
     if (!entry || (entry.lockedUntil <= now && now - entry.firstFailureAt > this.windowMs)) {
       entry = { failures: 0, firstFailureAt: now, lockedUntil: 0 };
@@ -97,7 +96,6 @@ export class LoginThrottle {
       entry.firstFailureAt = now;
     }
     store.set(key, entry);
-    // Keep memory bounded if someone sprays random keys.
     if (store.size > 10_000) {
       for (const [storedKey, value] of store) {
         if (value.lockedUntil <= now && now - value.firstFailureAt > this.windowMs) {
@@ -108,5 +106,4 @@ export class LoginThrottle {
   }
 }
 
-/** Shared instance for the API process. */
 export const loginThrottle = new LoginThrottle();

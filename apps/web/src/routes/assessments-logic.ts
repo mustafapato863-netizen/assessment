@@ -1,4 +1,5 @@
-export type AssessmentTab = 'all' | 'eligibility' | 'in_assessment' | 'pending_approval' | 'completed';
+export type AssessmentTab =
+  'all' | 'eligibility' | 'in_assessment' | 'pending_approval' | 'completed';
 export type AssessmentStage =
   | 'request'
   | 'eligibility'
@@ -75,9 +76,9 @@ export function readFilters(hash = window.location.hash): AssessmentFilters {
   const params = new URLSearchParams(query);
   const tabValue = params.get('tab') as AssessmentTab | null;
   const rawStage = params.get('stage') || '';
-  const stageValue = (validStages.includes(rawStage as AssessmentStage)
-    ? rawStage
-    : legacyStageMap[rawStage]) as AssessmentStage | undefined;
+  const stageValue = (
+    validStages.includes(rawStage as AssessmentStage) ? rawStage : legacyStageMap[rawStage]
+  ) as AssessmentStage | undefined;
   return {
     tab: tabValue && validTabs.includes(tabValue) ? tabValue : 'all',
     stage: stageValue && validStages.includes(stageValue) ? stageValue : '',
@@ -152,7 +153,11 @@ export function formatRequested(iso: string, now = new Date()): { date: string; 
 
 export const PAGE_SIZE = 8;
 
-export function paginate<T>(list: T[], page: number, size = PAGE_SIZE): {
+export function paginate<T>(
+  list: T[],
+  page: number,
+  size = PAGE_SIZE,
+): {
   items: T[];
   page: number;
   pages: number;
@@ -170,8 +175,7 @@ export function bottleneckStage(cases: AssessmentListCase[]): AssessmentStage | 
       counts[item.stage] = (counts[item.stage] || 0) + 1;
     });
   return (
-    Object.entries(counts).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))[0]?.[0] as
-      | AssessmentStage
-      | undefined
-  ) ?? null;
+    (Object.entries(counts).sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))[0]?.[0] as
+      AssessmentStage | undefined) ?? null
+  );
 }

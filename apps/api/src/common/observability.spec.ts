@@ -32,7 +32,8 @@ describe('OpenTelemetry Observability Module', () => {
 
   it('wires OTLP exporter when OTEL_EXPORTER_OTLP_ENDPOINT is provided', () => {
     process.env.OTEL_SERVICE_NAME = 'assessflow-prod';
-    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = 'https://eastus-8.in.applicationinsights.azure.com/v2.1/track';
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT =
+      'https://eastus-8.in.applicationinsights.azure.com/v2.1/track';
 
     const obs = new ObservabilityService();
     const config = obs.init();

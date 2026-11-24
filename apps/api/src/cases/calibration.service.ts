@@ -1,110 +1,102 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
+  CalibrationCandidate,
+  CalibrationCell,
+  CalibrationMatrixResponse,
+  CalibrationPerformanceLevel,
+  CalibrationPotentialLevel,
+  CaseStage,
+  CaseStatus,
+  ResultCode,
+  SCORECARD_READY_NOW_THRESHOLD,
+  SCORECARD_READY_WITH_DEVELOPMENT_THRESHOLD,
   calculateScorecard,
   defaultScorecardConfig,
   scorecardConfigSchema,
   scorecardRatingsSchema,
-  SCORECARD_READY_NOW_THRESHOLD,
-  SCORECARD_READY_WITH_DEVELOPMENT_THRESHOLD,
-  type CalibrationCell,
-  type CalibrationCandidate,
-  type CalibrationMatrixResponse,
-  type CalibrationPerformanceLevel,
-  type CalibrationPotentialLevel,
-  type ResultCode,
 } from '@assessflow/contracts';
-import type { Prisma } from '@assessflow/database';
+import { Prisma } from '@assessflow/database';
 import { PrismaService } from '../database/prisma.service';
+import { getActorContext } from '../auth';
 import { caseScopeWhere } from '../access/access-accounts.service';
-import { getActorContext } from '../auth/actor.context';
 
-const NINE_BOX_DEFINITIONS: Array<{
+interface NineBoxDef {
   boxIndex: number;
   label: string;
   description: string;
   targetPercentage: number;
-  perf: CalibrationPerformanceLevel;
-  pot: CalibrationPotentialLevel;
-}> = [
+}
+
+const NINE_BOX_DEFINITIONS: NineBoxDef[] = [
   {
     boxIndex: 1,
     label: 'Underperformer',
-    description: 'Low performance and low potential. Action plan or exit needed.',
+    description:
+      'Low performance & low potential. Requires immediate performance remediation or reassignment.',
     targetPercentage: 5,
-    perf: 'LOW',
-    pot: 'LOW',
   },
   {
     boxIndex: 2,
     label: 'Effective Performer',
-    description: 'Steady current output with specialized or bounded scope.',
+    description:
+      'Medium performance & low potential. Solid contributor in current role; focus on tactical retention.',
     targetPercentage: 10,
-    perf: 'MEDIUM',
-    pot: 'LOW',
   },
   {
     boxIndex: 3,
-    label: 'Trusted Professional',
-    description: 'Exceptional domain execution with focus in current band.',
-    targetPercentage: 15,
-    perf: 'HIGH',
-    pot: 'LOW',
+    label: 'Trusted Specialist',
+    description:
+      'High performance & low potential. Deep functional mastery; preserve institutional knowledge.',
+    targetPercentage: 10,
   },
   {
     boxIndex: 4,
     label: 'Inconsistent Contributor',
-    description: 'Demonstrates capacity bursts but lacks role consistency.',
-    targetPercentage: 10,
-    perf: 'LOW',
-    pot: 'MEDIUM',
+    description:
+      'Low performance & medium potential. Coach to remove execution blockers or clarify expectations.',
+    targetPercentage: 8,
   },
   {
     boxIndex: 5,
-    label: 'Core Player',
-    description: 'Solid performance with healthy readiness for next level.',
+    label: 'Core Contributor',
+    description:
+      'Medium performance & medium potential. Reliable core talent; expand cross-functional impact.',
     targetPercentage: 25,
-    perf: 'MEDIUM',
-    pot: 'MEDIUM',
   },
   {
     boxIndex: 6,
     label: 'High Performer',
-    description: 'Consistently exceeds expectations with strong growth potential.',
+    description:
+      'High performance & medium potential. Strong readiness for near-term scope growth or Lateral Move.',
     targetPercentage: 15,
-    perf: 'HIGH',
-    pot: 'MEDIUM',
   },
   {
     boxIndex: 7,
     label: 'Rough Diamond',
-    description: 'High leadership capacity requiring tactical skill development.',
+    description:
+      'Low performance & high potential. High capability ceiling but requires immediate delivery stabilization.',
     targetPercentage: 5,
-    perf: 'LOW',
-    pot: 'HIGH',
   },
   {
     boxIndex: 8,
-    label: 'High Achiever',
-    description: 'Exceeds goals and capable of taking lateral or scale leadership.',
-    targetPercentage: 10,
-    perf: 'MEDIUM',
-    pot: 'HIGH',
+    label: 'Future Leader',
+    description:
+      'Medium performance & high potential. High growth velocity; prioritize targeted leadership sponsorship.',
+    targetPercentage: 12,
   },
   {
     boxIndex: 9,
-    label: 'Star / Future Leader',
-    description: 'Top-tier performance and highest growth readiness across the org.',
-    targetPercentage: 5,
-    perf: 'HIGH',
-    pot: 'HIGH',
+    label: 'Star / Top Talent',
+    description:
+      'High performance & high potential. Succession-ready enterprise leadership pipeline.',
+    targetPercentage: 10,
   },
 ];
 
-/**
- * Axis bands use the same cut-offs as the overall result so the grid and the
- * result code tell one story: below 3 = LOW, 3 to <4 = MEDIUM, 4+ = HIGH.
- */
-export function scoreBand(score: number): CalibrationPerformanceLevel {
+export function scoreBand(score: number): CalibrationPerformanceLevel;
+export function scoreBand(score: number | null): CalibrationPerformanceLevel | null;
+export function scoreBand(score: number | null): CalibrationPerformanceLevel | null {
+  if (score === null) return null;
   if (score >= SCORECARD_READY_NOW_THRESHOLD) return 'HIGH';
   if (score >= SCORECARD_READY_WITH_DEVELOPMENT_THRESHOLD) return 'MEDIUM';
   return 'LOW';
@@ -113,7 +105,16 @@ export function scoreBand(score: number): CalibrationPerformanceLevel {
 export function calculateBoxIndex(
   perf: CalibrationPerformanceLevel,
   pot: CalibrationPotentialLevel,
-): number {
+): number;
+export function calculateBoxIndex(
+  perf: CalibrationPerformanceLevel | null,
+  pot: CalibrationPotentialLevel | null,
+): number | null;
+export function calculateBoxIndex(
+  perf: CalibrationPerformanceLevel | null,
+  pot: CalibrationPotentialLevel | null,
+): number | null {
+  if (!perf || !pot) return null;
   const matrix: Record<CalibrationPotentialLevel, Record<CalibrationPerformanceLevel, number>> = {
     LOW: { LOW: 1, MEDIUM: 2, HIGH: 3 },
     MEDIUM: { LOW: 4, MEDIUM: 5, HIGH: 6 },
@@ -121,6 +122,9 @@ export function calculateBoxIndex(
   };
   return matrix[pot][perf];
 }
+
+const classifyBand = scoreBand;
+const resolveBoxIndex = calculateBoxIndex;
 
 const AXES = {
   performance: 'Technical scorecard score (proxy until annual performance ratings are imported)',
@@ -136,6 +140,11 @@ export class CalibrationService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getMatrix(departmentFilter?: string): Promise<CalibrationMatrixResponse> {
+    if (departmentFilter && departmentFilter.length > 120) {
+      throw new BadRequestException('Department filter exceeds maximum length.');
+    }
+    const normalizedDepartment = departmentFilter?.trim();
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     let rawCases: any[] = [];
 
@@ -145,21 +154,35 @@ export class CalibrationService {
         where: {
           AND: [
             { status: { notIn: ['DRAFT', 'CANCELLED'] } },
-            // The 9-box calibrates internal talent; external recruits are excluded.
             { candidateType: { not: 'NEW_CANDIDATE' } },
-            // Same data scope as every other case read.
             caseScopeWhere(actor) as Prisma.AssessmentCaseWhereInput,
-            ...(departmentFilter && departmentFilter !== 'ALL'
-              ? [{ departmentSnapshot: departmentFilter }]
+            ...(normalizedDepartment && normalizedDepartment !== 'ALL'
+              ? [{ departmentSnapshot: normalizedDepartment }]
               : []),
           ],
         },
         include: {
-          employee: true,
+          employee: { select: { externalId: true, displayName: true, currentLevel: true } },
           plan: { select: { scorecardConfig: true } },
-          scorecards: { where: { submittedAt: { not: null } } },
-          resultRevisions: { orderBy: { revision: 'desc' }, take: 1 },
-          recommendationRevisions: { orderBy: { revision: 'desc' }, take: 1 },
+          scorecards: {
+            where: { submittedAt: { not: null } },
+            select: { ratings: true },
+          },
+          resultRevisions: {
+            orderBy: { revision: 'desc' },
+            take: 1,
+            select: {
+              finalizedAt: true,
+              reopenedAt: true,
+              resultCode: true,
+              scorecardSummary: true,
+            },
+          },
+          recommendationRevisions: {
+            orderBy: { revision: 'desc' },
+            take: 1,
+            select: { code: true },
+          },
         },
       });
     }
@@ -239,35 +262,34 @@ export class CalibrationService {
       ? (latestRevision.resultCode ?? null)
       : null;
 
-    // Re-score from the submitted scorecards so placement always uses the
-    // current formula, not a summary stored when the result was finalized.
     const submissions = (c.scorecards ?? []) as Array<{ ratings: unknown }>;
     let technicalScore: number | null = null;
     let behavioralScore: number | null = null;
     let scoredResultCode: ResultCode | null = null;
     let knockout = false;
     let scoreSource: 'SCORECARD' | 'RESULT_SUMMARY' | null = null;
+
     if (resultIsEffective && submissions.length) {
-      const config = c.plan?.scorecardConfig
-        ? scorecardConfigSchema.parse(c.plan.scorecardConfig)
-        : defaultScorecardConfig;
-      const scored = calculateScorecard(
-        config,
-        submissions.map((submission) => ({
-          ratings: scorecardRatingsSchema.parse(submission.ratings),
-          submitted: true,
-        })),
-      );
-      if (scored.completeCount > 0) {
-        technicalScore = round2(scored.technical ?? 0);
-        behavioralScore = round2(scored.behavioral ?? 0);
-        scoredResultCode = scored.resultCode;
-        knockout = scored.knockout;
-        scoreSource = 'SCORECARD';
+      const parsedConfig = c.plan?.scorecardConfig
+        ? scorecardConfigSchema.safeParse(c.plan.scorecardConfig)
+        : null;
+      const config = parsedConfig?.success ? parsedConfig.data : defaultScorecardConfig;
+      const validSubmissions = submissions.flatMap((submission) => {
+        const parsedRatings = scorecardRatingsSchema.safeParse(submission.ratings);
+        return parsedRatings.success ? [{ ratings: parsedRatings.data, submitted: true }] : [];
+      });
+      if (validSubmissions.length) {
+        const scored = calculateScorecard(config, validSubmissions);
+        if (scored.completeCount > 0) {
+          technicalScore = round2(scored.technical ?? 0);
+          behavioralScore = round2(scored.behavioral ?? 0);
+          scoredResultCode = scored.resultCode;
+          knockout = scored.knockout;
+          scoreSource = 'SCORECARD';
+        }
       }
     }
-    // Results imported or entered without a scorecard: use the Technical and
-    // Behavioral scores stored on the finalized result, when it has them.
+
     if (resultIsEffective && scoreSource === null) {
       const stored = (latestRevision.scorecardSummary ?? {}) as {
         technical?: unknown;
@@ -279,50 +301,56 @@ export class CalibrationService {
       if (valid(stored.technical) && valid(stored.behavioral)) {
         technicalScore = round2(stored.technical);
         behavioralScore = round2(stored.behavioral);
-        knockout = stored.knockout === true;
+        knockout = Boolean(stored.knockout);
         scoreSource = 'RESULT_SUMMARY';
       }
     }
 
-    const placedOnGrid = technicalScore !== null && behavioralScore !== null;
-    const perf = placedOnGrid ? scoreBand(technicalScore!) : null;
-    const pot = placedOnGrid ? scoreBand(behavioralScore!) : null;
-    const boxIndex = perf && pot ? calculateBoxIndex(perf, pot) : null;
-    const boxDef = boxIndex ? NINE_BOX_DEFINITIONS.find((b) => b.boxIndex === boxIndex) : undefined;
+    const performanceBand = scoreBand(technicalScore);
+    const potentialBand = scoreBand(behavioralScore);
+    const boxIndex = calculateBoxIndex(performanceBand, potentialBand);
+    const boxDef =
+      boxIndex !== null ? NINE_BOX_DEFINITIONS.find((b) => b.boxIndex === boxIndex) : null;
 
-    const unplacedReason = placedOnGrid
-      ? null
-      : !latestRevision?.finalizedAt
-        ? 'Result not finalized yet'
-        : latestRevision.reopenedAt
-          ? 'Result reopened'
-          : 'No scorecard and no Technical/Behavioral scores on the result (entered or imported directly)';
+    let readinessLabel = 'Pending Assessment';
+    if (resultCode === 'READY_NOW') readinessLabel = 'Ready Now';
+    else if (resultCode === 'READY_WITH_DEVELOPMENT') readinessLabel = 'With Development';
+    else if (resultCode === 'NOT_READY') readinessLabel = 'Not Ready';
+
+    let unplacedReason: string | null = null;
+    if (boxIndex === null) {
+      unplacedReason = latestRevision?.reopenedAt
+        ? 'Result reopened'
+        : !resultIsEffective
+          ? 'Result not finalized'
+          : 'No scorecard scores recorded for this result';
+    }
 
     return {
       id: c.id,
       caseId: c.id,
       caseCode: c.caseCode,
       employeeId: c.employee?.externalId ?? c.employeeId,
-      displayName: c.employee?.displayName ?? 'Candidate',
+      displayName: c.employee?.displayName ?? 'Unknown Employee',
       department: c.departmentSnapshot,
       currentRole: c.currentRoleSnapshot,
       currentLevel: c.employee?.currentLevel ?? null,
       targetRole: c.targetRoleSnapshot,
       targetLevel: c.targetLevelSnapshot ?? null,
-      status: c.status,
-      stage: c.stage,
+      status: c.status as CaseStatus,
+      stage: c.stage as CaseStage,
       resultCode,
       recommendationCode: c.recommendationRevisions?.[0]?.code ?? null,
       technicalScore,
       behavioralScore,
-      performanceBand: perf,
-      potentialBand: pot,
+      performanceBand,
+      potentialBand,
       boxIndex,
       boxLabel: boxDef?.label ?? null,
-      readinessLabel: resultCode ? resultCode.replace(/_/g, ' ') : 'PENDING EVALUATION',
+      readinessLabel,
       scoredResultCode,
-      knockout,
       scoreSource,
+      knockout,
       unplacedReason,
       tenureMonths: null,
     };

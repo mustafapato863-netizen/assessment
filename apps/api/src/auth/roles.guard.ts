@@ -14,10 +14,11 @@ import type { Request } from 'express';
 import { AppRole, AuthActor, normalizeRole } from './auth.types';
 import { ROLES_KEY, IS_PUBLIC_KEY } from './roles.decorator';
 import { setActorContext } from './actor.context';
-import { verifyAppToken } from './app-token.util';
+import { verifyAppToken, type VerifiedAppActor } from './app-token.util';
 import { isDevHeaderAuthEnabled } from './dev-auth';
 import { PrismaService } from '../database/prisma.service';
 import { caseScopeWhere } from '../access/access-accounts.service';
+import { isUuid } from '../common/uuid.util';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -77,9 +78,7 @@ export class RolesGuard implements CanActivate {
       });
     }
 
-    // The middleware has already verified Entra tokens. In local development with
-    // DEV_AUTH_HEADERS, it attaches a permissive demo actor to every request, so a real
-    // AssessFlow bearer token must take precedence over that fallback actor.
+    // Verified Entra actor (middleware or test harness).
     if (existingActor && entraEnabled && process.env.NODE_ENV !== 'production') {
       return this.authorize(existingActor, requiredRoles, correlationId, request);
     }
@@ -101,7 +100,7 @@ export class RolesGuard implements CanActivate {
       throw new UnauthorizedException('A valid AssessFlow sign-in is required.');
     }
 
-    // Local development only (DEV_AUTH_HEADERS=true): the header-based demo actor.
+    // Local development only (DEV_AUTH_HEADERS=true): header-based demo actor.
     const actor = this.resolveLocalActor(request);
     (request as unknown as { actor?: AuthActor }).actor = actor;
     (request as unknown as { user?: AuthActor }).user = actor;
@@ -110,7 +109,7 @@ export class RolesGuard implements CanActivate {
   }
 
   private async resolveAppActor(token: string): Promise<AuthActor> {
-    let tokenActor: AuthActor;
+    let tokenActor: VerifiedAppActor;
     try {
       tokenActor = verifyAppToken(token);
     } catch {
@@ -122,11 +121,25 @@ export class RolesGuard implements CanActivate {
       }
       return tokenActor;
     }
+    if (!isUuid(tokenActor.id)) {
+      throw new UnauthorizedException('Your session is invalid or expired. Please sign in again.');
+    }
     const account = await this.prisma.accessAccount.findUnique({ where: { id: tokenActor.id } });
     if (!account || !account.active) {
       throw new UnauthorizedException(
         'This account is disabled. Please contact your administrator.',
       );
+    }
+    const changedAt =
+      'passwordChangedAt' in account && account.passwordChangedAt
+        ? new Date(account.passwordChangedAt as Date | string)
+        : null;
+    if (
+      changedAt &&
+      typeof tokenActor.tokenIssuedAt === 'number' &&
+      tokenActor.tokenIssuedAt < Math.floor(changedAt.getTime() / 1000)
+    ) {
+      throw new UnauthorizedException('Your password was recently changed. Please sign in again.');
     }
     return {
       id: account.id,
@@ -169,44 +182,103 @@ export class RolesGuard implements CanActivate {
         },
       });
     }
-    if (request && request.method !== 'GET') {
-      const checks: Promise<void>[] = [this.assertAdminEditAccess(actor, request, correlationId)];
-      if (enforceScope) checks.push(this.assertCaseScope(actor, request, correlationId));
-      return Promise.all(checks).then(() => true);
-    }
-    if (enforceScope && request) {
-      return this.assertCaseScope(actor, request, correlationId).then(() => true);
+    const isWriteRequest = Boolean(request && request.method !== 'GET');
+    if (request && (isWriteRequest || enforceScope)) {
+      return this.resolveAndAssertCaseAccess(
+        actor,
+        request,
+        correlationId,
+        isWriteRequest,
+        enforceScope,
+      ).then(() => true);
     }
     return true;
   }
 
-  private async assertAdminEditAccess(actor: AuthActor, request: Request, correlationId: string) {
+  private notFoundCase(correlationId: string): NotFoundException {
+    return new NotFoundException({
+      error: {
+        code: 'CASE_NOT_FOUND',
+        message: 'This assessment case could not be found.',
+        correlationId,
+      },
+    });
+  }
+
+  private notFoundAttachment(correlationId: string): NotFoundException {
+    return new NotFoundException({
+      error: {
+        code: 'ATTACHMENT_NOT_FOUND',
+        message: 'This attachment could not be found.',
+        correlationId,
+      },
+    });
+  }
+
+  /**
+   * Resolves caseId once from route params/body (validating UUIDs before Prisma lookups)
+   * and enforces both ADMIN_EDIT_ONLY restrictions and row-level case scope in one query.
+   */
+  private async resolveAndAssertCaseAccess(
+    actor: AuthActor,
+    request: Request,
+    correlationId: string,
+    checkAdminEdit: boolean,
+    checkScope: boolean,
+  ): Promise<void> {
     if (!this.prisma?.enabled) return;
-    const params = request.params as Record<string, string | undefined>;
-    const body = request.body as { caseId?: string } | undefined;
-    let caseId = params.caseId ?? body?.caseId;
-    if (!caseId && params.eventId) {
+
+    const params = (request.params ?? {}) as Record<string, string | undefined>;
+    const body = (request.body ?? undefined) as { caseId?: unknown } | undefined;
+
+    let caseId: string | undefined;
+    if (params.caseId !== undefined) {
+      if (!isUuid(params.caseId)) throw this.notFoundCase(correlationId);
+      caseId = params.caseId;
+    } else if (body?.caseId !== undefined) {
+      if (!isUuid(body.caseId)) throw this.notFoundCase(correlationId);
+      caseId = body.caseId;
+    } else if (params.eventId !== undefined) {
+      if (!isUuid(params.eventId)) throw this.notFoundCase(correlationId);
       caseId = (
         await this.prisma.assessmentEvent.findUnique({
           where: { id: params.eventId },
           select: { caseId: true },
         })
       )?.caseId;
-    }
-    if (!caseId && params.stepId) {
+      if (!caseId) throw this.notFoundCase(correlationId);
+    } else if (params.stepId !== undefined) {
+      if (!isUuid(params.stepId)) throw this.notFoundCase(correlationId);
       caseId = (
         await this.prisma.approvalStep.findUnique({
           where: { id: params.stepId },
           select: { caseId: true },
         })
       )?.caseId;
+      if (!caseId) throw this.notFoundCase(correlationId);
+    } else if (params.attachmentId !== undefined) {
+      if (!isUuid(params.attachmentId)) throw this.notFoundAttachment(correlationId);
+      caseId = (
+        await this.prisma.attachment.findUnique({
+          where: { id: params.attachmentId },
+          select: { caseId: true },
+        })
+      )?.caseId;
+      if (!caseId) throw this.notFoundAttachment(correlationId);
     }
+
     if (!caseId) return;
+
     const record = await this.prisma.assessmentCase.findUnique({
       where: { id: caseId },
-      select: { adminEditStage: true },
+      select: { id: true, adminEditStage: true },
     });
-    if (record?.adminEditStage && !actor.roles.includes('Admin')) {
+    if (!record) {
+      if (checkScope) throw this.notFoundCase(correlationId);
+      return;
+    }
+
+    if (checkAdminEdit && record.adminEditStage && !actor.roles.includes('Admin')) {
       throw new ForbiddenException({
         error: {
           code: 'ADMIN_EDIT_ONLY',
@@ -215,49 +287,15 @@ export class RolesGuard implements CanActivate {
         },
       });
     }
-  }
 
-  private async assertCaseScope(actor: AuthActor, request: Request, correlationId: string) {
-    const params = request.params as Record<string, string | undefined>;
-    const body = request.body as { caseId?: string } | undefined;
-    let caseId = params.caseId ?? body?.caseId;
-    if (!caseId && params.eventId) {
-      caseId = (
-        await this.prisma?.assessmentEvent.findUnique({
-          where: { id: params.eventId },
-          select: { caseId: true },
-        })
-      )?.caseId;
-    }
-    if (!caseId && params.stepId) {
-      caseId = (
-        await this.prisma?.approvalStep.findUnique({
-          where: { id: params.stepId },
-          select: { caseId: true },
-        })
-      )?.caseId;
-    }
-    if (!caseId && params.attachmentId) {
-      caseId = (
-        await this.prisma?.attachment.findUnique({
-          where: { id: params.attachmentId },
-          select: { caseId: true },
-        })
-      )?.caseId;
-    }
-    if (!caseId) return;
-    const match = await this.prisma?.assessmentCase.findFirst({
-      where: { id: caseId, ...caseScopeWhere(actor) },
-      select: { id: true },
-    });
-    if (!match) {
-      throw new NotFoundException({
-        error: {
-          code: 'CASE_NOT_FOUND',
-          message: 'This assessment case could not be found.',
-          correlationId,
-        },
+    if (checkScope) {
+      const scopeMatch = await this.prisma.assessmentCase.findFirst({
+        where: { AND: [{ id: caseId }, caseScopeWhere(actor)] },
+        select: { id: true },
       });
+      if (!scopeMatch) {
+        throw this.notFoundCase(correlationId);
+      }
     }
   }
 

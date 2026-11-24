@@ -2,7 +2,7 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * Playwright E2E Configuration for AssessFlow
- * 
+ *
  * Ports / Environment Assumptions:
  * - API Port: 3000 (http://localhost:3000)
  * - Web Port: 5173 (http://localhost:5173, Vite)
@@ -19,12 +19,9 @@ export default defineConfig({
   workers: 1,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  reporter: [
-    ['list'],
-    ['html', { outputFolder: 'playwright-report', open: 'never' }],
-  ],
+  reporter: [['list'], ['html', { outputFolder: 'playwright-report', open: 'never' }]],
   use: {
-    baseURL: 'http://localhost:5173',
+    baseURL: 'http://localhost:5174',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -50,16 +47,19 @@ export default defineConfig({
         PORT: '3000',
         NODE_ENV: 'test-memory',
         DATA_MODE: 'memory',
+        DEV_AUTH_HEADERS: 'true',
         DATABASE_URL: 'postgresql://mock:mock@localhost:5432/mock?schema=public',
       },
     },
     {
       command: 'pnpm dev',
-      url: 'http://localhost:5173',
+      url: 'http://localhost:5174',
       reuseExistingServer: true,
       timeout: 30_000,
       env: {
         ...process.env,
+        DEV_API_TARGET: 'http://localhost:3000',
+        VITE_API_URL: '/api/v1/assessflow',
         VITE_FEATURE_CALIBRATION: 'true',
       },
     },

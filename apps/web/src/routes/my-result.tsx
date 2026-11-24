@@ -1,31 +1,31 @@
-import { Navigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, Clock3, LockKeyhole } from 'lucide-react';
 import { ErrorBanner, PageHeading, PanelHeader } from '../components/ui';
 import { api } from '../lib/api';
-import { getActiveUser } from '../lib/auth';
+import { getSession } from '../lib/auth';
+import { formatDate } from '../lib/format';
 import { reasonLabels, resultCodeLabels } from '../lib/labels';
+import { queryKeys } from '../lib/query-keys';
 
 export function MyResultsPage() {
-  const user = getActiveUser();
+  const user = getSession();
   const {
     data = [],
     isLoading,
     isError,
     error,
+    refetch,
   } = useQuery({
-    queryKey: ['my-results'],
+    queryKey: queryKeys.myResults(),
     queryFn: api.myResults,
-    enabled: user.role === 'EMPLOYEE',
+    enabled: Boolean(user),
   });
-
-  if (user.role !== 'EMPLOYEE') return <Navigate to="/" replace />;
 
   return (
     <>
       <PageHeading
         eyebrow="EMPLOYEE SELF SERVICE"
-        title={`My assessment results${user.name ? `, ${user.name.split(' ')[0]}` : ''}`}
+        title={`My assessment results${user?.name ? `, ${user.name.split(' ')[0]}` : ''}`}
         subtitle="Your results appear here after your feedback conversation has taken place."
       />
       <section className="panel my-results-panel">
@@ -35,7 +35,7 @@ export function MyResultsPage() {
           action={<span className="soft-count">{data.length} results</span>}
         />
         {isLoading ? (
-          <div className="assessor-empty">
+          <div className="assessor-empty" role="status">
             <span className="loader-ring" />
             <p>Loading your results…</p>
           </div>
@@ -43,6 +43,7 @@ export function MyResultsPage() {
           <div className="assessor-empty">
             <ErrorBanner
               message={error instanceof Error ? error.message : 'Your results could not load.'}
+              onRetry={() => void refetch()}
             />
           </div>
         ) : data.length ? (
@@ -59,7 +60,7 @@ export function MyResultsPage() {
                   </p>
                 </div>
                 <span className="my-result-date">
-                  <Clock3 size={14} /> {new Date(result.finalizedAt).toLocaleDateString()}
+                  <Clock3 size={14} /> {formatDate(result.finalizedAt)}
                 </span>
                 {result.rationale && <p className="my-result-rationale">{result.rationale}</p>}
               </article>
@@ -70,8 +71,8 @@ export function MyResultsPage() {
             <LockKeyhole size={28} />
             <strong>Your results are not available yet</strong>
             <p>
-              Your result will appear after your feedback conversation is completed and the Assessor
-              marks it as viewable.
+              Released results appear here after your feedback conversation is completed and the
+              Assessor marks them as viewable.
             </p>
           </div>
         )}

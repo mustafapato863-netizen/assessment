@@ -8,7 +8,7 @@ interface AtmosphericBackgroundProps {
 }
 
 /**
- * AtmosphericBackground - A restrained, CSS-only ambient canvas with drifting radial gradients.
+ * AtmosphericBackground - Restrained, CSS-only ambient canvas with drifting radial gradients.
  */
 export function AtmosphericBackground({
   className = '',
@@ -31,7 +31,7 @@ export function AtmosphericBackground({
   return (
     <div
       ref={backgroundRef}
-      className={`sgh-atmosphere pointer-events-none fixed inset-0 select-none ${className}`.trim()}
+      className={`sgh-atmosphere ${className}`.trim()}
       data-variant={variant}
       aria-hidden="true"
     />

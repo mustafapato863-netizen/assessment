@@ -46,10 +46,10 @@ export function groupByEmployee<T extends EmployeeGroupCase>(cases: T[]): Employ
     .filter((employee): employee is EmployeeRecord<T> => employee !== null);
 }
 
-export function sortEmployees<T extends EmployeeGroupCase>(list: EmployeeRecord<T>[]): EmployeeRecord<T>[] {
-  return [...list].sort(
-    (a, b) => b.cases.length - a.cases.length || a.name.localeCompare(b.name),
-  );
+export function sortEmployees<T extends EmployeeGroupCase>(
+  list: EmployeeRecord<T>[],
+): EmployeeRecord<T>[] {
+  return [...list].sort((a, b) => b.cases.length - a.cases.length || a.name.localeCompare(b.name));
 }
 
 export function searchEmployees<T extends EmployeeGroupCase>(
@@ -71,7 +71,9 @@ export function searchEmployees<T extends EmployeeGroupCase>(
   });
 }
 
-export function employeeStats<T extends EmployeeGroupCase>(employees: EmployeeRecord<T>[]): {
+export function employeeStats<T extends EmployeeGroupCase>(
+  employees: EmployeeRecord<T>[],
+): {
   people: number;
   cases: number;
   multiCount: number;

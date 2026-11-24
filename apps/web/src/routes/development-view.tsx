@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import './development.css';
 import { formatCaseId } from '../lib/format-case-id';
+import { initials } from '../lib/format';
 import { STAGE_LABELS } from './assessments-logic';
 import type {
   DevelopmentAction,
@@ -32,33 +34,38 @@ import {
   onSaveEvidence(planId, actionId, note)
 */
 
-const initials = (n: string) =>
-  n
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0])
-    .join('')
-    .toUpperCase();
-
 function AddActionForm({
   onSubmit,
 }: {
-  onSubmit: (data: { title: string; owner: string; dueDate: string | null }) => void;
+  onSubmit: (data: {
+    title: string;
+    owner: string;
+    dueDate: string | null;
+  }) => void | Promise<void>;
 }) {
   const [form, setForm] = useState({ title: '', owner: '', dueDate: '' });
   const [touched, setTouched] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const { valid, errors } = validateAction(form);
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [k]: e.target.value });
 
-  const submit = (e: React.FormEvent<HTMLFormElement>) => {
+  const submit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setTouched(true);
-    if (!valid) return;
-    onSubmit({ title: form.title.trim(), owner: form.owner.trim(), dueDate: form.dueDate || null });
-    setForm({ title: '', owner: '', dueDate: '' });
-    setTouched(false);
+    if (!valid || submitting) return;
+    setSubmitting(true);
+    try {
+      await onSubmit({
+        title: form.title.trim(),
+        owner: form.owner.trim(),
+        dueDate: form.dueDate || null,
+      });
+      setForm({ title: '', owner: '', dueDate: '' });
+      setTouched(false);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -175,7 +182,7 @@ export interface DevelopmentViewProps {
   onAddAction?: (
     planId: string,
     data: { title: string; owner: string; dueDate: string | null },
-  ) => void;
+  ) => void | Promise<void>;
   onStatusChange?: (planId: string, actionId: string, status: DevelopmentActionStatus) => void;
   onSaveEvidence?: (planId: string, actionId: string, note: string) => void;
 }
@@ -265,9 +272,9 @@ export default function Development({
                   </span>
                 </div>
               </div>
-              <a className="dv-link" href={selected.href}>
+              <Link className="dv-link" to={selected.href.replace(/^#/, '')}>
                 Open case →
-              </a>
+              </Link>
             </div>
 
             <div className="dv-progress">

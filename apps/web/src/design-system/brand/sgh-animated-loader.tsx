@@ -62,10 +62,7 @@ export function SghAnimatedLoader({
       aria-label="Authenticating session"
     >
       {/* 1. Animated Dual-Wing SGH Heart Emblem with Glowing Ring */}
-      <div
-        className="relative mb-7 flex items-center justify-center"
-        style={{ position: 'relative', marginBottom: '24px' }}
-      >
+      <div className="sgh-loader-emblem">
         {/* Ambient Halo Glow */}
         <div
           style={{

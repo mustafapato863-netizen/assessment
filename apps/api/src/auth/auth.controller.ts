@@ -6,6 +6,7 @@ import {
   Post,
   UnauthorizedException,
 } from '@nestjs/common';
+import { authLoginSchema, changePasswordSchema } from '@assessflow/contracts';
 import { AccessAccountsService } from '../access/access-accounts.service';
 import { createAppToken } from './app-token.util';
 import { Actor, AuthActor, Public, Roles } from './index';
@@ -18,41 +19,39 @@ export class AuthController {
 
   @Post('login')
   @Public()
-  async login(@Body() input: { email?: string; password?: string }, @Ip() ip?: string) {
-    if (!input.email || !input.password) {
+  async login(@Body() rawInput: unknown, @Ip() ip?: string) {
+    const parsed = authLoginSchema.safeParse(rawInput);
+    if (!parsed.success) {
       throw new UnauthorizedException('Enter your company email and password.');
     }
-    loginThrottle.assertAllowed(input.email, ip);
+    const { email, password } = parsed.data;
+    loginThrottle.assertAllowed(email, ip);
     try {
-      const user = await this.accounts.authenticate(input.email, input.password);
-      loginThrottle.recordSuccess(input.email);
+      const user = await this.accounts.authenticate(email, password);
+      loginThrottle.recordSuccess(email);
       return { token: createAppToken(user), user };
     } catch (error) {
-      if (error instanceof UnauthorizedException) loginThrottle.recordFailure(input.email, ip);
+      if (error instanceof UnauthorizedException) loginThrottle.recordFailure(email, ip);
       throw error;
     }
   }
 
   @Post('change-password')
   @Roles(...APP_ROLES)
-  async changePassword(
-    @Body() input: { currentPassword?: string; newPassword?: string; confirmPassword?: string },
-    @Actor() actor: AuthActor,
-    @Ip() ip?: string,
-  ) {
-    // Re-authenticate so a stolen session token alone cannot take over the account.
+  async changePassword(@Body() rawInput: unknown, @Actor() actor: AuthActor, @Ip() ip?: string) {
     if (!actor.email) {
       throw new UnauthorizedException('Sign in with your company account to change the password.');
     }
-    if (!input.currentPassword) {
-      throw new BadRequestException('Enter your current password.');
+    const parsed = changePasswordSchema.safeParse(rawInput);
+    if (!parsed.success) {
+      const firstError = parsed.error.issues[0]?.message ?? 'Invalid password input.';
+      throw new BadRequestException(firstError);
     }
-    if (input.newPassword && input.newPassword === input.currentPassword) {
-      throw new BadRequestException('Choose a new password that differs from the current one.');
-    }
+    const { currentPassword, newPassword, confirmPassword } = parsed.data;
+
     loginThrottle.assertAllowed(actor.email, ip);
     try {
-      await this.accounts.authenticate(actor.email, input.currentPassword);
+      await this.accounts.authenticate(actor.email, currentPassword);
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         loginThrottle.recordFailure(actor.email, ip);
@@ -61,10 +60,19 @@ export class AuthController {
       throw error;
     }
     loginThrottle.recordSuccess(actor.email);
-    return this.accounts.changeTemporaryPassword(
+    const result = await this.accounts.changeTemporaryPassword(
       actor,
-      input.newPassword ?? '',
-      input.confirmPassword ?? '',
+      newPassword,
+      confirmPassword ?? newPassword,
     );
+    const token = createAppToken({
+      id: actor.id,
+      name: actor.name,
+      email: actor.email,
+      roles: actor.roles,
+      scopeType: actor.scopeType ?? 'ORGANIZATION',
+      scopeValues: actor.scopeValues ?? [],
+    });
+    return { ...result, token };
   }
 }

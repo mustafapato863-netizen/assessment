@@ -11,8 +11,8 @@ export interface ThinkingDotsProps {
 }
 
 /**
- * ThinkingDots - Interactive / Ambient canvas particle grid effect.
- * Renders an ethereal, pulsing matrix of dots with responsive resize and high-DPI scaling.
+ * ThinkingDots - Restrained ambient canvas particle grid effect.
+ * Pauses animation when document is hidden or prefers-reduced-motion is set.
  */
 export const ThinkingDots: React.FC<ThinkingDotsProps> = ({
   dotSize = 1.5,
@@ -26,29 +26,27 @@ export const ThinkingDots: React.FC<ThinkingDotsProps> = ({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext('2d', { alpha: true });
     if (!ctx) return;
 
-    let animationFrameId: number;
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+    let animationFrameId = 0;
+    let time = 0;
 
     const handleResize = () => {
       if (!canvas) return;
       const dpr = Math.min(window.devicePixelRatio || 1, 2);
       canvas.width = window.innerWidth * dpr;
       canvas.height = window.innerHeight * dpr;
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
 
-    handleResize();
-    window.addEventListener('resize', handleResize);
-
-    let time = 0;
-
-    const draw = () => {
+    const drawFrame = () => {
       const displayW = window.innerWidth;
       const displayH = window.innerHeight;
-
       ctx.clearRect(0, 0, displayW, displayH);
 
       const cols = Math.ceil(displayW / spacing);
@@ -58,19 +56,15 @@ export const ThinkingDots: React.FC<ThinkingDotsProps> = ({
         for (let j = 0; j < rows; j++) {
           const x = i * spacing;
           const y = j * spacing;
-
-          // Wave equation
           const dist = Math.sin(i * 0.18 + time) + Math.cos(j * 0.18 + time);
-          const normalized = (dist + 2) / 4; // 0 to 1
-
+          const normalized = (dist + 2) / 4;
           const currentDotSize = dotSize * (0.6 + normalized * 0.8);
 
-          // Color palette interpolation between Cyan (#00A3E0) and Emerald (#00A859)
           if (isDark) {
-            const opacity = 0.08 + normalized * 0.26;
+            const opacity = 0.08 + normalized * 0.24;
             ctx.fillStyle = `rgba(${i % 2 === 0 ? '0, 163, 224' : '0, 168, 89'}, ${opacity})`;
           } else {
-            const opacity = 0.05 + normalized * 0.18;
+            const opacity = 0.05 + normalized * 0.16;
             ctx.fillStyle = `rgba(${i % 2 === 0 ? '0, 132, 206' : '0, 168, 89'}, ${opacity})`;
           }
 
@@ -79,15 +73,31 @@ export const ThinkingDots: React.FC<ThinkingDotsProps> = ({
           ctx.fill();
         }
       }
-
-      time += speed;
-      animationFrameId = requestAnimationFrame(draw);
     };
 
-    draw();
+    const tick = () => {
+      drawFrame();
+      if (!prefersReducedMotion && document.visibilityState === 'visible') {
+        time += speed;
+        animationFrameId = requestAnimationFrame(tick);
+      }
+    };
+
+    const handleVisibility = () => {
+      cancelAnimationFrame(animationFrameId);
+      if (document.visibilityState === 'visible') {
+        tick();
+      }
+    };
+
+    handleResize();
+    tick();
+    window.addEventListener('resize', handleResize);
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
       window.removeEventListener('resize', handleResize);
+      document.removeEventListener('visibilitychange', handleVisibility);
       cancelAnimationFrame(animationFrameId);
     };
   }, [dotSize, spacing, speed, isDark]);
@@ -98,14 +108,11 @@ export const ThinkingDots: React.FC<ThinkingDotsProps> = ({
       className={`sgh-thinking-dots ${className}`.trim()}
       style={{
         position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
+        inset: 0,
         pointerEvents: 'none',
         zIndex: 0,
-        opacity: 0.35,
       }}
+      aria-hidden="true"
     />
   );
 };

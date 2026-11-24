@@ -61,6 +61,9 @@ export type CaseStatus = (typeof caseStatuses)[number];
 export const eligibilityDecisions = ['ELIGIBLE', 'NOT_ELIGIBLE'] as const;
 export type EligibilityDecision = (typeof eligibilityDecisions)[number];
 
+export const criterionResults = ['MET', 'NOT_MET', 'NOT_CHECKED', 'NOT_APPLICABLE'] as const;
+export type CriterionResultCode = (typeof criterionResults)[number];
+
 export const resultCodes = [
   'READY_NOW',
   'READY_WITH_DEVELOPMENT',
@@ -72,17 +75,17 @@ export type ResultCode = (typeof resultCodes)[number];
 export const createCaseSchema = z
   .object({
     candidateType: z.enum(candidateTypes).default('INTERNAL_EMPLOYEE'),
-    // Staff number. Required for internal employees so every person has one record.
-    employeeId: z.string().trim().min(1, 'Enter the employee ID (staff number)').max(60),
-    employeeName: z.string().min(2).max(120),
-    candidateEmail: z.string().email().max(254).optional().or(z.literal('')),
-    department: z.string().min(2).max(120),
-    currentRole: z.string().max(160).optional(),
-    currentLevel: z.string().max(80).optional(),
+    // Staff number. Required for internal employees; optional for external candidates.
+    employeeId: z.string().trim().max(60).optional().default(''),
+    employeeName: z.string().trim().min(2).max(120),
+    candidateEmail: z.string().trim().email().max(254).optional().or(z.literal('')),
+    department: z.string().trim().min(2).max(120),
+    currentRole: z.string().trim().max(160).optional(),
+    currentLevel: z.string().trim().max(80).optional(),
     assessmentReason: z.enum(assessmentReasons),
-    targetRole: z.string().min(2).max(160),
-    targetLevel: z.string().min(1).max(80),
-    justification: z.string().min(20).max(4000),
+    targetRole: z.string().trim().min(2).max(160),
+    targetLevel: z.string().trim().min(1).max(80),
+    justification: z.string().trim().min(20).max(4000),
     priority: z.enum(['LOW', 'NORMAL', 'HIGH']).default('NORMAL'),
   })
   .superRefine((data, ctx) => {
@@ -146,7 +149,7 @@ export const eligibilityDecisionSchema = z.object({
     .array(
       z.object({
         code: z.string().min(1).max(40),
-        result: z.enum(['MET', 'NOT_CHECKED']),
+        result: z.enum(criterionResults),
       }),
     )
     .max(20)
@@ -154,6 +157,16 @@ export const eligibilityDecisionSchema = z.object({
   expectedVersion: z.number().int().positive(),
 });
 export type EligibilityDecisionInput = z.infer<typeof eligibilityDecisionSchema>;
+
+export const overrideRequestSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(5, 'Enter an override justification (at least 5 characters).')
+    .max(2000),
+  expectedVersion: z.number().int().positive().optional(),
+});
+export type OverrideRequestInput = z.infer<typeof overrideRequestSchema>;
 
 export const adminReopenableStages = [
   'REQUEST',
@@ -204,19 +217,35 @@ export const finalizePlanSchema = z.object({
 });
 export type FinalizePlanInput = z.infer<typeof finalizePlanSchema>;
 
-export const scheduleEventSchema = z.object({
-  planMethodId: z.string().uuid().optional(),
-  startsAt: z.string().datetime(),
-  endsAt: z.string().datetime().optional(),
-  timezone: z.string().min(1).max(80).optional(),
-  location: z.string().max(200).optional(),
-  meetingLink: z.string().max(500).optional(),
-  assessors: z
-    .array(z.object({ userId: z.string().min(1), displayName: z.string().min(1).max(120) }))
-    .max(20)
-    .optional(),
-  expectedVersion: z.number().int().positive(),
-});
+export const scheduleEventSchema = z
+  .object({
+    planMethodId: z.string().uuid().optional(),
+    startsAt: z.string().datetime(),
+    endsAt: z.string().datetime().optional(),
+    timezone: z.string().min(1).max(80).optional(),
+    location: z.string().max(200).optional(),
+    meetingLink: z
+      .string()
+      .max(500)
+      .refine((value) => !value || /^https?:\/\//i.test(value.trim()), {
+        message: 'Meeting link must use http:// or https://',
+      })
+      .optional(),
+    assessors: z
+      .array(z.object({ userId: z.string().min(1), displayName: z.string().min(1).max(120) }))
+      .max(20)
+      .optional(),
+    expectedVersion: z.number().int().positive(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.endsAt && new Date(data.endsAt).getTime() <= new Date(data.startsAt).getTime()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['endsAt'],
+        message: 'Session end time must be after the start time',
+      });
+    }
+  });
 export type ScheduleEventInput = z.infer<typeof scheduleEventSchema>;
 
 export const saveEvidenceSchema = z.object({
@@ -239,8 +268,8 @@ export const assessorRecommendationCodes = [
 export type AssessorRecommendationCode = (typeof assessorRecommendationCodes)[number];
 
 export const finalizeResultSchema = z.object({
-  resultCode: z.enum(resultCodes),
-  assessorRecommendation: z.string().trim().min(1).max(500).optional(),
+  resultCode: z.enum(resultCodes).optional(),
+  assessorRecommendation: z.enum(assessorRecommendationCodes).optional(),
   evidenceSummary: z.string().max(4000).optional(),
   strengths: z.string().max(4000).optional(),
   gaps: z.string().max(4000).optional(),
@@ -255,8 +284,18 @@ export const reopenResultSchema = z.object({
 });
 export type ReopenResultInput = z.infer<typeof reopenResultSchema>;
 
+export const reviseScorecardSchema = z.object({
+  reason: z.string().trim().min(3, 'Enter a reason of at least 3 characters.').max(500),
+});
+export type ReviseScorecardInput = z.infer<typeof reviseScorecardSchema>;
+
+export const feedbackVisibilitySchema = z.object({
+  visible: z.boolean(),
+});
+export type FeedbackVisibilityInput = z.infer<typeof feedbackVisibilitySchema>;
+
 export const updateAssessorRecommendationSchema = z.object({
-  code: z.string().trim().min(1).max(500),
+  code: z.enum(assessorRecommendationCodes),
   reason: z.string().trim().min(3).max(500),
   expectedVersion: z.number().int().positive(),
 });
@@ -326,6 +365,136 @@ export const closeCaseSchema = z.object({
 });
 export type CloseCaseInput = z.infer<typeof closeCaseSchema>;
 
+// ==========================================
+// Auth, Access Control & Administration Schemas
+// ==========================================
+
+export const authLoginSchema = z.object({
+  email: z.string().trim().email('Enter a valid email address.').max(254),
+  password: z.string().min(1, 'Enter your password.').max(256),
+});
+export type AuthLoginInput = z.infer<typeof authLoginSchema>;
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Enter your current password.').max(256),
+    newPassword: z
+      .string()
+      .min(12, 'Password must be at least 12 characters.')
+      .max(256, 'Password must be at most 256 characters.'),
+    confirmPassword: z.string().max(256).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.newPassword === data.currentPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['newPassword'],
+        message: 'Choose a new password that differs from your current one.',
+      });
+    }
+    if (typeof data.confirmPassword === 'string' && data.confirmPassword !== data.newPassword) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['confirmPassword'],
+        message: 'Passwords do not match.',
+      });
+    }
+  });
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+
+export const appRoleNames = [
+  'Employee',
+  'EmployeeManager',
+  'Requester',
+  'Manager',
+  'Coordinator',
+  'Assessor',
+  'PanelLead',
+  'HR',
+  'BusinessApprover',
+  'Auditor',
+  'Admin',
+] as const;
+export type AppRoleName = (typeof appRoleNames)[number];
+
+export const accessScopeTypes = [
+  'NONE',
+  'SELF',
+  'DIRECT_REPORTS',
+  'DEPARTMENTS',
+  'ASSIGNED',
+  'ORGANIZATION',
+] as const;
+export type AccessScopeType = (typeof accessScopeTypes)[number];
+
+export const adminCreateAccountSchema = z.object({
+  email: z.string().trim().email('Enter a valid company email address.').max(254),
+  displayName: z.string().trim().min(1, 'Display name is required.').max(120),
+  roles: z.array(z.string().min(1)).min(1, 'Select at least one role.').max(10),
+  scopeType: z.enum(accessScopeTypes),
+  scopeValues: z.array(z.string().trim()).max(100).default([]),
+  active: z.boolean().optional().default(true),
+  password: z.string().min(12).max(256).optional(),
+});
+export type AdminCreateAccountInput = z.infer<typeof adminCreateAccountSchema>;
+
+export const adminUpdateAccountSchema = z.object({
+  email: z.string().trim().email('Enter a valid company email address.').max(254).optional(),
+  displayName: z.string().trim().min(1, 'Display name is required.').max(120).optional(),
+  roles: z.array(z.string().min(1)).min(1).max(10).optional(),
+  scopeType: z.enum(accessScopeTypes).optional(),
+  scopeValues: z.array(z.string().trim()).max(100).optional(),
+  active: z.boolean().optional(),
+  password: z.string().min(12).max(256).optional(),
+});
+export type AdminUpdateAccountInput = z.infer<typeof adminUpdateAccountSchema>;
+
+export const slaWindowsSchema = z.object({
+  eligibilityHours: z.number().int().min(1).max(720),
+  assessorHours: z.number().int().min(1).max(720),
+  committeeHours: z.number().int().min(1).max(720),
+});
+
+export const administrationPolicySchema = z
+  .object({
+    version: z.string().min(1).max(40).optional(),
+    updatedAt: z.string().optional(),
+    cbiWeight: z.number().int().min(0).max(100),
+    caseStudyWeight: z.number().int().min(0).max(100),
+    simulationWeight: z.number().int().min(0).max(100),
+    passingScore: z.number().min(0).max(100),
+    blindGrading: z.boolean(),
+    autoEscalate: z.boolean(),
+    slaWindows: slaWindowsSchema,
+  })
+  .superRefine((policy, ctx) => {
+    const total = policy.cbiWeight + policy.caseStudyWeight + policy.simulationWeight;
+    if (total !== 100) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['cbiWeight'],
+        message: `Scoring weights must total 100% (currently ${total}%).`,
+      });
+    }
+  });
+
+export const adminPolicyEnforceSchema = z.object({
+  policy: administrationPolicySchema,
+  reason: z.string().trim().max(2000).optional(),
+});
+export type AdminPolicyEnforceInput = z.infer<typeof adminPolicyEnforceSchema>;
+
+export interface RolePermissionMatrixEntry {
+  role: AppRoleName;
+  label: string;
+  description: string;
+  allowedScopes: AccessScopeType[];
+  defaultHome: string;
+  pages: string[];
+  capabilities: string[];
+  restrictions: string[];
+}
+
 export interface AvailableAction {
   code: string;
   label: string;
@@ -363,7 +532,7 @@ export interface AssessmentCaseSummary {
   ageLabel: string;
   version: number;
   adminEditStage?: CaseStage | null;
-  scoringEnabled: false;
+  scoringEnabled: boolean;
   availableActions: AvailableAction[];
 }
 
@@ -376,7 +545,7 @@ export interface AssessmentCaseDetail extends AssessmentCaseSummary {
       code: string;
       label: string;
       blocking: boolean;
-      result: 'MET' | 'NOT_MET' | 'NOT_CHECKED';
+      result: CriterionResultCode;
     }>;
     decision?: EligibilityDecision;
     reason?: string;
@@ -388,6 +557,13 @@ export interface AssessmentCaseDetail extends AssessmentCaseSummary {
     timestamp: string;
     tone: 'info' | 'success' | 'warning' | 'danger';
   }>;
+}
+
+export interface OverviewNavCounts {
+  activeCases: number;
+  openTasks: number;
+  employees: number;
+  activeDevelopment: number;
 }
 
 export interface OverviewResponse {
@@ -413,6 +589,7 @@ export interface OverviewResponse {
     assessorHours: number;
     committeeHours: number;
   };
+  navCounts?: OverviewNavCounts;
 }
 
 export const DEFAULT_SLA_WINDOWS = {
@@ -420,6 +597,38 @@ export const DEFAULT_SLA_WINDOWS = {
   assessorHours: 120,
   committeeHours: 72,
 } as const;
+
+export interface DevelopmentActionDto {
+  id: string;
+  title: string;
+  ownerName: string;
+  dueDate?: string | null;
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED';
+  evidenceNote?: string | null;
+  completedAt?: string | null;
+}
+
+export interface DevelopmentPlanWithCaseDto {
+  id: string;
+  caseId: string;
+  ownerName: string;
+  actionPlan?: string | null;
+  learningManagementSystem?: string | null;
+  targetDate?: string | null;
+  status: string;
+  actions: DevelopmentActionDto[];
+  caseSummary?: {
+    caseCode: string;
+    employeeId: string;
+    employeeName: string;
+    department: string;
+    targetRole: string;
+    status: CaseStatus;
+    candidateType: CandidateType;
+    hiringOutcome: HiringOutcome;
+    hiringOutcomeReason?: HiringOutcomeReason | null;
+  };
+}
 
 export interface ApiErrorShape {
   error: {
@@ -481,15 +690,23 @@ export function isAllowedAttachmentType(fileName: string, contentType: string): 
 export const createAttachmentSchema = z.object({
   caseId: z.string().uuid(),
   evidenceId: z.string().uuid().optional(),
-  fileName: z.string().min(1).max(255),
-  contentType: z.string().min(1).max(120),
+  fileName: z
+    .string()
+    .trim()
+    .min(1)
+    .max(255)
+    .refine((value) => !/[\\/]/.test(value) && !value.includes('..'), {
+      message: 'File name must not contain path separators or traversal sequences.',
+    }),
+  contentType: z.string().trim().min(1).max(120),
   sizeBytes: z
     .number()
     .int()
     .positive('File size must be greater than 0 bytes')
     .max(MAX_ATTACHMENT_SIZE_BYTES, 'File size exceeds 10MB maximum limit'),
-  classification: z.string().min(1, 'Classification is required').max(80),
+  classification: z.string().trim().min(1, 'Classification is required').max(80),
   storageKey: z.string().min(1).max(500).optional(),
+  contentBase64: z.string().max(15_000_000).optional(),
 });
 export type CreateAttachmentInput = z.infer<typeof createAttachmentSchema>;
 

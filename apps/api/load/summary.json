@@ -1,13 +1,6 @@
 {
   "options": {
-    "summaryTrendStats": [
-      "avg",
-      "min",
-      "med",
-      "max",
-      "p(90)",
-      "p(95)"
-    ],
+    "summaryTrendStats": ["avg", "min", "med", "max", "p(90)", "p(95)"],
     "summaryTimeUnit": "",
     "noColor": false
   },
@@ -208,63 +201,63 @@
     "id": "d41d8cd98f00b204e9800998ecf8427e",
     "groups": [],
     "checks": [
-        {
-          "path": "::overview returns 200",
-          "id": "7a37edf5af334d1fd85ee141321dca9d",
-          "passes": 571,
-          "fails": 0,
-          "name": "overview returns 200"
-        },
-        {
-          "path": "::overview has metrics",
-          "id": "7a7c130abfb1ecdb18cefc18f64b8561",
-          "passes": 571,
-          "fails": 0,
-          "name": "overview has metrics"
-        },
-        {
-          "name": "case list returns 200",
-          "path": "::case list returns 200",
-          "id": "16574c77361b613bb87f286c209c1d7a",
-          "passes": 571,
-          "fails": 0
-        },
-        {
-          "id": "f4b63bd2007f20d97e2dcefebb259265",
-          "passes": 571,
-          "fails": 0,
-          "name": "case detail returns 200",
-          "path": "::case detail returns 200"
-        },
-        {
-          "passes": 571,
-          "fails": 0,
-          "name": "pending eligibility list returns 200",
-          "path": "::pending eligibility list returns 200",
-          "id": "d3e594a2d938f5a3397de39c9d58ba1c"
-        },
-        {
-          "name": "tasks queue returns 200",
-          "path": "::tasks queue returns 200",
-          "id": "eca2bd6563955394a0dc1c1e9b1d7a07",
-          "passes": 571,
-          "fails": 0
-        },
-        {
-          "id": "9e7f929de6e75811421e41f39449c37b",
-          "passes": 571,
-          "fails": 0,
-          "name": "create draft returns 201",
-          "path": "::create draft returns 201"
-        },
-        {
-          "name": "submit case returns 200 or 201",
-          "path": "::submit case returns 200 or 201",
-          "id": "0399eeb2fb1c0b6dd5d3aba74238b06c",
-          "passes": 571,
-          "fails": 0
-        }
-      ],
+      {
+        "path": "::overview returns 200",
+        "id": "7a37edf5af334d1fd85ee141321dca9d",
+        "passes": 571,
+        "fails": 0,
+        "name": "overview returns 200"
+      },
+      {
+        "path": "::overview has metrics",
+        "id": "7a7c130abfb1ecdb18cefc18f64b8561",
+        "passes": 571,
+        "fails": 0,
+        "name": "overview has metrics"
+      },
+      {
+        "name": "case list returns 200",
+        "path": "::case list returns 200",
+        "id": "16574c77361b613bb87f286c209c1d7a",
+        "passes": 571,
+        "fails": 0
+      },
+      {
+        "id": "f4b63bd2007f20d97e2dcefebb259265",
+        "passes": 571,
+        "fails": 0,
+        "name": "case detail returns 200",
+        "path": "::case detail returns 200"
+      },
+      {
+        "passes": 571,
+        "fails": 0,
+        "name": "pending eligibility list returns 200",
+        "path": "::pending eligibility list returns 200",
+        "id": "d3e594a2d938f5a3397de39c9d58ba1c"
+      },
+      {
+        "name": "tasks queue returns 200",
+        "path": "::tasks queue returns 200",
+        "id": "eca2bd6563955394a0dc1c1e9b1d7a07",
+        "passes": 571,
+        "fails": 0
+      },
+      {
+        "id": "9e7f929de6e75811421e41f39449c37b",
+        "passes": 571,
+        "fails": 0,
+        "name": "create draft returns 201",
+        "path": "::create draft returns 201"
+      },
+      {
+        "name": "submit case returns 200 or 201",
+        "path": "::submit case returns 200 or 201",
+        "id": "0399eeb2fb1c0b6dd5d3aba74238b06c",
+        "passes": 571,
+        "fails": 0
+      }
+    ],
     "name": "",
     "path": ""
   }

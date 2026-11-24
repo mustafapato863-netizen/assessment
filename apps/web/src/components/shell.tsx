@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
-import { useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowRight,
   BarChart3,
@@ -23,24 +23,16 @@ import {
   WifiOff,
   X,
 } from 'lucide-react';
-import { getActiveUser, getSession, logout, subscribeToAuth, type AppUser } from '../lib/auth';
+import { canAccessRoute, getSession, logout, subscribeToAuth, type AppUser } from '../lib/auth';
 import { SghHeartSvg } from '../design-system/brand/sgh-heart-svg';
 import { SettingsModal } from './settings-modal';
+import { ProfileModal } from './profile-modal';
 import { copy, type Copy, type View } from '../lib/labels';
 import { PILOT_FLAGS } from '../lib/flags';
 import { useToast, ToastContext, type ToastContextValue } from '../hooks/use-toast';
 import { CommandPalette, ShortcutsHelpDialog, useKeyboardShortcuts } from './command-palette';
 import { api } from '../lib/api';
-import { getKpis } from '../routes/workQueue';
-import { mapWorkItems } from '../routes/my-work-data';
-import { mapCasesForEmployeeStats } from '../routes/assessment-case-adapter';
-import { employeeStats, groupByEmployee } from '../routes/employees-logic';
-import { mapAssessmentCase } from '../routes/assessment-case-adapter';
-import {
-  developmentKpis,
-  mapDevelopmentPlan,
-  type DevelopmentPlanData,
-} from '../routes/development-logic';
+import { queryKeys } from '../lib/query-keys';
 
 export { useToast, ToastContext, type ToastContextValue };
 
@@ -64,7 +56,7 @@ export function OfflineBanner() {
 
   return (
     <div className="offline-banner" role="status" aria-live="polite">
-      <WifiOff size={16} />
+      <WifiOff size={16} aria-hidden="true" />
       <span>
         You are currently working offline. Changes cannot be synced until connection is restored.
       </span>
@@ -78,6 +70,14 @@ function isRouteActive(id: string, pathname: string): boolean {
   return pathname === `/${id}` || pathname.startsWith(`/${id}/`);
 }
 
+interface SidebarNavItem {
+  id: View;
+  label: string;
+  icon: typeof LayoutDashboard;
+  count?: string;
+  path: string;
+}
+
 export function NavItem({
   item,
   active,
@@ -89,16 +89,16 @@ export function NavItem({
   collapsed: boolean;
   onClick: () => void;
 }) {
-  // A zero count (for example "My work 0") shows no badge.
   const hasCount = Boolean(item.count) && item.count !== '0';
   return (
     <button
+      type="button"
       className={`nav-item ${active ? 'active' : ''} ${collapsed ? 'collapsed' : ''}`}
       onClick={onClick}
       title={collapsed ? item.label : undefined}
       aria-current={active ? 'page' : undefined}
     >
-      <item.icon size={18} />
+      <item.icon size={18} aria-hidden="true" />
       {!collapsed && <span>{item.label}</span>}
       {!collapsed && hasCount && <span className="nav-count">{item.count}</span>}
     </button>
@@ -114,6 +114,8 @@ export function Sidebar({
   onClose,
   activeUser,
   onOpenSettings,
+  onOpenProfile,
+  onLogout,
 }: {
   collapsed: boolean;
   mobileOpen: boolean;
@@ -123,61 +125,69 @@ export function Sidebar({
   onClose: () => void;
   activeUser?: AppUser | null;
   onOpenSettings?: () => void;
+  onOpenProfile?: () => void;
+  onLogout?: () => void;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
   const t = propT ?? copy;
   const user = activeUser ?? null;
-  const canSeeMyWork = [
-    'SYS_ADMIN',
-    'HR_ADMIN',
-    'MANAGER',
-    'EMPLOYEE_MANAGER',
-    'DEV_LEAD',
-    'APPROVER',
-    'ASSESSOR',
-  ].includes(user?.role ?? '');
-  const { data: overviewData } = useQuery({
-    queryKey: ['overview'],
-    queryFn: api.overview,
-    enabled: canSeeMyWork,
-  });
-  const { data: casesData } = useQuery({
-    queryKey: ['cases'],
-    queryFn: () => api.cases(),
-    enabled: canSeeMyWork,
-  });
-  const developmentCases = (casesData ?? []).filter(
-    (caseItem) => caseItem.status === 'DEVELOPMENT_IN_PROGRESS',
-  );
-  const developmentPlanQueries = useQueries({
-    queries: developmentCases.map((caseItem) => ({
-      queryKey: ['development', caseItem.id],
-      queryFn: () => api.getDevelopment<DevelopmentPlanData>(caseItem.id).catch(() => null),
-      staleTime: 30_000,
-    })),
-  });
-  const myWorkItems = mapWorkItems(overviewData?.tasks ?? [], casesData ?? []);
-  const myWorkCount =
-    overviewData && casesData ? String(getKpis(myWorkItems).openCases) : undefined;
-  const employeeCount = casesData
-    ? String(employeeStats(groupByEmployee(mapCasesForEmployeeStats(casesData))).people)
-    : undefined;
-  const developmentCount = casesData
-    ? String(
-        developmentKpis(
-          developmentCases.map((caseItem, index) =>
-            mapDevelopmentPlan(
-              mapAssessmentCase(caseItem),
-              developmentPlanQueries[index]?.data ?? null,
-            ),
-          ),
-        ).activePlans,
-      )
-    : undefined;
 
-  // Cycle progress: live cases (cancelled ones left out) grouped by stage.
-  // Decision = Recommendation and Approval, the same stages the cases list calls "decision".
+  const canSeeCases = canAccessRoute(user, 'cases');
+  const canSeeOverview = canAccessRoute(user, 'overview') || canAccessRoute(user, 'tasks');
+
+  const { data: overviewData } = useQuery({
+    queryKey: queryKeys.overview(),
+    queryFn: api.overview,
+    enabled: Boolean(user) && canSeeOverview,
+    staleTime: 60_000,
+  });
+
+  const { data: casesData } = useQuery({
+    queryKey: queryKeys.cases(),
+    queryFn: () => api.cases(),
+    enabled: Boolean(user) && canSeeCases,
+    staleTime: 60_000,
+  });
+
+  const navCounts = (
+    overviewData as
+      | (typeof overviewData & {
+          navCounts?: {
+            activeCases: number;
+            openTasks: number;
+            employees: number;
+            activeDevelopment: number;
+          };
+        })
+      | undefined
+  )?.navCounts;
+
+  const myWorkCount =
+    navCounts !== undefined
+      ? String(navCounts.openTasks)
+      : overviewData?.tasks
+        ? String(overviewData.tasks.length)
+        : undefined;
+  const casesCount =
+    casesData !== undefined
+      ? String(casesData.length)
+      : navCounts !== undefined
+        ? String(navCounts.activeCases)
+        : undefined;
+  const employeeCount =
+    navCounts !== undefined
+      ? String(navCounts.employees)
+      : casesData
+        ? String(new Set(casesData.map((c) => c.employeeId)).size)
+        : undefined;
+  const developmentCount =
+    navCounts !== undefined
+      ? String(navCounts.activeDevelopment)
+      : casesData
+        ? String(casesData.filter((c) => c.status === 'DEVELOPMENT_IN_PROGRESS').length)
+        : undefined;
+
   const cycleCases = (casesData ?? []).filter((caseItem) => caseItem.status !== 'CANCELLED');
   const cycleStageCount = (stages: string[]) =>
     cycleCases.filter((caseItem) => stages.includes(caseItem.stage)).length;
@@ -190,97 +200,85 @@ export function Sidebar({
     : 0;
   const cycleSegmentPercent = (count: number) =>
     cycleCases.length ? (count / cycleCases.length) * 100 : 0;
-  // Each key is also the segment class in the bar and the swatch colour (seg-<key>).
   const cycleStages = [
     { key: 'decision', label: 'Decision', count: cycleDecisionCount },
     { key: 'follow-up', label: 'Follow-up', count: cycleFollowUpCount },
     { key: 'closed', label: 'Closed', count: cycleClosedCount },
   ];
 
-  const standardItems: Array<{
-    id: View;
-    label: string;
-    icon: typeof LayoutDashboard;
-    count?: string;
-    path: string;
-  }> = [
-    { id: 'overview', label: t.overview, icon: LayoutDashboard, path: '/' },
-    { id: 'tasks', label: t.tasks, icon: ListTodo, count: myWorkCount, path: '/tasks' },
-    {
+  const workspaceItems: SidebarNavItem[] = [];
+  if (canAccessRoute(user, 'overview')) {
+    workspaceItems.push({ id: 'overview', label: t.overview, icon: LayoutDashboard, path: '/' });
+  }
+  if (canAccessRoute(user, 'tasks')) {
+    workspaceItems.push({
+      id: 'tasks',
+      label: t.tasks,
+      icon: ListTodo,
+      count: myWorkCount,
+      path: '/tasks',
+    });
+  }
+  if (canAccessRoute(user, 'cases')) {
+    workspaceItems.push({
       id: 'cases',
       label: t.cases,
       icon: ClipboardCheck,
-      count: casesData ? String(casesData.length) : undefined,
+      count: casesCount,
       path: '/assessments',
-    },
-    {
+    });
+  }
+  if (canAccessRoute(user, 'assessor')) {
+    workspaceItems.push({
+      id: 'assessor',
+      label: 'My assessments',
+      icon: UserCheck,
+      path: '/assessor',
+    });
+  }
+  if (user?.role === 'EMPLOYEE') {
+    workspaceItems.push({
+      id: 'my-result',
+      label: 'My result',
+      icon: ClipboardCheck,
+      path: '/my-result',
+    });
+  } else if (canAccessRoute(user, 'employees')) {
+    workspaceItems.push({
       id: 'employees',
       label: t.employees,
       icon: Users,
       count: employeeCount,
       path: '/employees',
-    },
-    {
+    });
+  }
+
+  const insightItems: SidebarNavItem[] = [];
+  if (canAccessRoute(user, 'development')) {
+    insightItems.push({
       id: 'development',
       label: t.development,
       icon: TrendingUp,
       count: developmentCount,
       path: '/development',
-    },
-    {
+    });
+  }
+  if (canAccessRoute(user, 'insights')) {
+    insightItems.push({
       id: 'insights',
       label: t.insights,
       icon: BarChart3,
       path: '/insights',
-    },
-    // Calibration is for the calibration committee (matches the /calibration RoleGate).
-    ...(PILOT_FLAGS.calibration &&
-    ['SYS_ADMIN', 'HR_ADMIN', 'MANAGER', 'ASSESSOR'].includes(user?.role ?? '')
-      ? [{ id: 'calibration' as View, label: t.calibration, icon: Scale, path: '/calibration' }]
-      : []),
-  ];
-  const items: Array<{
-    id: View;
-    label: string;
-    icon: typeof LayoutDashboard;
-    count?: string;
-    path: string;
-  }> =
-    user?.role === 'ASSESSOR'
-      ? [
-          ...standardItems,
-          { id: 'assessor', label: 'My assessments', icon: UserCheck, path: '/assessor' },
-        ]
-      : user?.role === 'EMPLOYEE'
-        ? [{ id: 'my-result', label: 'My result', icon: ClipboardCheck, path: '/my-result' }]
-        : user?.role === 'EMPLOYEE_MANAGER'
-          ? [
-              {
-                id: 'employees',
-                label: t.employees,
-                icon: Users,
-                count: employeeCount,
-                path: '/employees',
-              },
-              {
-                id: 'cases',
-                label: t.cases,
-                icon: ClipboardCheck,
-                count: casesData ? String(casesData.length) : undefined,
-                path: '/assessments',
-              },
-            ]
-          : standardItems;
-  const workspaceItems =
-    user?.role === 'ASSESSOR'
-      ? [
-          ...standardItems.slice(0, 4),
-          { id: 'assessor' as View, label: 'My assessments', icon: UserCheck, path: '/assessor' },
-        ]
-      : user?.role === 'EMPLOYEE' || user?.role === 'EMPLOYEE_MANAGER'
-        ? items
-        : items.slice(0, 4);
-  const insightItems = user?.role === 'ASSESSOR' ? standardItems.slice(4) : items.slice(4);
+    });
+  }
+  if (PILOT_FLAGS.calibration && canAccessRoute(user, 'calibration')) {
+    insightItems.push({
+      id: 'calibration',
+      label: t.calibration,
+      icon: Scale,
+      path: '/calibration',
+    });
+  }
 
   const handleSelect = (itemId: View, path: string) => {
     if (onSelect) {
@@ -293,6 +291,7 @@ export function Sidebar({
 
   const initials = user?.avatarInitials ?? '?';
   const avatarColor = user?.avatarColor ?? 'avatar-slate';
+  const isAdmin = canAccessRoute(user, 'admin');
 
   return (
     <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
@@ -305,6 +304,7 @@ export function Sidebar({
           <small>Saudi German Health</small>
         </div>
         <button
+          type="button"
           className="icon-button mobile-close"
           aria-label="Close navigation"
           onClick={onClose}
@@ -314,14 +314,14 @@ export function Sidebar({
       </div>
 
       <div className="workspace-switch">
-        <div className="workspace-icon">
+        <div className="workspace-icon" aria-hidden="true">
           <Building2 size={19} />
         </div>
         <div className="workspace-copy">
           <strong>Egypt</strong>
           <small>{t.cycle}</small>
         </div>
-        <span className="online-dot" />
+        <span className="online-dot" aria-hidden="true" />
       </div>
 
       <nav className="nav-groups" aria-label="Main navigation">
@@ -335,7 +335,8 @@ export function Sidebar({
             onClick={() => handleSelect(item.id, item.path)}
           />
         ))}
-        {user?.role !== 'EMPLOYEE' && user?.role !== 'EMPLOYEE_MANAGER' && (
+
+        {insightItems.length > 0 && (
           <>
             <span className="nav-label nav-label-spaced">INSIGHTS</span>
             {insightItems.map((item) => (
@@ -349,7 +350,8 @@ export function Sidebar({
             ))}
           </>
         )}
-        {user?.role === 'SYS_ADMIN' && (
+
+        {isAdmin && (
           <>
             <span className="nav-label nav-label-spaced">SYSTEM</span>
             <NavItem
@@ -362,7 +364,7 @@ export function Sidebar({
         )}
       </nav>
 
-      {!collapsed && (
+      {!collapsed && canSeeCases && (
         <div className="sidebar-cycle">
           <div className="cycle-header">
             <strong>Cycle progress</strong>
@@ -400,33 +402,69 @@ export function Sidebar({
             ))}
           </ul>
           <div className="cycle-footer">
-            <a className="cycle-view" href="#/cases">
+            <button
+              type="button"
+              className="cycle-view"
+              style={{ background: 'transparent', padding: 0 }}
+              onClick={() => {
+                navigate('/assessments');
+                onClose();
+              }}
+            >
               View cases
               <ArrowRight size={12} aria-hidden="true" />
-            </a>
+            </button>
           </div>
         </div>
       )}
 
       {!collapsed && user && (
-        <div
-          className="sidebar-user"
-          role={user.role === 'SYS_ADMIN' ? 'button' : undefined}
-          tabIndex={user.role === 'SYS_ADMIN' ? 0 : undefined}
-          onClick={user.role === 'SYS_ADMIN' ? onOpenSettings : undefined}
-          title={user.role === 'SYS_ADMIN' ? 'System Settings' : undefined}
-          style={{ cursor: user.role === 'SYS_ADMIN' ? 'pointer' : 'default' }}
-          onKeyDown={(e) =>
-            user.role === 'SYS_ADMIN' && (e.key === 'Enter' || e.key === ' ') && onOpenSettings?.()
-          }
-        >
-          <div className={`avatar ${avatarColor}`}>{initials}</div>
-          <div>
-            <strong>{user.name}</strong>
-            <small>{user.roleTitle}</small>
+        <>
+          <button
+            type="button"
+            className="sidebar-user"
+            onClick={() => {
+              onClose();
+              onOpenProfile?.();
+            }}
+            title="Open My Profile & Password"
+            style={{ width: '100%', textAlign: 'left' }}
+          >
+            <div className={`avatar ${avatarColor}`}>{initials}</div>
+            <div>
+              <strong>{user.name}</strong>
+              <small>{user.roleTitle}</small>
+            </div>
+            <ChevronDown size={15} />
+          </button>
+
+          <div className="sidebar-mobile-actions">
+            {isAdmin && (
+              <button
+                type="button"
+                className="sidebar-mobile-btn"
+                onClick={() => {
+                  onClose();
+                  onOpenSettings?.();
+                }}
+              >
+                <Settings2 size={15} />
+                System Settings
+              </button>
+            )}
+            <button
+              type="button"
+              className="sidebar-mobile-btn signout"
+              onClick={() => {
+                onClose();
+                onLogout?.();
+              }}
+            >
+              <LogOut size={15} />
+              Sign out
+            </button>
           </div>
-          <ChevronDown size={15} />
-        </div>
+        </>
       )}
     </aside>
   );
@@ -439,6 +477,7 @@ export function Topbar({
   collapsed,
   onOpenPalette,
   onOpenSettings,
+  onOpenProfile,
   activeUser,
   onLogout,
 }: {
@@ -448,6 +487,7 @@ export function Topbar({
   collapsed: boolean;
   onOpenPalette?: () => void;
   onOpenSettings?: () => void;
+  onOpenProfile?: () => void;
   activeUser?: AppUser | null;
   onLogout?: () => void;
 }) {
@@ -462,20 +502,34 @@ export function Topbar({
         setUserMenuOpen(false);
       }
     };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setUserMenuOpen(false);
+    };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
   }, [userMenuOpen]);
 
   const user = activeUser ?? null;
   const initials = user?.avatarInitials ?? '?';
   const avatarColor = user?.avatarColor ?? 'avatar-slate';
+  const isAdmin = canAccessRoute(user, 'admin');
 
   return (
     <header className="topbar">
-      <button className="icon-button mobile-menu" onClick={onOpenMenu} aria-label="Open navigation">
+      <button
+        type="button"
+        className="icon-button mobile-menu"
+        onClick={onOpenMenu}
+        aria-label="Open navigation"
+      >
         <Menu size={21} />
       </button>
       <button
+        type="button"
         data-sidebar-toggle
         className="icon-button desktop-toggle"
         onClick={onToggleCollapse}
@@ -498,7 +552,7 @@ export function Topbar({
         aria-label="Open command palette"
         style={{ cursor: 'pointer' }}
       >
-        <Search size={18} />
+        <Search size={18} aria-hidden="true" />
         <input
           aria-label={t.search}
           placeholder={t.search}
@@ -510,12 +564,12 @@ export function Topbar({
       </div>
 
       <div className="topbar-actions">
-        {/* Settings button */}
-        {user?.role === 'SYS_ADMIN' && (
+        {isAdmin && (
           <button
+            type="button"
             className="icon-button settings-button"
             aria-label="System Settings"
-            title="System Settings & Database Telemetry"
+            title="System Settings & Health"
             onClick={() => {
               setUserMenuOpen(false);
               onOpenSettings?.();
@@ -525,13 +579,12 @@ export function Topbar({
           </button>
         )}
 
-        {/* User profile dropdown */}
         <div className="topbar-user-wrapper" ref={userMenuRef} style={{ position: 'relative' }}>
           <button
             type="button"
             className="topbar-profile topbar-profile-interactive"
             onClick={() => setUserMenuOpen((prev) => !prev)}
-            aria-label={`Signed in as ${user?.name ?? 'User'}. Click for account options.`}
+            aria-label={`Signed in as ${user?.name ?? 'User'}. Account options.`}
             aria-expanded={userMenuOpen}
             aria-haspopup="true"
           >
@@ -545,7 +598,6 @@ export function Topbar({
 
           {userMenuOpen && (
             <div className="user-dropdown-menu panel" role="menu">
-              {/* Account info */}
               <div className="user-dropdown-header">
                 <div className={`avatar avatar-lg ${avatarColor}`}>{initials}</div>
                 <div className="user-dropdown-info">
@@ -557,7 +609,7 @@ export function Topbar({
 
               <div className="user-dropdown-divider" />
 
-              {user?.role === 'SYS_ADMIN' && (
+              {isAdmin && (
                 <button
                   type="button"
                   role="menuitem"
@@ -578,11 +630,11 @@ export function Topbar({
                 className="user-dropdown-item"
                 onClick={() => {
                   setUserMenuOpen(false);
-                  /* profile page - future */
+                  onOpenProfile?.();
                 }}
               >
                 <User size={15} />
-                My Profile
+                My Profile & Password
               </button>
 
               <div className="user-dropdown-divider" />
@@ -626,28 +678,19 @@ export function AppShell({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [activeUser, setActiveUserState] = useState<AppUser | null>(getSession);
 
   const collapsed = propCollapsed ?? sidebarCollapsed;
   const mobileOpen = propMobileOpen ?? mobileMenuOpen;
   const t = propT ?? copy;
 
-  useEffect(() => {
-    const unsub = subscribeToAuth((u) => setActiveUserState(u));
-    return unsub;
-  }, []);
-
-  // Redirect to login if not authenticated
-  useEffect(() => {
-    if (!getSession()) {
-      navigate('/login', { replace: true });
-    }
-  }, [navigate]);
+  useEffect(() => subscribeToAuth((u) => setActiveUserState(u)), []);
 
   const handleLogout = () => {
     logout();
     queryClient.clear();
-    showToast('You have been signed out successfully.');
+    showToast('You have been signed out successfully.', 'success');
     navigate('/login', { replace: true });
   };
 
@@ -665,6 +708,8 @@ export function AppShell({
         onClose={() => setMobileMenuOpen(false)}
         activeUser={activeUser}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenProfile={() => setProfileOpen(true)}
+        onLogout={handleLogout}
       />
       {mobileOpen && (
         <div
@@ -682,6 +727,7 @@ export function AppShell({
           collapsed={collapsed}
           onOpenPalette={() => setPaletteOpen(true)}
           onOpenSettings={() => setSettingsOpen(true)}
+          onOpenProfile={() => setProfileOpen(true)}
           activeUser={activeUser}
           onLogout={handleLogout}
         />
@@ -690,6 +736,7 @@ export function AppShell({
       <CommandPalette isOpen={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <ShortcutsHelpDialog isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <ProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
     </div>
   );
 }

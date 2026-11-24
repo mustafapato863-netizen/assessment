@@ -178,11 +178,12 @@ export function verifyEntraJwt(token: string, options: VerifyJwtOptions): AuthAc
   const now = Math.floor(Date.now() / 1000);
   const tolerance = options.clockToleranceSec ?? 60;
 
-  // Expiration check
-  if (typeof payload.exp === 'number') {
-    if (now > payload.exp + tolerance) {
-      throw new Error(`Token has expired (exp: ${payload.exp}, now: ${now})`);
-    }
+  // Expiration check (mandatory)
+  if (typeof payload.exp !== 'number') {
+    throw new Error('Token is missing exp claim');
+  }
+  if (now > payload.exp + tolerance) {
+    throw new Error(`Token has expired (exp: ${payload.exp}, now: ${now})`);
   }
 
   // Not Before check

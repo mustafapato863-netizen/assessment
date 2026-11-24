@@ -59,11 +59,14 @@ export class EligibilityDomain {
     return parsed.data;
   }
 
-  static assertCanDecide(record: {
-    status: string;
-    version: number;
-    eligibility?: unknown | null;
-  }, expectedVersion: number) {
+  static assertCanDecide(
+    record: {
+      status: string;
+      version: number;
+      eligibility?: unknown | null;
+    },
+    expectedVersion: number,
+  ) {
     if (record.version !== expectedVersion) {
       throw new ConflictException({
         error: {

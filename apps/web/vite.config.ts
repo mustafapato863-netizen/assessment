@@ -1,15 +1,28 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const apiTarget = process.env.DEV_API_TARGET || 'http://localhost:8080';
+
 export default defineConfig({
-  envDir: '../..',
   plugins: [react()],
   server: {
-    port: Number(process.env.WEB_PORT || 5174),
-    strictPort: process.env.DEV_AUTO_PORT === 'false',
+    port: 5174,
     proxy: {
-      '/api': process.env.DEV_API_TARGET || 'http://localhost:3001',
-      '/health': process.env.DEV_API_TARGET || 'http://localhost:3001',
+      '/api': {
+        target: apiTarget,
+        changeOrigin: true,
+      },
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'query-vendor': ['@tanstack/react-query'],
+          'icons-vendor': ['lucide-react'],
+        },
+      },
     },
   },
 });

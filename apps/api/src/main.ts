@@ -14,8 +14,10 @@ if (typeof process.loadEnvFile === 'function') {
 }
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { gzipSync } from 'node:zlib';
+import type { NextFunction, Request, Response } from 'express';
 import { AppModule } from './app.module';
-
+import { HttpExceptionFilter } from './common/http-exception.filter';
 import { securityHeadersMiddleware, rateLimiterMiddleware } from './common/security.middleware';
 import { initObservability } from './common/observability';
 import { validateProductionEnvironment } from './common/environment.validation';
@@ -34,14 +36,41 @@ function trustProxySetting(raw: string | undefined): number | boolean | string {
   return value;
 }
 
+/** Lightweight zero-dependency JSON gzip compression for payloads >= 1 KB. */
+function jsonGzipMiddleware(req: Request, res: Response, next: NextFunction): void {
+  const acceptEncoding = req.headers['accept-encoding'];
+  if (typeof acceptEncoding !== 'string' || !acceptEncoding.includes('gzip')) {
+    return next();
+  }
+  const origJson = res.json.bind(res);
+  res.json = ((body: unknown) => {
+    try {
+      if (res.headersSent) return origJson(body);
+      const serialized = JSON.stringify(body);
+      if (!serialized || serialized.length < 1024) {
+        return origJson(body);
+      }
+      const compressed = gzipSync(serialized);
+      res.setHeader('Content-Encoding', 'gzip');
+      res.setHeader('Vary', 'Accept-Encoding');
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('Content-Length', compressed.length);
+      return res.send(compressed);
+    } catch {
+      return origJson(body);
+    }
+  }) as Response['json'];
+  next();
+}
+
 async function bootstrap() {
   initObservability();
   const app = await NestFactory.create(AppModule, { bufferLogs: true });
-  // Only trust X-Forwarded-For from known proxies so req.ip (rate limits,
-  // sign-in lockout) cannot be spoofed. Default trusts private-network proxies
-  // (Docker, nginx, a load balancer on the VNet). Set TRUST_PROXY to a hop count
-  // or address list if the API sits behind a public CDN or proxy.
-  app.getHttpAdapter().getInstance().set('trust proxy', trustProxySetting(process.env.TRUST_PROXY));
+  app.enableShutdownHooks();
+
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.disable('x-powered-by');
+  expressApp.set('trust proxy', trustProxySetting(process.env.TRUST_PROXY));
 
   app.enableCors({
     origin: createCorsOriginChecker(process.env.CORS_ALLOWED_ORIGINS),
@@ -53,6 +82,8 @@ async function bootstrap() {
 
   app.use(securityHeadersMiddleware);
   app.use(rateLimiterMiddleware);
+  app.use(jsonGzipMiddleware);
+  app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
 
   const port = Number(process.env.PORT ?? 8080);

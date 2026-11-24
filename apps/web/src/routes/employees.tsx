@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import './employees.css';
 import { api } from '../lib/api';
-import { getActiveUser } from '../lib/auth';
+import { getSession, hasBackendRole } from '../lib/auth';
+import { initials } from '../lib/format';
+import { queryKeys } from '../lib/query-keys';
 import { ErrorBanner, LoadingRows } from '../components/ui';
 import type { AssessmentCaseDetail } from '@assessflow/contracts';
 import { formatCaseId } from './workQueue';
@@ -20,33 +23,33 @@ import {
 
 const PAGE_SIZE = 8;
 
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase();
-}
-
 export function EmployeesPage() {
+  const { id: routeEmployeeId } = useParams<{ id?: string }>();
+  const navigate = useNavigate();
   const [q, setQ] = useState('');
   const [dept, setDept] = useState('');
   const [page, setPage] = useState(1);
-  const [selectedId, setSelectedId] = useState(readSelected);
+  const [selectedId, setSelectedId] = useState(() => routeEmployeeId || readSelected());
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const [nameReason, setNameReason] = useState('');
   const queryClient = useQueryClient();
-  const isAdmin = getActiveUser().role === 'SYS_ADMIN';
+  const isAdmin = hasBackendRole(getSession(), ['Admin']);
+
+  useEffect(() => {
+    if (routeEmployeeId) {
+      setSelectedId(decodeURIComponent(routeEmployeeId));
+      setEditingName(false);
+    }
+  }, [routeEmployeeId]);
 
   const {
     data: rawCases,
     isLoading,
     isError,
+    refetch,
   } = useQuery({
-    queryKey: ['cases'],
+    queryKey: queryKeys.cases(),
     queryFn: () => api.cases(),
   });
   const cases = useMemo(() => (rawCases ?? []).map(mapAssessmentCase), [rawCases]);
@@ -170,7 +173,7 @@ export function EmployeesPage() {
               </select>
             </div>
 
-            <div className="em-row em-row--head" role="row">
+            <div className="em-row em-row--head" aria-hidden="true">
               <span />
               <span>Employee</span>
               <span>Department</span>
@@ -187,8 +190,18 @@ export function EmployeesPage() {
               {items.map((employee) => {
                 const chip = stageChip(employee.latest);
                 const isSelected = selected?.id === employee.id;
+                const handlePickEmployee = () => {
+                  setSelectedId(employee.id);
+                  writeSelected(employee.id);
+                  navigate(`/employees/${encodeURIComponent(employee.id)}`);
+                };
                 return (
-                  <li key={employee.id} className={`em-row${isSelected ? ' is-on' : ''}`}>
+                  <li
+                    key={employee.id}
+                    className={`em-row${isSelected ? ' is-on' : ''}`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={handlePickEmployee}
+                  >
                     <span className="em-avatar" aria-hidden="true">
                       {initials(employee.name)}
                     </span>
@@ -215,7 +228,12 @@ export function EmployeesPage() {
                       className="em-open"
                       aria-label={`View ${employee.name}`}
                       aria-pressed={isSelected}
-                      onClick={() => writeSelected(employee.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setSelectedId(employee.id);
+                        writeSelected(employee.id);
+                        navigate(`/employees/${encodeURIComponent(employee.id)}`);
+                      }}
                     >
                       →
                     </button>
@@ -447,7 +465,7 @@ export function EmployeesPage() {
 
                         <div className="em-tl__bottom">
                           <span className="em-sub">Case {formatCaseId(item.caseId)}</span>
-                          <a href={item.href}>Open full case →</a>
+                          <Link to={item.href.replace(/^#/, '')}>Open full case →</Link>
                         </div>
                       </li>
                     );

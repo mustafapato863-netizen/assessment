@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import './assessments.css';
+import { initials } from '../lib/format';
 import { formatCaseId } from './workQueue';
 import {
   TABS,
@@ -14,16 +16,6 @@ import {
   type AssessmentFilters,
   type AssessmentListCase,
 } from './assessments-logic';
-
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase();
-}
 
 export default function Assessments({
   cases = [],
@@ -174,7 +166,7 @@ export default function Assessments({
           </select>
         </div>
 
-        <div className="as-row as-row--head" role="row">
+        <div className="as-row as-row--head" aria-hidden="true">
           <span />
           <span>Employee</span>
           <span>Reason</span>
@@ -219,13 +211,13 @@ export default function Assessments({
                   <strong className="as-date">{when.date}</strong>
                   <span className="as-sub">{when.ago}</span>
                 </div>
-                <a
+                <Link
                   className="as-open"
-                  href={item.href}
+                  to={item.href.replace(/^#/, '')}
                   aria-label={`Open case ${item.employeeName}`}
                 >
                   →
-                </a>
+                </Link>
               </li>
             );
           })}

@@ -472,7 +472,7 @@
   height: 8px;
   margin-top: 5px;
   border-radius: 50%;
-  background: #4338ca;
+  background: var(--primary-hover);
   flex: 0 0 auto;
 }
 .em-activity-dot--success {

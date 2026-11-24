@@ -127,8 +127,9 @@ model AccessAccount {
   entraObjectId  String?  @unique
   email          String   @unique
   displayName    String
-  passwordHash   String?  @db.Text
-  mustChangePassword Boolean @default(false)
+  passwordHash       String?   @db.Text
+  mustChangePassword Boolean   @default(false)
+  passwordChangedAt  DateTime?
   roles          String[] @default([])
   scopeType      String   @default("NONE")
   scopeValues    String[] @default([])
@@ -159,6 +160,7 @@ model EmployeeReference {
 
   @@unique([organizationId, externalId])
   @@index([organizationId, department])
+  @@index([email])
 }
 
 model AssessmentCase {
@@ -211,8 +213,12 @@ model AssessmentCase {
   @@index([organizationId, status, stage])
   @@index([organizationId, ownerName, status])
   @@index([employeeId, requestedAt])
+  @@index([organizationId, requestedAt])
+  @@index([organizationId, feedbackReleasedAt, status])
   @@index([departmentSnapshot, assessmentReason])
   @@index([candidateType, hiringOutcome, hiringOutcomeReason])
+  @@index([candidateType, status, departmentSnapshot])
+  @@index([createdAt])
 }
 
 model EligibilityReview {
@@ -271,6 +277,8 @@ model AssessmentPlanMethod {
   events      AssessmentEvent[]
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
+
+  @@index([planId])
 }
 
 model AssessmentEvent {
@@ -292,6 +300,7 @@ model AssessmentEvent {
   updatedAt      DateTime              @updatedAt
 
   @@index([caseId, status, startsAt])
+  @@index([planMethodId])
 }
 
 model EventAssessor {
@@ -305,6 +314,7 @@ model EventAssessor {
   createdAt   DateTime        @default(now())
 
   @@unique([eventId, userId])
+  @@index([userId])
 }
 
 model EvidenceSubmission {
@@ -324,6 +334,8 @@ model EvidenceSubmission {
   updatedAt   DateTime        @updatedAt
 
   @@unique([eventId, assessorId])
+  @@index([caseId])
+  @@index([createdAt])
 }
 
 model AssessmentScorecard {
@@ -359,6 +371,8 @@ model Attachment {
   scannedAt      DateTime?
 
   @@index([caseId, scanStatus])
+  @@index([scanStatus, createdAt])
+  @@index([evidenceId])
 }
 
 model ResultRevision {
@@ -415,6 +429,8 @@ model ApprovalStep {
   updatedAt        DateTime         @updatedAt
 
   @@unique([caseId, sequence])
+  @@index([decision, role])
+  @@index([approverId])
 }
 
 model DevelopmentPlan {
@@ -443,6 +459,8 @@ model DevelopmentAction {
   completedAt DateTime?
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+
+  @@index([planId])
 }
 
 model ReassessmentLink {
@@ -454,6 +472,8 @@ model ReassessmentLink {
   reason         String
   targetDate     DateTime?
   createdAt      DateTime       @default(now())
+
+  @@index([sourceCaseId])
 }
 
 model Task {
@@ -470,6 +490,7 @@ model Task {
   updatedAt   DateTime       @updatedAt
 
   @@index([assigneeId, status, dueAt])
+  @@index([caseId, status, taskType])
 }
 
 model AuditEvent {
@@ -489,6 +510,9 @@ model AuditEvent {
 
   @@index([caseId, createdAt])
   @@index([actorId, createdAt])
+  @@index([createdAt])
+  @@index([action, createdAt])
+  @@index([caseId, action])
 }
 
 model GovernancePolicy {
@@ -513,6 +537,7 @@ model AccessLog {
   createdAt     DateTime       @default(now())
 
   @@index([resourceType, resourceId, createdAt])
+  @@index([createdAt])
 }
 
 model NotificationOutbox {

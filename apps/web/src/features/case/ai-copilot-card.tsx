@@ -1,8 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import {
-  AlertCircle,
-  BrainCircuit,
   Check,
   CheckCircle2,
   Copy,
@@ -12,44 +10,57 @@ import {
   Sparkles,
   Wand2,
 } from 'lucide-react';
-import type {
-  CopilotBiasCheckResponse,
-  CopilotSuggestActionsResponse,
-  CopilotSynthesizeResponse,
-} from '@assessflow/contracts';
+import type { CopilotSynthesizeResponse } from '@assessflow/contracts';
 import { api } from '../../lib/api';
+import { InlineError, StatusBadge } from '../../components/ui';
+import './ai-copilot-card.css';
 
 export function AiCopilotCard({
   caseId,
+  defaultTab = 'synthesis',
   currentEvidenceText,
   onApplySynthesis,
   onApplySanitizedText,
   onApplyAction,
 }: {
   caseId: string;
+  defaultTab?: 'synthesis' | 'bias' | 'actions';
   currentEvidenceText?: string;
   onApplySynthesis?: (synthesis: CopilotSynthesizeResponse) => void;
   onApplySanitizedText?: (cleanText: string) => void;
   onApplyAction?: (action: { title: string; description: string; targetWeeks: number }) => void;
 }) {
-  const [activeTab, setActiveTab] = useState<'synthesis' | 'bias' | 'actions'>('synthesis');
+  const [activeTab, setActiveTab] = useState<'synthesis' | 'bias' | 'actions'>(defaultTab);
   const [biasInputText, setBiasInputText] = useState(currentEvidenceText ?? '');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [appliedSynthesis, setAppliedSynthesis] = useState(false);
+  const copiedTimerRef = useRef<number | null>(null);
 
-  // Synthesis mutation
+  useEffect(() => {
+    setActiveTab(defaultTab);
+  }, [defaultTab, caseId]);
+
+  useEffect(() => {
+    setBiasInputText(currentEvidenceText ?? '');
+  }, [caseId, currentEvidenceText]);
+
+  useEffect(() => {
+    return () => {
+      if (copiedTimerRef.current !== null) {
+        window.clearTimeout(copiedTimerRef.current);
+      }
+    };
+  }, []);
+
   const synthesizeMutation = useMutation({
     mutationFn: () => api.copilotSynthesize(caseId),
-    onSuccess: (data) => {
-      if (onApplySynthesis) onApplySynthesis(data);
-    },
+    onSuccess: () => setAppliedSynthesis(false),
   });
 
-  // Bias check mutation
   const biasCheckMutation = useMutation({
     mutationFn: (text: string) => api.copilotBiasCheck(caseId, { text }),
   });
 
-  // Action suggestions mutation
   const actionsMutation = useMutation({
     mutationFn: () => api.copilotSuggestActions(caseId, { limit: 3 }),
   });
@@ -59,92 +70,33 @@ export function AiCopilotCard({
   const actionsResult = actionsMutation.data;
 
   return (
-    <div
-      className="panel ai-copilot-card"
-      style={{
-        border: '1px solid #c7d2fe',
-        background: 'linear-gradient(180deg, #f8faff 0%, #ffffff 100%)',
-        borderRadius: '10px',
-        marginBottom: '20px',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Copilot Header */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '12px 16px',
-          borderBottom: '1px solid #e0e7ff',
-          background: 'linear-gradient(90deg, #eef2ff 0%, #f5f3ff 100%)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: '28px',
-              height: '28px',
-              borderRadius: '6px',
-              background: '#4f46e5',
-              color: '#ffffff',
-            }}
-          >
+    <div className="panel ai-copilot-card copilot-card">
+      <div className="copilot-header">
+        <div className="copilot-brand">
+          <div className="copilot-badge-icon" aria-hidden="true">
             <Sparkles size={16} />
           </div>
           <div>
-            <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 700, color: '#312e81' }}>
-              AssessFlow AI Assessor Copilot
-            </h4>
-            <span style={{ fontSize: '11px', color: '#6366f1', fontWeight: 500 }}>
-              Evidence Synthesis & Bias Radar
-            </span>
+            <h4>AssessFlow AI Assessor Copilot</h4>
+            <span>Evidence Synthesis, Bias Radar & SMART Milestones</span>
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '4px',
-            background: '#e0e7ff',
-            padding: '3px',
-            borderRadius: '6px',
-          }}
-        >
+        <div className="copilot-tabs" role="tablist" aria-label="AI Copilot modules">
           <button
             type="button"
-            className="tab-btn"
-            style={{
-              padding: '4px 10px',
-              fontSize: '12px',
-              fontWeight: 600,
-              border: 'none',
-              borderRadius: '4px',
-              background: activeTab === 'synthesis' ? '#ffffff' : 'transparent',
-              color: activeTab === 'synthesis' ? '#312e81' : '#64748b',
-              cursor: 'pointer',
-            }}
+            role="tab"
+            aria-selected={activeTab === 'synthesis'}
+            className={`copilot-tab ${activeTab === 'synthesis' ? 'active' : ''}`}
             onClick={() => setActiveTab('synthesis')}
           >
             Executive Synthesis
           </button>
           <button
             type="button"
-            className="tab-btn"
-            style={{
-              padding: '4px 10px',
-              fontSize: '12px',
-              fontWeight: 600,
-              border: 'none',
-              borderRadius: '4px',
-              background: activeTab === 'bias' ? '#ffffff' : 'transparent',
-              color: activeTab === 'bias' ? '#312e81' : '#64748b',
-              cursor: 'pointer',
-            }}
+            role="tab"
+            aria-selected={activeTab === 'bias'}
+            className={`copilot-tab ${activeTab === 'bias' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('bias');
               if (!biasInputText && currentEvidenceText) setBiasInputText(currentEvidenceText);
@@ -154,17 +106,9 @@ export function AiCopilotCard({
           </button>
           <button
             type="button"
-            className="tab-btn"
-            style={{
-              padding: '4px 10px',
-              fontSize: '12px',
-              fontWeight: 600,
-              border: 'none',
-              borderRadius: '4px',
-              background: activeTab === 'actions' ? '#ffffff' : 'transparent',
-              color: activeTab === 'actions' ? '#312e81' : '#64748b',
-              cursor: 'pointer',
-            }}
+            role="tab"
+            aria-selected={activeTab === 'actions'}
+            className={`copilot-tab ${activeTab === 'actions' ? 'active' : ''}`}
             onClick={() => setActiveTab('actions')}
           >
             SMART Actions
@@ -172,35 +116,24 @@ export function AiCopilotCard({
         </div>
       </div>
 
-      <div style={{ padding: '16px' }}>
-        {/* TAB 1: EXECUTIVE SYNTHESIS */}
+      <div className="copilot-body" role="tabpanel">
         {activeTab === 'synthesis' && (
-          <div>
+          <>
             {!synthesis ? (
-              <div style={{ textAlign: 'center', padding: '16px 8px' }}>
-                <p style={{ fontSize: '13px', color: '#475569', margin: '0 0 12px' }}>
-                  Analyze assessor evidence submissions and synthesize candidate readiness against
-                  target competencies.
+              <div className="copilot-empty">
+                <p>
+                  Analyze submitted assessor evidence and synthesize candidate readiness against
+                  target role competencies.
                 </p>
                 <button
                   type="button"
                   className="primary-button"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 16px',
-                    fontSize: '13px',
-                    background: '#4f46e5',
-                    color: '#ffffff',
-                    borderRadius: '6px',
-                  }}
                   disabled={synthesizeMutation.isPending}
                   onClick={() => synthesizeMutation.mutate()}
                 >
                   {synthesizeMutation.isPending ? (
                     <>
-                      <LoaderCircle size={15} className="spin" /> Synthesizing Evidence...
+                      <LoaderCircle size={15} className="spin" /> Synthesizing Evidence…
                     </>
                   ) : (
                     <>
@@ -210,161 +143,32 @@ export function AiCopilotCard({
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                <div
-                  style={{
-                    background: '#f8fafc',
-                    padding: '12px',
-                    borderRadius: '6px',
-                    border: '1px solid #e2e8f0',
-                  }}
-                >
-                  <div
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      marginBottom: '6px',
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        color: '#4338ca',
-                        textTransform: 'uppercase',
-                      }}
-                    >
-                      Executive Evaluation Synthesis
-                    </span>
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        padding: '2px 8px',
-                        borderRadius: '4px',
-                        background:
-                          synthesis.suggestedOutcome === 'READY_NOW'
-                            ? '#dcfce7'
-                            : synthesis.suggestedOutcome === 'NOT_READY'
-                              ? '#fee2e2'
-                              : '#fef3c7',
-                        color:
-                          synthesis.suggestedOutcome === 'READY_NOW'
-                            ? '#15803d'
-                            : synthesis.suggestedOutcome === 'NOT_READY'
-                              ? '#b91c1c'
-                              : '#b45309',
-                      }}
-                    >
-                      AI Outcome: {synthesis.suggestedOutcome.replace(/_/g, ' ')}
-                    </span>
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div className="copilot-summary-box">
+                  <div className="copilot-summary-top">
+                    <span className="copilot-kicker">Executive Evaluation Synthesis</span>
+                    <StatusBadge status={synthesis.suggestedOutcome} />
                   </div>
-                  <p style={{ margin: 0, fontSize: '13px', color: '#1e293b', lineHeight: 1.5 }}>
+                  <p style={{ margin: 0, fontSize: 13, color: 'var(--text)', lineHeight: 1.55 }}>
                     {synthesis.executiveSummary}
                   </p>
-                  <p
-                    style={{
-                      margin: '8px 0 0',
-                      fontSize: '12px',
-                      color: '#64748b',
-                      fontStyle: 'italic',
-                    }}
-                  >
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--muted)' }}>
                     <strong>Rationale:</strong> {synthesis.suggestedOutcomeRationale}
                   </p>
                 </div>
 
-                {/* Demonstrated Strengths */}
-                <div>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: '#0f172a' }}>
-                    Demonstrated Competencies:
-                  </span>
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                      gap: '8px',
-                      marginTop: '6px',
-                    }}
-                  >
-                    {synthesis.demonstratedStrengths.map((str, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          background: '#f0fdf4',
-                          border: '1px solid #bbf7d0',
-                          padding: '8px 10px',
-                          borderRadius: '6px',
-                          fontSize: '12px',
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            fontWeight: 600,
-                            color: '#166534',
-                          }}
-                        >
-                          <span>{str.competency}</span>
-                          <span>{Math.round(str.confidenceScore * 100)}% Match</span>
-                        </div>
-                        <p style={{ margin: '4px 0 0', color: '#334155', fontSize: '11px' }}>
-                          {str.evidenceExcerpt}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Identified Gaps */}
-                {synthesis.identifiedGaps.length > 0 && (
+                {synthesis.demonstratedStrengths.length > 0 && (
                   <div>
-                    <span style={{ fontSize: '12px', fontWeight: 600, color: '#0f172a' }}>
-                      Target Competency Gaps:
-                    </span>
-                    <div
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '6px',
-                        marginTop: '6px',
-                      }}
-                    >
-                      {synthesis.identifiedGaps.map((gap, idx) => (
-                        <div
-                          key={idx}
-                          style={{
-                            background: '#fffbeb',
-                            border: '1px solid #fde68a',
-                            padding: '8px 10px',
-                            borderRadius: '6px',
-                            fontSize: '12px',
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              fontWeight: 600,
-                              color: '#92400e',
-                            }}
-                          >
-                            <span>{gap.competency}</span>
-                            <span
-                              style={{
-                                fontSize: '10px',
-                                padding: '1px 5px',
-                                background: '#fef3c7',
-                                borderRadius: '3px',
-                              }}
-                            >
-                              {gap.severity}
-                            </span>
+                    <strong style={{ fontSize: 12.5 }}>Demonstrated Competencies</strong>
+                    <div className="copilot-grid">
+                      {synthesis.demonstratedStrengths.map((str, idx) => (
+                        <div key={idx} className="copilot-strength-item">
+                          <div className="copilot-strength-head">
+                            <span>{str.competency}</span>
+                            <span>{Math.round(str.confidenceScore * 100)}%</span>
                           </div>
-                          <p style={{ margin: '4px 0 0', color: '#451a03', fontSize: '11px' }}>
-                            {gap.observation}
+                          <p style={{ margin: '4px 0 0', color: 'var(--secondary)' }}>
+                            {str.evidenceExcerpt}
                           </p>
                         </div>
                       ))}
@@ -372,18 +176,28 @@ export function AiCopilotCard({
                   </div>
                 )}
 
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    gap: '8px',
-                    marginTop: '4px',
-                  }}
-                >
+                {synthesis.identifiedGaps.length > 0 && (
+                  <div>
+                    <strong style={{ fontSize: 12.5 }}>Target Competency Gaps</strong>
+                    <div style={{ display: 'grid', gap: 8, marginTop: 6 }}>
+                      {synthesis.identifiedGaps.map((gap, idx) => (
+                        <div key={idx} className="copilot-gap-item">
+                          <div className="copilot-gap-head">
+                            <span>{gap.competency}</span>
+                            <span className="soft-chip">{gap.severity}</span>
+                          </div>
+                          <p style={{ margin: '4px 0 0', color: '#78350f' }}>{gap.observation}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="action-row" style={{ justifyContent: 'flex-end' }}>
                   <button
                     type="button"
                     className="secondary-button"
-                    style={{ fontSize: '12px', padding: '5px 10px' }}
+                    disabled={synthesizeMutation.isPending}
                     onClick={() => synthesizeMutation.mutate()}
                   >
                     Re-generate
@@ -392,206 +206,123 @@ export function AiCopilotCard({
                     <button
                       type="button"
                       className="primary-button"
-                      style={{
-                        fontSize: '12px',
-                        padding: '5px 12px',
-                        background: '#4f46e5',
-                        color: '#fff',
+                      onClick={() => {
+                        onApplySynthesis(synthesis);
+                        setAppliedSynthesis(true);
                       }}
-                      onClick={() => onApplySynthesis(synthesis)}
                     >
-                      <Check size={13} /> Apply to Result Form
+                      <Check size={14} />
+                      {appliedSynthesis ? 'Applied to Summary' : 'Apply to Result Summary'}
                     </button>
                   )}
                 </div>
               </div>
             )}
-          </div>
+            {synthesizeMutation.isError && <InlineError error={synthesizeMutation.error} />}
+          </>
         )}
 
-        {/* TAB 2: UNCONSCIOUS BIAS RADAR */}
         {activeTab === 'bias' && (
-          <div>
-            <p style={{ fontSize: '12px', color: '#475569', margin: '0 0 8px' }}>
-              Scans assessor evaluations for non-behavioral adjectives, age bias, or gender-coded
-              terms.
+          <>
+            <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>
+              Scans assessor evaluations for non-behavioral adjectives, age bias, or coded phrasing.
             </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label className="field">
+              <span>Assessment notes to scan</span>
               <textarea
-                style={{
-                  width: '100%',
-                  minHeight: '80px',
-                  padding: '8px',
-                  borderRadius: '6px',
-                  border: '1px solid #cbd5e1',
-                  fontSize: '13px',
-                  fontFamily: 'inherit',
-                }}
-                placeholder="Paste assessor notes or feedback text to inspect for bias..."
+                rows={3}
+                placeholder="Paste assessor notes or feedback narrative to inspect…"
                 value={biasInputText}
                 onChange={(e) => setBiasInputText(e.target.value)}
               />
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  className="primary-button"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '6px 14px',
-                    fontSize: '12px',
-                    background: '#4f46e5',
-                    color: '#ffffff',
-                    borderRadius: '6px',
-                  }}
-                  disabled={biasCheckMutation.isPending || !biasInputText.trim()}
-                  onClick={() => biasCheckMutation.mutate(biasInputText)}
-                >
-                  {biasCheckMutation.isPending ? (
-                    <LoaderCircle size={14} className="spin" />
-                  ) : (
-                    <ShieldAlert size={14} />
-                  )}
-                  Scan For Unconscious Bias
-                </button>
-              </div>
+            </label>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={biasCheckMutation.isPending || !biasInputText.trim()}
+                onClick={() => biasCheckMutation.mutate(biasInputText)}
+              >
+                {biasCheckMutation.isPending ? (
+                  <LoaderCircle size={14} className="spin" />
+                ) : (
+                  <ShieldAlert size={14} />
+                )}
+                Scan for Unconscious Bias
+              </button>
+            </div>
+            {biasCheckMutation.isError && <InlineError error={biasCheckMutation.error} />}
 
-              {biasResult && (
-                <div style={{ marginTop: '8px' }}>
-                  {biasResult.clean ? (
-                    <div
-                      style={{
-                        background: '#f0fdf4',
-                        border: '1px solid #bbf7d0',
-                        borderRadius: '6px',
-                        padding: '10px 14px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        color: '#166534',
-                        fontSize: '13px',
-                      }}
-                    >
-                      <CheckCircle2 size={16} />
+            {biasResult && (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {biasResult.clean ? (
+                  <div className="settings-security-badge" role="status">
+                    <CheckCircle2 size={16} style={{ color: 'var(--success)', flexShrink: 0 }} />
+                    <span>
+                      <strong>Objective & Clean:</strong> No subjective bias indicators detected.
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <div className="inline-error" role="status">
+                      <ShieldAlert size={16} />
                       <span>
-                        <strong>Objective & Clean:</strong> No subjective bias indicators or
-                        non-behavioral language detected.
+                        <strong>Bias Alert ({biasResult.findingsCount} flagged):</strong> Consider
+                        replacing subjective wording with behavioral observations.
                       </span>
                     </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <div
-                        style={{
-                          background: '#fff1f2',
-                          border: '1px solid #fecdd3',
-                          borderRadius: '6px',
-                          padding: '10px 14px',
-                          color: '#9f1239',
-                          fontSize: '12px',
-                        }}
-                      >
-                        <strong>Bias Alert ({biasResult.findingsCount} flagged):</strong> Feedback
-                        contains subjective or demographically coded phrasing.
-                      </div>
-
-                      {biasResult.warnings.map((w, idx) => (
+                    {biasResult.warnings.map((w, idx) => (
+                      <div key={idx} className="copilot-bias-warning">
+                        <div className="copilot-summary-top">
+                          <strong style={{ color: 'var(--danger)' }}>
+                            &ldquo;{w.phrase}&rdquo;
+                          </strong>
+                          <span className="soft-chip">{w.category}</span>
+                        </div>
+                        <p style={{ margin: 0, color: 'var(--muted)' }}>{w.explanation}</p>
                         <div
-                          key={idx}
                           style={{
-                            background: '#ffffff',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '6px',
-                            padding: '8px 12px',
-                            fontSize: '12px',
+                            background: 'var(--surface-subtle)',
+                            padding: '6px 10px',
+                            borderRadius: 6,
                           }}
                         >
-                          <div
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                            }}
-                          >
-                            <span style={{ fontWeight: 700, color: '#e11d48' }}>"{w.phrase}"</span>
-                            <span
-                              style={{
-                                fontSize: '10px',
-                                background: '#f1f5f9',
-                                padding: '2px 6px',
-                                borderRadius: '4px',
-                              }}
-                            >
-                              {w.category}
-                            </span>
-                          </div>
-                          <p style={{ margin: '3px 0 6px', color: '#475569', fontSize: '11px' }}>
-                            {w.explanation}
-                          </p>
-                          <div
-                            style={{
-                              background: '#f8fafc',
-                              padding: '6px 8px',
-                              borderRadius: '4px',
-                              fontSize: '11px',
-                            }}
-                          >
-                            <span style={{ fontWeight: 600, color: '#166534' }}>
-                              Objective Alternative:{' '}
-                            </span>
-                            <span style={{ color: '#0f172a' }}>{w.objectiveAlternative}</span>
-                          </div>
+                          <strong style={{ color: 'var(--success)' }}>
+                            Objective alternative:{' '}
+                          </strong>
+                          <span>{w.objectiveAlternative}</span>
                         </div>
-                      ))}
-
-                      {biasResult.sanitizedSuggestion && onApplySanitizedText && (
-                        <div
-                          style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '4px' }}
+                      </div>
+                    ))}
+                    {biasResult.sanitizedSuggestion && onApplySanitizedText && (
+                      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          className="primary-button"
+                          onClick={() => onApplySanitizedText(biasResult.sanitizedSuggestion!)}
                         >
-                          <button
-                            type="button"
-                            className="primary-button"
-                            style={{
-                              fontSize: '12px',
-                              padding: '6px 12px',
-                              background: '#059669',
-                              color: '#fff',
-                            }}
-                            onClick={() => onApplySanitizedText(biasResult.sanitizedSuggestion!)}
-                          >
-                            <Check size={13} /> Apply Sanitized Wording
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </div>
+                          <Check size={14} />
+                          Apply Sanitized Wording
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </>
         )}
 
-        {/* TAB 3: SMART ACTION GENERATOR */}
         {activeTab === 'actions' && (
-          <div>
-            <p style={{ fontSize: '12px', color: '#475569', margin: '0 0 10px' }}>
-              Auto-generates targeted development milestones based on observed competency gaps.
+          <>
+            <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>
+              Generate targeted SMART development milestones aligned to observed competency gaps.
             </p>
             {!actionsResult ? (
-              <div style={{ textAlign: 'center', padding: '12px' }}>
+              <div className="copilot-empty">
                 <button
                   type="button"
                   className="primary-button"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '8px 16px',
-                    fontSize: '13px',
-                    background: '#4f46e5',
-                    color: '#ffffff',
-                    borderRadius: '6px',
-                  }}
                   disabled={actionsMutation.isPending}
                   onClick={() => actionsMutation.mutate()}
                 >
@@ -604,71 +335,50 @@ export function AiCopilotCard({
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'grid', gap: 10 }}>
                 {actionsResult.actions.map((act, idx) => (
-                  <div
-                    key={idx}
-                    style={{
-                      background: '#ffffff',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '6px',
-                      padding: '10px 12px',
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <span style={{ fontWeight: 600, fontSize: '13px', color: '#0f172a' }}>
-                        {act.title}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: '10px',
-                          fontWeight: 600,
-                          padding: '2px 6px',
-                          borderRadius: '4px',
-                          background: '#e0e7ff',
-                          color: '#4338ca',
-                        }}
-                      >
-                        {act.targetWeeks} Weeks ({act.category})
+                  <div key={idx} className="copilot-action-item">
+                    <div className="copilot-action-head">
+                      <strong style={{ fontSize: 13 }}>{act.title}</strong>
+                      <span className="status-badge info">
+                        {act.targetWeeks} Weeks · {act.category}
                       </span>
                     </div>
-                    <p style={{ margin: '4px 0', fontSize: '12px', color: '#475569' }}>
+                    <p style={{ margin: 0, fontSize: 12.5, color: 'var(--muted)' }}>
                       {act.description}
                     </p>
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginTop: '6px',
-                      }}
-                    >
-                      <span style={{ fontSize: '11px', color: '#64748b' }}>
+                    <div className="copilot-action-foot">
+                      <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>
                         <strong>Evidence:</strong> {act.suggestedEvidence}
                       </span>
                       {onApplyAction && (
                         <button
                           type="button"
                           className="secondary-button"
-                          style={{ fontSize: '11px', padding: '3px 8px' }}
+                          style={{ minHeight: 32, padding: '0 10px', fontSize: 12 }}
                           onClick={() => {
                             onApplyAction(act);
                             setCopiedIndex(idx);
-                            setTimeout(() => setCopiedIndex(null), 2000);
+                            if (copiedTimerRef.current !== null) {
+                              window.clearTimeout(copiedTimerRef.current);
+                            }
+                            copiedTimerRef.current = window.setTimeout(
+                              () => setCopiedIndex(null),
+                              2000,
+                            );
                           }}
                         >
                           {copiedIndex === idx ? (
-                            <Check size={12} color="#166534" />
+                            <>
+                              <Check size={13} style={{ color: 'var(--success)' }} />
+                              Added
+                            </>
                           ) : (
-                            <Copy size={12} />
+                            <>
+                              <Copy size={13} />
+                              Add to Plan
+                            </>
                           )}
-                          {copiedIndex === idx ? 'Added' : 'Add to Plan'}
                         </button>
                       )}
                     </div>
@@ -676,7 +386,8 @@ export function AiCopilotCard({
                 ))}
               </div>
             )}
-          </div>
+            {actionsMutation.isError && <InlineError error={actionsMutation.error} />}
+          </>
         )}
       </div>
     </div>

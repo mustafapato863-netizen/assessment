@@ -35,10 +35,22 @@ export class AdministrationController {
     return this.administration.deactivateAccount(id, actor);
   }
 
+  @Post('accounts/:id/reactivate')
+  @Roles('Admin')
+  reactivateAccount(@Param('id') id: string, @Actor() actor: AuthActor) {
+    return this.administration.reactivateAccount(id, actor);
+  }
+
   @Post('accounts/:id/reset-password')
   @Roles('Admin')
   resetPassword(@Param('id') id: string, @Actor() actor: AuthActor) {
     return this.administration.resetAccountPassword(id, actor);
+  }
+
+  @Get('roles-matrix')
+  @Roles('Admin')
+  rolesMatrix() {
+    return this.administration.rolesMatrix();
   }
 
   @Get('policy')

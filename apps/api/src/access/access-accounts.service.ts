@@ -7,15 +7,22 @@ import {
   Optional,
   UnauthorizedException,
 } from '@nestjs/common';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { Prisma } from '@assessflow/database';
+import {
+  adminCreateAccountSchema,
+  adminUpdateAccountSchema,
+  type AccessScopeType,
+  type RolePermissionMatrixEntry,
+} from '@assessflow/contracts';
 import { PrismaService } from '../database/prisma.service';
 import { AppRole, normalizeRole } from '../auth/auth.types';
 import type { AuthActor } from '../auth/auth.types';
 import { hashPassword, verifyPassword } from '../auth/password.util';
+import { assertUuid, isUuid } from '../common/uuid.util';
+import { currentCorrelationId } from '../common/correlation.context';
 
-export type AccessScope =
-  'NONE' | 'ORGANIZATION' | 'DEPARTMENTS' | 'DIRECT_REPORTS' | 'ASSIGNED' | 'SELF';
+export type AccessScope = AccessScopeType;
 
 export interface AccessAccountInput {
   password?: string;
@@ -39,9 +46,27 @@ interface StoredAccessAccount extends AccessAccountInput {
   updatedAt: Date | string;
 }
 
+const ACCOUNT_PUBLIC_SELECT = {
+  id: true,
+  entraObjectId: true,
+  email: true,
+  displayName: true,
+  mustChangePassword: true,
+  roles: true,
+  scopeType: true,
+  scopeValues: true,
+  active: true,
+  createdBy: true,
+  createdAt: true,
+  updatedAt: true,
+} as const;
+
+const DUMMY_SCRYPT_HASH = `scrypt:${'0'.repeat(32)}:${'0'.repeat(128)}`;
+
 function allowedEmailDomain(): string {
   return (process.env.ACCESS_ALLOWED_EMAIL_DOMAIN || 'saudigerman.com').trim().toLowerCase();
 }
+
 const SCOPES: AccessScope[] = [
   'NONE',
   'ORGANIZATION',
@@ -51,11 +76,6 @@ const SCOPES: AccessScope[] = [
   'SELF',
 ];
 
-/**
- * Case statuses after final approval. Results and feedback reach the employee and
- * their managers only in these states, so nobody sees an outcome that approval
- * could still change.
- */
 export const RESULT_RELEASE_STATUSES = [
   'APPROVED',
   'DEVELOPMENT_IN_PROGRESS',
@@ -63,11 +83,6 @@ export const RESULT_RELEASE_STATUSES = [
   'CLOSED',
 ] as const;
 
-/**
- * Workflow tasks are created for role queues (e.g. 'hr-approver') rather than
- * named people. A user works a queue when they hold the matching role; the
- * case scope still limits which of those cases they can see.
- */
 export const ROLE_TASK_QUEUES: Partial<Record<AppRole, readonly string[]>> = {
   HR: ['hr-talent', 'hr-approver'],
   Coordinator: ['assessment-coordinator'],
@@ -77,12 +92,10 @@ export const ROLE_TASK_QUEUES: Partial<Record<AppRole, readonly string[]>> = {
   Manager: ['manager'],
 };
 
-/** Task assignee ids an actor works: their own id plus their role queues. */
 export function taskAssigneeIdsFor(actor: AuthActor): string[] {
   return [actor.id, ...actor.roles.flatMap((role) => ROLE_TASK_QUEUES[role] ?? [])];
 }
 
-/** Approval step roles an actor can decide (see APPROVAL_STEP_ROLES). */
 function approvalStepRolesFor(actor: AuthActor): string[] {
   const roles: string[] = [];
   if (actor.roles.includes('HR')) roles.push('HR');
@@ -90,23 +103,225 @@ function approvalStepRolesFor(actor: AuthActor): string[] {
   return roles;
 }
 
+export const ROLE_PERMISSION_MATRIX: RolePermissionMatrixEntry[] = [
+  {
+    role: 'Admin',
+    label: 'System Administrator',
+    description:
+      'Full platform governance, account administration, policy enforcement, stage reopen, and workflow orchestration.',
+    allowedScopes: ['ORGANIZATION'],
+    defaultHome: '/overview',
+    pages: [
+      'Overview',
+      'My work',
+      'Assessments',
+      'Employees',
+      'Development',
+      'Calibration',
+      'Insights',
+      'Administration',
+    ],
+    capabilities: [
+      'Manage accounts & scopes',
+      'Enforce governance policy',
+      'Reopen completed stages',
+      'Run full assessment lifecycle',
+    ],
+    restrictions: ['Cannot approve a step on a case they scored, finalized, or recommended (SoD).'],
+  },
+  {
+    role: 'Assessor',
+    label: 'Principal / Lead Assessor',
+    description:
+      'Leads assessments, reviews eligibility, builds plans & events, scores rubrics, uses AI Copilot, finalizes results, and writes recommendations.',
+    allowedScopes: ['ORGANIZATION', 'DEPARTMENTS', 'ASSIGNED'],
+    defaultHome: '/assessor',
+    pages: [
+      'Overview',
+      'Assessor workspace',
+      'My work',
+      'Assessments',
+      'Employees',
+      'Development',
+      'Calibration',
+      'Insights',
+    ],
+    capabilities: [
+      'Create & submit cases',
+      'Eligibility & planning',
+      'Schedule events & manage scorecards',
+      'AI Copilot & result finalization',
+      'Update development & close',
+    ],
+    restrictions: ['Cannot manage accounts or policies', 'Cannot decide approval steps (SoD).'],
+  },
+  {
+    role: 'PanelLead',
+    label: 'Panel Lead',
+    description:
+      'Assigned assessment panelist responsible for recording session evidence, bias-checking notes, and completing candidate scorecards.',
+    allowedScopes: ['ASSIGNED'],
+    defaultHome: '/assessor',
+    pages: ['Assessor workspace', 'My work', 'Assessments', 'Calibration'],
+    capabilities: [
+      'Save & submit session evidence',
+      'Upload evidence attachments',
+      'Complete & revise assigned scorecards',
+      'Run Copilot Bias Radar',
+    ],
+    restrictions: [
+      'Restricted to assigned cases/sessions',
+      'Cannot finalize results, recommend, approve, or schedule events.',
+    ],
+  },
+  {
+    role: 'HR',
+    label: 'HR Talent Partner / Approver',
+    description:
+      'Owns the Step 1 HR approval gate and monitors talent pipelines, calibration, and development readiness.',
+    allowedScopes: ['ORGANIZATION', 'DEPARTMENTS', 'ASSIGNED'],
+    defaultHome: '/overview',
+    pages: [
+      'Overview',
+      'My work',
+      'Assessments',
+      'Employees',
+      'Development',
+      'Calibration',
+      'Insights',
+    ],
+    capabilities: [
+      'Decide HR approval step (Step 1)',
+      'Read scorecards, results, calibration & insights within scope',
+    ],
+    restrictions: [
+      'Cannot alter scorecards, results, or administration policies',
+      'Cannot approve both HR & Business steps.',
+    ],
+  },
+  {
+    role: 'BusinessApprover',
+    label: 'Business Executive Approver',
+    description: 'Owns the Step 2 Business executive approval gate after HR sign-off.',
+    allowedScopes: ['ASSIGNED'],
+    defaultHome: '/tasks',
+    pages: ['My work', 'Case dossiers (assigned)'],
+    capabilities: [
+      'Decide Business approval step (Step 2)',
+      'View finalized results & recommendations on pending approvals',
+    ],
+    restrictions: [
+      'Assigned/pending approval cases only',
+      'No workflow mutations outside approval decision.',
+    ],
+  },
+  {
+    role: 'Coordinator',
+    label: 'Assessment Coordinator',
+    description:
+      'Read-only operational visibility across overview, schedules, employees, and development progress.',
+    allowedScopes: ['ORGANIZATION', 'DEPARTMENTS'],
+    defaultHome: '/overview',
+    pages: ['Overview', 'My work', 'Assessments', 'Employees', 'Development', 'Insights'],
+    capabilities: ['Track case progress, events, and development status'],
+    restrictions: ['Read-only across assessment and approval decisions.'],
+  },
+  {
+    role: 'Requester',
+    label: 'Line Manager / Case Initiator',
+    description:
+      'Raises new assessment drafts for direct reports or approved departments and submits them for eligibility review.',
+    allowedScopes: ['DIRECT_REPORTS', 'DEPARTMENTS', 'NONE'],
+    defaultHome: '/overview',
+    pages: ['Overview', 'My work', 'Assessments', 'Development'],
+    capabilities: [
+      'Create draft requests for scoped team/departments',
+      'Submit drafts',
+      'Upload intake attachments',
+    ],
+    restrictions: [
+      'Read-only after submission',
+      'Results & recommendations hidden until released post-approval.',
+    ],
+  },
+  {
+    role: 'Manager',
+    label: 'Department / Cycle Manager',
+    description:
+      'Cycle-wide read-only talent viewer across Overview, Assessments, Employees, Development, Calibration, and Insights.',
+    allowedScopes: ['ORGANIZATION'],
+    defaultHome: '/overview',
+    pages: [
+      'Overview',
+      'My work',
+      'Assessments',
+      'Employees',
+      'Development',
+      'Calibration',
+      'Insights',
+    ],
+    capabilities: ['Monitor department talent pipelines, calibration matrix, and analytics'],
+    restrictions: ['Read-only role; cannot mutate workflow or accounts.'],
+  },
+  {
+    role: 'EmployeeManager',
+    label: 'Employee Manager (Department)',
+    description:
+      'Follows released assessment outcomes and post-approval growth plans for their assigned departments.',
+    allowedScopes: ['DEPARTMENTS'],
+    defaultHome: '/employees',
+    pages: ['Assessments (released)', 'Employees', 'Development'],
+    capabilities: ['View released results and development follow-ups in assigned departments'],
+    restrictions: ['Sees cases only after final approval and feedback release.'],
+  },
+  {
+    role: 'Auditor',
+    label: 'Read-Only Compliance Auditor',
+    description:
+      'Reviews cases, plans, results, approvals, and calibration read-only for governance compliance.',
+    allowedScopes: ['DEPARTMENTS', 'ASSIGNED'],
+    defaultHome: '/overview',
+    pages: [
+      'Overview',
+      'My work',
+      'Assessments',
+      'Employees',
+      'Development',
+      'Calibration',
+      'Insights',
+    ],
+    capabilities: ['Full read-only compliance visibility within assigned scope'],
+    restrictions: ['Strictly read-only; zero workflow or admin mutations.'],
+  },
+  {
+    role: 'Employee',
+    label: 'Assessed Employee (Self)',
+    description: 'Self-service access strictly limited to their own released assessment feedback.',
+    allowedScopes: ['SELF'],
+    defaultHome: '/my-result',
+    pages: ['My Results'],
+    capabilities: ['View personal assessment result once released by HR/Assessor'],
+    restrictions: ['Cannot view in-flight assessments, calibration, or other employees.'],
+  },
+];
+
+const NO_CASE_ACCESS_WHERE = { id: { in: [] as string[] } };
+
 export function caseScopeWhere(actor: AuthActor): Record<string, unknown> {
   const values = actor.scopeValues ?? [];
-  // System admins always have organization-wide access. Local development's
-  // default actor also carries the Employee role, so checking that narrow role
-  // first incorrectly rejected the admin's organization scope.
   if (actor.roles.includes('Admin') || actor.roles.includes('Assessor')) return {};
   if (
     (actor.roles.includes('EmployeeManager') && actor.scopeType !== 'DEPARTMENTS') ||
     (actor.roles.includes('Employee') && actor.scopeType !== 'SELF') ||
     (actor.roles.includes('Manager') && actor.scopeType !== 'ORGANIZATION')
   ) {
-    return { id: '__invalid_role_scope__' };
+    return NO_CASE_ACCESS_WHERE;
   }
   switch (actor.scopeType) {
     case 'ORGANIZATION':
       return {};
     case 'DEPARTMENTS':
+      if (!values.length) return NO_CASE_ACCESS_WHERE;
       return {
         departmentSnapshot: { in: values },
         ...(actor.roles.includes('EmployeeManager')
@@ -114,6 +329,7 @@ export function caseScopeWhere(actor: AuthActor): Record<string, unknown> {
           : {}),
       };
     case 'DIRECT_REPORTS':
+      if (!values.length) return NO_CASE_ACCESS_WHERE;
       return { employee: { externalId: { in: values } } };
     case 'ASSIGNED': {
       const stepRoles = approvalStepRolesFor(actor);
@@ -122,7 +338,6 @@ export function caseScopeWhere(actor: AuthActor): Record<string, unknown> {
           { tasks: { some: { assigneeId: actor.id } } },
           { events: { some: { assessors: { some: { userId: actor.id } } } } },
           { approvalSteps: { some: { approverId: actor.id } } },
-          // Approvers see cases waiting on a step their role can decide.
           ...(stepRoles.length
             ? [{ approvalSteps: { some: { decision: 'PENDING', role: { in: stepRoles } } } }]
             : []),
@@ -130,6 +345,7 @@ export function caseScopeWhere(actor: AuthActor): Record<string, unknown> {
       };
     }
     case 'SELF':
+      if (!actor.email && !values.length) return NO_CASE_ACCESS_WHERE;
       return {
         employee: {
           OR: [
@@ -139,11 +355,21 @@ export function caseScopeWhere(actor: AuthActor): Record<string, unknown> {
         },
       };
     default:
-      return { id: '__no_access__' };
+      return NO_CASE_ACCESS_WHERE;
   }
 }
 
 function normalizeAccountInput(input: AccessAccountInput) {
+  if (typeof input?.email !== 'string') {
+    throw new BadRequestException('Enter a valid company email address.');
+  }
+  if (typeof input?.displayName !== 'string' || !input.displayName.trim()) {
+    throw new BadRequestException('Display name is required.');
+  }
+  if (!Array.isArray(input?.roles)) {
+    throw new BadRequestException('Select at least one role.');
+  }
+
   const email = input.email.trim().toLowerCase();
   const domain = allowedEmailDomain();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -152,13 +378,13 @@ function normalizeAccountInput(input: AccessAccountInput) {
   if (!email.endsWith(`@${domain}`)) {
     throw new BadRequestException(`Only @${domain} email addresses can be added.`);
   }
-  if (!input.displayName.trim()) {
-    throw new BadRequestException('Display name is required.');
-  }
   if (!SCOPES.includes(input.scopeType)) throw new BadRequestException('Unknown data scope.');
+
   const roles = [
     ...new Set(input.roles.map((role) => normalizeRole(role)).filter(Boolean)),
   ] as AppRole[];
+  if (!roles.length) throw new BadRequestException('Select at least one valid role.');
+
   if (roles.includes('Employee') && input.scopeType !== 'SELF') {
     throw new BadRequestException('Employee access must be limited to their own record.');
   }
@@ -191,13 +417,20 @@ function normalizeAccountInput(input: AccessAccountInput) {
     !roles.some((role) => ['Admin', 'HR', 'Manager', 'Assessor'].includes(role))
   ) {
     throw new BadRequestException(
-      'Organization-wide access is reserved for Admin, HR, and Manager.',
+      'Organization-wide access is reserved for Admin, HR, Manager, and Assessor.',
     );
   }
   const scopeValues = [
-    ...new Set((input.scopeValues ?? []).map((value) => value.trim()).filter(Boolean)),
+    ...new Set(
+      (Array.isArray(input.scopeValues) ? input.scopeValues : [])
+        .map((value) => (typeof value === 'string' ? value.trim() : ''))
+        .filter(Boolean),
+    ),
   ];
-  if (input.scopeType === 'DIRECT_REPORTS' && scopeValues.length === 0) {
+  if (
+    (input.scopeType === 'DIRECT_REPORTS' || input.scopeType === 'DEPARTMENTS') &&
+    scopeValues.length === 0
+  ) {
     throw new BadRequestException(
       'Enter at least one department or employee ID for this data scope.',
     );
@@ -218,13 +451,18 @@ export class AccessAccountsService {
 
   constructor(@Optional() private readonly prisma?: PrismaService) {}
 
+  getRolesMatrix(): RolePermissionMatrixEntry[] {
+    return ROLE_PERMISSION_MATRIX;
+  }
+
   async list(actor?: AuthActor) {
     const canSeeAdminAccounts = !actor || actor.roles.includes('Admin');
     if (this.prisma?.enabled) {
-      const accounts = await this.prisma.accessAccount.findMany({ orderBy: { createdAt: 'desc' } });
-      return accounts
-        .filter((account) => canSeeAdminAccounts || !account.roles.includes('Admin'))
-        .map(({ passwordHash: _passwordHash, ...account }) => account);
+      const accounts = await this.prisma.accessAccount.findMany({
+        select: ACCOUNT_PUBLIC_SELECT,
+        orderBy: { createdAt: 'desc' },
+      });
+      return accounts.filter((account) => canSeeAdminAccounts || !account.roles.includes('Admin'));
     }
     return [...this.localAccounts.values()]
       .filter((account) => canSeeAdminAccounts || !account.roles.includes('Admin'))
@@ -250,19 +488,22 @@ export class AccessAccountsService {
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
   }
 
-  async create(input: AccessAccountInput, actor: AuthActor) {
-    const password = this.validatePassword(input.password);
-    const data = normalizeAccountInput(input);
+  async create(input: unknown, actor: AuthActor) {
+    const parsed = adminCreateAccountSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues[0]?.message ?? 'Invalid account input.');
+    }
+    const password = this.validatePassword(parsed.data.password);
+    const data = normalizeAccountInput(parsed.data);
     this.assertAssessorCannotManageAdmins(actor, data.roles, false);
     const passwordHash = await hashPassword(password);
     if (this.prisma?.enabled) {
-      const existing = await this.prisma.accessAccount.findFirst({
-        where: { email: data.email },
-      });
-      if (existing) throw new ConflictException('This company account is already registered.');
       const created = await this.prisma.$transaction(async (tx) => {
+        const existing = await tx.accessAccount.findFirst({ where: { email: data.email } });
+        if (existing) throw new ConflictException('This company account is already registered.');
         const record = await tx.accessAccount.create({
           data: { ...data, passwordHash, createdBy: actor.id, mustChangePassword: true },
+          select: ACCOUNT_PUBLIC_SELECT,
         });
         await this.writeAdminAudit(
           tx,
@@ -274,8 +515,7 @@ export class AccessAccountsService {
         );
         return record;
       });
-      const { passwordHash: _passwordHash, ...safeAccount } = created;
-      return safeAccount;
+      return created;
     }
     if ([...this.localAccounts.values()].some((account) => account.email === data.email)) {
       throw new ConflictException('This company account is already registered.');
@@ -283,7 +523,7 @@ export class AccessAccountsService {
     const now = new Date().toISOString();
     const account: StoredAccessAccount = {
       ...data,
-      id: randomUUID(),
+      id: cryptoRandomUuid(),
       passwordHash,
       mustChangePassword: true,
       createdAt: now,
@@ -294,9 +534,19 @@ export class AccessAccountsService {
     return safeAccount;
   }
 
-  async update(id: string, input: Partial<AccessAccountInput>, actor?: AuthActor) {
+  async update(id: string, input: unknown, actor?: AuthActor) {
+    if (this.prisma?.enabled) {
+      assertUuid(id, 'ACCOUNT_NOT_FOUND', 'Access account not found.');
+    }
+    const parsed = adminUpdateAccountSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues[0]?.message ?? 'Invalid account update.');
+    }
+    const validInput = parsed.data;
     if (
-      (input.password !== undefined || input.active !== undefined || input.roles !== undefined) &&
+      (validInput.password !== undefined ||
+        validInput.active !== undefined ||
+        validInput.roles !== undefined) &&
       !actor?.roles.includes('Admin')
     ) {
       throw new ForbiddenException(
@@ -307,57 +557,43 @@ export class AccessAccountsService {
       ? await this.prisma.accessAccount.findUnique({ where: { id } })
       : this.localAccounts.get(id);
     if (!existing) throw new NotFoundException('Access account not found.');
-    if (input.password !== undefined) {
+    if (validInput.password !== undefined) {
       throw new BadRequestException(
         'Use the administrator Reset password action for password changes.',
       );
     }
     if (actor?.roles.includes('Admin') && this.prisma?.enabled) {
-      return this.adminUpdate(id, input, actor);
+      return this.adminUpdate(id, validInput, actor);
     }
     this.assertAssessorCannotManageAdmins(
       actor,
-      input.roles ?? existing.roles,
+      validInput.roles ?? existing.roles,
       existing.roles.includes('Admin'),
     );
 
     const merged = normalizeAccountInput({
-      email: input.email ?? existing.email,
-      displayName: input.displayName ?? existing.displayName,
-      roles: input.roles ?? existing.roles,
-      scopeType: input.scopeType ?? (existing.scopeType as AccessScope),
-      scopeValues: input.scopeValues ?? existing.scopeValues,
-      active: input.active ?? existing.active,
+      email: validInput.email ?? existing.email,
+      displayName: validInput.displayName ?? existing.displayName,
+      roles: validInput.roles ?? existing.roles,
+      scopeType: validInput.scopeType ?? (existing.scopeType as AccessScope),
+      scopeValues: validInput.scopeValues ?? existing.scopeValues,
+      active: validInput.active ?? existing.active,
     });
-
-    const passwordHash =
-      input.password !== undefined
-        ? await hashPassword(this.validatePassword(input.password))
-        : undefined;
 
     if (this.prisma?.enabled) {
       const duplicate = await this.prisma.accessAccount.findFirst({
-        where: {
-          id: { not: id },
-          email: merged.email,
-        },
+        where: { id: { not: id }, email: merged.email },
       });
       if (duplicate) throw new ConflictException('Another access account uses this email.');
-      const updated = await this.prisma.accessAccount.update({
+      return this.prisma.accessAccount.update({
         where: { id },
-        data: {
-          ...merged,
-          ...(passwordHash ? { passwordHash, mustChangePassword: true } : {}),
-        },
+        data: merged,
+        select: ACCOUNT_PUBLIC_SELECT,
       });
-      const { passwordHash: _passwordHash, ...safeAccount } = updated;
-      return safeAccount;
     }
     const updated: StoredAccessAccount = {
       ...existing,
       ...merged,
-      ...(passwordHash ? { passwordHash } : {}),
-      ...(passwordHash ? { mustChangePassword: true } : {}),
       roles: merged.roles,
       scopeType: merged.scopeType,
       scopeValues: merged.scopeValues,
@@ -370,6 +606,9 @@ export class AccessAccountsService {
   }
 
   async authenticate(email: string, password: string) {
+    if (typeof email !== 'string' || typeof password !== 'string') {
+      throw new UnauthorizedException('Invalid email or password.');
+    }
     const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedEmail.endsWith(`@${allowedEmailDomain()}`)) {
       throw new UnauthorizedException('Invalid email or password.');
@@ -378,6 +617,7 @@ export class AccessAccountsService {
       ? await this.prisma.accessAccount.findUnique({ where: { email: normalizedEmail } })
       : [...this.localAccounts.values()].find((item) => item.email === normalizedEmail);
     if (!account || !account.active || !account.passwordHash) {
+      await verifyPassword(password, DUMMY_SCRYPT_HASH);
       throw new UnauthorizedException('Invalid email or password.');
     }
     if (!(await verifyPassword(password, account.passwordHash))) {
@@ -413,12 +653,14 @@ export class AccessAccountsService {
     return { id, removed: false };
   }
 
-  async adminCreate(input: AdminAccessAccountInput, actor: AuthActor) {
+  async adminCreate(input: unknown, actor: AuthActor) {
     this.requireDatabase();
+    const parsed = adminCreateAccountSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues[0]?.message ?? 'Invalid account input.');
+    }
     const temporaryPassword = this.generateTemporaryPassword();
-    const data = normalizeAccountInput({ ...input, password: temporaryPassword });
-    const existing = await this.prisma!.accessAccount.findUnique({ where: { email: data.email } });
-    if (existing) throw new ConflictException('This company account is already registered.');
+    const data = normalizeAccountInput({ ...parsed.data, password: temporaryPassword });
     const passwordHash = await hashPassword(temporaryPassword);
     const safeInput = {
       displayName: data.displayName,
@@ -429,6 +671,8 @@ export class AccessAccountsService {
       active: true,
     };
     const account = await this.prisma!.$transaction(async (tx) => {
+      const existing = await tx.accessAccount.findUnique({ where: { email: data.email } });
+      if (existing) throw new ConflictException('This company account is already registered.');
       const created = await tx.accessAccount.create({
         data: {
           ...data,
@@ -436,39 +680,60 @@ export class AccessAccountsService {
           mustChangePassword: true,
           createdBy: actor.id,
         },
+        select: ACCOUNT_PUBLIC_SELECT,
       });
-      const { passwordHash: _passwordHash, ...safeAccount } = created;
       await this.writeAdminAudit(tx, actor, 'ADMIN_ACCOUNT_CREATED', created.id, null, safeInput);
-      return safeAccount;
+      return created;
     });
     return { account, temporaryPassword };
   }
 
   async adminUpdate(
     id: string,
-    input: Partial<AccessAccountInput>,
+    input: unknown,
     actor: AuthActor,
     action = 'ADMIN_ACCOUNT_UPDATED',
   ) {
     this.requireDatabase();
-    const existing = await this.prisma!.accessAccount.findUnique({ where: { id } });
-    if (!existing) throw new NotFoundException('Access account not found.');
-    const merged = normalizeAccountInput({
-      email: input.email ?? existing.email,
-      displayName: input.displayName ?? existing.displayName,
-      roles: input.roles ?? existing.roles,
-      scopeType: input.scopeType ?? (existing.scopeType as AccessScope),
-      scopeValues: input.scopeValues ?? existing.scopeValues,
-      active: input.active ?? existing.active,
-    });
-    await this.assertAnotherAdminRemains(id, existing, merged);
-    const previousData = this.safeAccountAuditData(existing);
-    const newData = this.safeAccountAuditData(merged);
+    assertUuid(id, 'ACCOUNT_NOT_FOUND', 'Access account not found.');
+    const parsed = adminUpdateAccountSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues[0]?.message ?? 'Invalid account update.');
+    }
+    const validInput = parsed.data;
+    if (validInput.password !== undefined) {
+      throw new BadRequestException(
+        'Use the administrator Reset password action for password changes.',
+      );
+    }
+
     return this.prisma!.$transaction(async (tx) => {
-      const updated = await tx.accessAccount.update({ where: { id }, data: merged });
-      const { passwordHash: _passwordHash, ...safeAccount } = updated;
+      const existing = await tx.accessAccount.findUnique({ where: { id } });
+      if (!existing) throw new NotFoundException('Access account not found.');
+      const merged = normalizeAccountInput({
+        email: validInput.email ?? existing.email,
+        displayName: validInput.displayName ?? existing.displayName,
+        roles: validInput.roles ?? existing.roles,
+        scopeType: validInput.scopeType ?? (existing.scopeType as AccessScope),
+        scopeValues: validInput.scopeValues ?? existing.scopeValues,
+        active: validInput.active ?? existing.active,
+      });
+      if (merged.email !== existing.email) {
+        const duplicate = await tx.accessAccount.findFirst({
+          where: { id: { not: id }, email: merged.email },
+        });
+        if (duplicate) throw new ConflictException('Another access account uses this email.');
+      }
+      await this.assertAnotherAdminRemains(tx, id, existing, merged);
+      const previousData = this.safeAccountAuditData(existing);
+      const newData = this.safeAccountAuditData(merged);
+      const updated = await tx.accessAccount.update({
+        where: { id },
+        data: merged,
+        select: ACCOUNT_PUBLIC_SELECT,
+      });
       await this.writeAdminAudit(tx, actor, action, id, previousData, newData);
-      return safeAccount;
+      return updated;
     });
   }
 
@@ -476,8 +741,13 @@ export class AccessAccountsService {
     return this.adminUpdate(id, { active: false }, actor, 'ADMIN_ACCOUNT_DEACTIVATED');
   }
 
+  async adminReactivate(id: string, actor: AuthActor) {
+    return this.adminUpdate(id, { active: true }, actor, 'ADMIN_ACCOUNT_REACTIVATED');
+  }
+
   async adminResetPassword(id: string, actor: AuthActor) {
     this.requireDatabase();
+    assertUuid(id, 'ACCOUNT_NOT_FOUND', 'Access account not found.');
     const existing = await this.prisma!.accessAccount.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Access account not found.');
     const temporaryPassword = this.generateTemporaryPassword();
@@ -485,7 +755,7 @@ export class AccessAccountsService {
     await this.prisma!.$transaction(async (tx) => {
       await tx.accessAccount.update({
         where: { id },
-        data: { passwordHash, mustChangePassword: true },
+        data: { passwordHash, mustChangePassword: true, passwordChangedAt: new Date() },
       });
       await this.writeAdminAudit(
         tx,
@@ -501,22 +771,24 @@ export class AccessAccountsService {
 
   async changeTemporaryPassword(actor: AuthActor, newPassword: string, confirmPassword: string) {
     this.requireDatabase();
+    assertUuid(actor.id, 'ACCOUNT_NOT_FOUND', 'Account is unavailable.');
     if (newPassword !== confirmPassword) throw new BadRequestException('Passwords do not match.');
     const password = this.validatePassword(newPassword);
     const existing = await this.prisma!.accessAccount.findUnique({ where: { id: actor.id } });
     if (!existing || !existing.active) throw new UnauthorizedException('Account is unavailable.');
     const passwordHash = await hashPassword(password);
+    const previousMustChange = Boolean(existing.mustChangePassword);
     await this.prisma!.$transaction(async (tx) => {
       await tx.accessAccount.update({
         where: { id: actor.id },
-        data: { passwordHash, mustChangePassword: false },
+        data: { passwordHash, mustChangePassword: false, passwordChangedAt: new Date() },
       });
       await this.writeAdminAudit(
         tx,
         actor,
-        'TEMPORARY_PASSWORD_CHANGED',
+        previousMustChange ? 'TEMPORARY_PASSWORD_CHANGED' : 'PASSWORD_CHANGED',
         actor.id,
-        { mustChangePassword: true },
+        { mustChangePassword: previousMustChange },
         { mustChangePassword: false },
       );
     });
@@ -534,6 +806,7 @@ export class AccessAccountsService {
   }
 
   private async assertAnotherAdminRemains(
+    tx: Prisma.TransactionClient,
     id: string,
     existing: { active: boolean; roles: string[] },
     next: { active: boolean; roles: string[] },
@@ -542,15 +815,17 @@ export class AccessAccountsService {
       !existing.active ||
       !existing.roles.includes('Admin') ||
       (next.active && next.roles.includes('Admin'))
-    )
+    ) {
       return;
-    const activeAdmins = await this.prisma!.accessAccount.count({
+    }
+    const activeAdmins = await tx.accessAccount.count({
       where: { id: { not: id }, active: true, roles: { has: 'Admin' } },
     });
-    if (activeAdmins === 0)
+    if (activeAdmins === 0) {
       throw new BadRequestException(
         'The last active System admin cannot be deactivated or demoted.',
       );
+    }
   }
 
   private safeAccountAuditData(value: {
@@ -592,7 +867,7 @@ export class AccessAccountsService {
         entityId,
         previousData: asJson(previousData),
         newData: asJson(newData),
-        correlationId: `corr-${randomUUID()}`,
+        correlationId: currentCorrelationId(),
       },
     });
   }
@@ -613,4 +888,10 @@ export class AccessAccountsService {
       }
     }
   }
+}
+
+function cryptoRandomUuid(): string {
+  return randomBytes(16)
+    .toString('hex')
+    .replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-4$3-a$4-$5');
 }

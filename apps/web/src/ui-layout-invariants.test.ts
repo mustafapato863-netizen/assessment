@@ -7,16 +7,20 @@ const srcDir = dirname(fileURLToPath(import.meta.url));
 const readSrc = (relPath: string) => readFileSync(resolve(srcDir, relPath), 'utf8');
 
 describe('Frontend UI & Layout Invariants', () => {
-  const stylesCss = readSrc('styles.css');
+  const tokensCss = readSrc('styles/tokens.css');
+  const stylesCss = `${tokensCss}\n${readSrc('styles.css')}`;
   const shellTsx = readSrc('components/shell.tsx');
   const loginTsx = readSrc('routes/login.tsx');
   const sghLogoTsx = readSrc('design-system/brand/sgh-logo.tsx');
   const sghAnimLogoTsx = readSrc('design-system/brand/sgh-animated-logo.tsx');
   const aiCopilotTsx = readSrc('features/case/ai-copilot-card.tsx');
   const caseTsx = readSrc('routes/case.tsx');
+  const caseHeaderTsx = readSrc('features/case/case-header.tsx');
+  const scorecardPanelTsx = readSrc('features/case/scorecard-panel.tsx');
   const assessmentsTsx = readSrc('routes/assessments.tsx');
   const employeesTsx = readSrc('routes/employees.tsx');
   const calibrationTsx = readSrc('routes/calibration-view/Calibration.tsx');
+  const administrationTsx = readSrc('routes/administration.tsx');
 
   it('defines canonical :root tokens and synchronizes collapsed sidebar grid track', () => {
     expect(stylesCss).toContain('--font: var(--font-sans);');
@@ -61,11 +65,14 @@ describe('Frontend UI & Layout Invariants', () => {
   });
 
   it('consolidates Case Detail stage navigation and removes duplicate stage-tab-bar', () => {
-    expect(caseTsx).toContain('stepper panel interactive stepper-with-head');
-    expect(caseTsx).toContain('className="stepper-head"');
-    expect(caseTsx).toContain('className="stepper-track"');
-    expect(caseTsx).toContain("aria-pressed={activeStageTab === 'ALL'}");
-    expect(caseTsx).not.toContain('className="stage-tab-bar"');
+    expect(caseHeaderTsx).toContain('stepper panel interactive stepper-with-head');
+    expect(caseHeaderTsx).toContain('className="stepper-head"');
+    expect(caseHeaderTsx).toContain('className="stepper-track"');
+    expect(caseHeaderTsx).toContain("aria-pressed={activeStageTab === 'ALL'}");
+    expect(caseHeaderTsx).not.toContain('className="stage-tab-bar"');
+    expect(caseTsx).toContain('<CaseHeader');
+    expect(scorecardPanelTsx).toContain('export const AssessorScorecard = memo(');
+    expect(scorecardPanelTsx).toContain('export const AssessmentSummary = memo(');
   });
 
   it('adds responsive data-label attributes and preserves Employees page heading selectors', () => {
@@ -114,8 +121,7 @@ describe('Frontend UI & Layout Invariants', () => {
     expect(stylesCss).toMatch(/\.user-dropdown-menu\s*\{[^}]*padding:\s*0;/s);
   });
 
-  it('aligns standalone and admin panels (AccessAccountsPanel, NewRequest) and route cards across empty/filtered/active scenarios', () => {
-    const accessAccountsTsx = readSrc('routes/access-accounts-panel.tsx');
+  it('aligns standalone and admin panels (Administration, RolesMatrix) and route cards across scenarios', () => {
     const myWorkCss = readSrc('routes/my-work.css');
     const assessmentsCss = readSrc('routes/assessments.css');
     const employeesCss = readSrc('routes/employees.css');
@@ -124,9 +130,19 @@ describe('Frontend UI & Layout Invariants', () => {
     const administrationCss = readSrc('routes/administration.css');
     const calibrationCss = readSrc('routes/calibration-view/calibration.css');
 
-    // AccessAccountsPanel should rely on .panel padding without misaligned 16px inner wrapper
-    expect(accessAccountsTsx).toContain('<section className="panel"');
-    expect(accessAccountsTsx).not.toContain('<div style={{ padding: 16 }}>');
+    // Administration should not nest <main> inside Shell and should mount RolesMatrixSection
+    expect(administrationTsx).toContain('<RolesMatrixSection');
+    expect(administrationTsx).not.toContain('<main');
+    expect(administrationTsx).not.toContain('role="row"');
+    expect(assessmentsTsx).not.toContain('role="row"');
+
+    // Legacy indigo hex codes must remain purged from shared stylesheets
+    expect(stylesCss).not.toContain('#4f46e5');
+    expect(stylesCss).not.toContain('#4338ca');
+    expect(stylesCss).not.toContain('#312e81');
+    expect(calibrationCss).not.toContain('#312e81');
+    expect(calibrationCss).not.toContain('#dedbff');
+    expect(employeesCss).not.toContain('#4338ca');
 
     // Route headers, cards, and empty states across all 7 route stylesheets must have explicit padding
     expect(myWorkCss).toMatch(/\.mw-head\s*\{[^}]*padding:\s*20px 24px;/s);

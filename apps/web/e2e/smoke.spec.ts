@@ -1,31 +1,29 @@
 import { test, expect } from '@playwright/test';
-import { submitCaseViaApi } from './fixtures/test-api';
+import { signInDemoSession, submitCaseViaApi } from './fixtures/test-api';
 
 test.describe('AssessFlow End-to-End Workflow Smoke Spec', () => {
   test('Full Journey: request -> submit -> eligibility -> plan -> event -> evidence -> result -> recommendation -> approval -> close', async ({
     page,
   }) => {
+    await signInDemoSession(page);
+
     // -------------------------------------------------------------
     // Step 1: REQUEST (New assessment request created via Web UI)
     // -------------------------------------------------------------
-    await page.goto('/');
+    await page.goto('/cases/new');
     await expect(page.locator('.brand-copy strong')).toHaveText('AssessFlow');
 
-    // Click "New assessment" in header/action
-    const newRequestBtn = page.getByRole('button', { name: /New assessment/i }).first();
-    await expect(newRequestBtn).toBeVisible();
-    await newRequestBtn.click();
-
-    // Drawer modal opens
-    const drawer = page.getByRole('dialog');
-    await expect(drawer).toBeVisible();
+    const form = page.locator('form').first();
+    await expect(form).toBeVisible();
 
     const candidateName = `Candidate E2E-${Date.now().toString().slice(-4)}`;
-    await page.getByPlaceholder('Search employee').fill(candidateName);
-    await page.getByPlaceholder('e.g. Product').fill('Product');
+    await page.getByPlaceholder(/Employee full name|Full name/i).fill(candidateName);
+    await page.getByPlaceholder('e.g. Clinical Operations').fill('Clinical Operations');
+    await page.getByPlaceholder('Staff number, e.g. 10452').fill('10452');
     await page.getByPlaceholder('Current position').fill('Senior Product Specialist');
     await page.getByPlaceholder('Target position').fill('Lead Product Manager');
-    await page.getByPlaceholder('L4').fill('L5');
+    await page.getByLabel(/Current level/i).selectOption('Senior');
+    await page.getByLabel(/Target level/i).selectOption('Manager');
     await page
       .getByPlaceholder('Explain the business context, target scope, and reason for review…')
       .fill(
@@ -58,13 +56,19 @@ test.describe('AssessFlow End-to-End Workflow Smoke Spec', () => {
     expect(submitResult.status).toBe(201);
     expect(submitResult.data.status).toBe('PENDING_ELIGIBILITY');
 
-    // The submit happened outside React Query: reload so the case view fetches fresh state.
+    // Out-of-band API mutation requires reload or navigation refetch under staleTime
     await page.reload();
 
     // Navigate to Assessments list and re-open case to load updated status
-    await page.getByRole('button', { name: /Assessments/i }).click();
+    await page
+      .getByRole('button', { name: /Assessments/i })
+      .first()
+      .click();
     await page.getByPlaceholder('Search case, employee, department…').fill(candidateName);
-    await page.getByText(candidateName).first().click();
+    await page
+      .getByRole('link', { name: new RegExp(candidateName, 'i') })
+      .first()
+      .click();
 
     await expect(page.locator('.case-header-side .status-badge')).toContainText(
       'Pending eligibility',
@@ -120,6 +124,17 @@ test.describe('AssessFlow End-to-End Workflow Smoke Spec', () => {
     const locationInput = page.getByPlaceholder('e.g. Assessment Room 302 or Teams link');
     await locationInput.fill('Assessment Center Executive Suite B');
 
+    const assessorCheckbox = eventsPanel.locator('input[type="checkbox"]').first();
+    if (await assessorCheckbox.isVisible().catch(() => false)) {
+      await assessorCheckbox.check();
+    } else {
+      await eventsPanel.getByPlaceholder('e.g. Ahmed Mohamed').fill('Dr. Nadia Selim');
+      await eventsPanel
+        .getByPlaceholder('name@saudigerman.com')
+        .fill('nadia.selim@saudigerman.com');
+      await eventsPanel.getByRole('button', { name: /Add person/i }).click();
+    }
+
     // Click "Schedule event"
     const scheduleEventBtn = page.getByRole('button', { name: /Schedule (assessment )?event/i });
     await expect(scheduleEventBtn).toBeVisible();
@@ -135,14 +150,18 @@ test.describe('AssessFlow End-to-End Workflow Smoke Spec', () => {
     const evidencePanel = page.locator('.evidence-panel');
     await expect(evidencePanel).toBeVisible();
 
-    const evidenceTextarea = evidencePanel.locator('textarea');
+    const evidenceTextarea = evidencePanel.getByPlaceholder(
+      /Detail the candidate's observed competencies/i,
+    );
     await expect(evidenceTextarea).toBeVisible();
     await evidenceTextarea.fill(
       'Candidate exhibited superior strategic framing, concise leadership responses, and thorough risk mitigation across complex scenarios.',
     );
 
     // Click "Submit evidence"
-    const submitEvidenceBtn = evidencePanel.getByRole('button', { name: /Submit assessor evidence/i });
+    const submitEvidenceBtn = evidencePanel.getByRole('button', {
+      name: /Submit (assessor )?evidence/i,
+    });
     await expect(submitEvidenceBtn).toBeVisible();
     await submitEvidenceBtn.click();
 
@@ -191,9 +210,7 @@ test.describe('AssessFlow End-to-End Workflow Smoke Spec', () => {
     await submitRecBtn.click();
 
     // Verify transition to PENDING_APPROVAL and approval steps visible
-    await expect(page.locator('.case-header-side .status-badge')).toContainText(
-      'Pending approval',
-    );
+    await expect(page.locator('.case-header-side .status-badge')).toContainText('Pending approval');
     await expect(page.getByText(/Sequential approval steps \(2\)/i)).toBeVisible();
 
     // -------------------------------------------------------------
@@ -201,7 +218,9 @@ test.describe('AssessFlow End-to-End Workflow Smoke Spec', () => {
     // -------------------------------------------------------------
     // Step 1: HR Approver (first pending step card in sequence order)
     await expect(page.getByText('Step 1: HR Approver')).toBeVisible();
-    const hrComment = page.getByPlaceholder('Provide context for approval, changes, or rejection…').nth(0);
+    const hrComment = page
+      .getByPlaceholder('Provide context for approval, changes, or rejection…')
+      .nth(0);
     await hrComment.fill('HR talent governance criteria fully validated.');
 
     const approveBtn1 = page.getByRole('button', { name: /^Approve$/i }).nth(0);
@@ -233,7 +252,7 @@ test.describe('AssessFlow End-to-End Workflow Smoke Spec', () => {
       .getByPlaceholder('e.g. Cross-functional leadership project')
       .fill('Executive Mentorship');
     await page.getByPlaceholder('e.g. Direct Manager').fill('VP of Product');
-    await page.getByRole('button', { name: /Update development/i }).click();
+    await page.getByRole('button', { name: /Add action item|Update development/i }).click();
     await expect(page.getByText('Executive Mentorship')).toBeVisible();
 
     // Click "Close case"
@@ -241,11 +260,9 @@ test.describe('AssessFlow End-to-End Workflow Smoke Spec', () => {
     await expect(closeBtn).toBeVisible();
     await closeBtn.click();
 
-    // Confirm close
-    await expect(
-      page.getByText('Confirm case closure? This locks the case lifecycle permanently.'),
-    ).toBeVisible();
-    const confirmCloseBtn = page.getByRole('button', { name: /Confirm close/i });
+    // Confirm close via ConfirmDialog
+    await expect(page.getByText(/Close assessment case permanently\?/i)).toBeVisible();
+    const confirmCloseBtn = page.getByRole('button', { name: /Confirm close( case)?/i });
     await expect(confirmCloseBtn).toBeVisible();
     await confirmCloseBtn.click();
 

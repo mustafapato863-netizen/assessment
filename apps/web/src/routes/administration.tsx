@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Download, KeyRound, ShieldCheck, UserRound, UserRoundX, X } from 'lucide-react';
+import { Download, KeyRound, ShieldCheck, UserCheck, UserRound, UserRoundX, X } from 'lucide-react';
 import { useToast } from '../hooks/use-toast';
 import { getSession } from '../lib/auth';
+import { downloadCsv as writeCsvFile, initials } from '../lib/format';
+import { queryKeys } from '../lib/query-keys';
+import { RolesMatrixSection } from '../features/admin/roles-matrix-section';
 import {
   api,
   type AccessAccount,
@@ -64,61 +67,33 @@ function allowedScopes(role: AccessRole): AccessScope[] {
   return scopeOptions.map(({ value }) => value);
 }
 
-function initials(name: string): string {
-  return name
-    .trim()
-    .split(/\s+/)
-    .map((part) => part[0] ?? '')
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
+function downloadCsv(rows: AdminAuditEvent[]) {
+  writeCsvFile(
+    `assessflow-audit-${new Date().toISOString().slice(0, 10)}.csv`,
+    ['Audit ID', 'Timestamp', 'Actor', 'Action', 'Target', 'Reason', 'Proof hash', 'Integrity'],
+    rows.map((row) => [
+      row.id,
+      row.timestamp,
+      row.actor,
+      row.action,
+      row.target,
+      row.reason,
+      row.hash,
+      row.integrity,
+    ]),
+  );
 }
 
 function formatAuditDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '—';
-  const formatted = new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
     hourCycle: 'h23',
   }).format(date);
-  return formatted.replace(',', ',');
-}
-
-function csvCell(value: unknown): string {
-  return `"${String(value ?? '').replaceAll('"', '""')}"`;
-}
-
-function downloadCsv(rows: AdminAuditEvent[]) {
-  const lines = [
-    ['Audit ID', 'Timestamp', 'Actor', 'Action', 'Target', 'Reason', 'Proof hash', 'Integrity']
-      .map(csvCell)
-      .join(','),
-    ...rows.map((row) =>
-      [
-        row.id,
-        row.timestamp,
-        row.actor,
-        row.action,
-        row.target,
-        row.reason,
-        row.hash,
-        row.integrity,
-      ]
-        .map(csvCell)
-        .join(','),
-    ),
-  ];
-  const url = URL.createObjectURL(
-    new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }),
-  );
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `assessflow-audit-${new Date().toISOString().slice(0, 10)}.csv`;
-  anchor.click();
-  URL.revokeObjectURL(url);
 }
 
 function scopeLabel(scope: AccessScope): string {
@@ -164,6 +139,8 @@ export function AdministrationPage() {
   const [newScopeValues, setNewScopeValues] = useState('');
   const [addingAccount, setAddingAccount] = useState(false);
   const [deactivateTarget, setDeactivateTarget] = useState<AccessAccount | null>(null);
+  const [adminTab, setAdminTab] = useState<'all' | 'access' | 'roles' | 'policy' | 'audit'>('all');
+  const searchTimerRef = useRef<number | null>(null);
   const [oneTimeCredential, setOneTimeCredential] = useState<{
     name: string;
     password: string;
@@ -201,7 +178,13 @@ export function AdministrationPage() {
       setAuditTotal(result.total);
       setAuditPage(result.page);
       setAuditActions((existing) =>
-        [...new Set([...existing, ...result.items.map((item) => item.action)])].sort(),
+        [
+          ...new Set([
+            ...existing,
+            ...(result.availableActions ?? []),
+            ...result.items.map((item) => item.action),
+          ]),
+        ].sort(),
       );
     } catch (error) {
       setAuditError(error instanceof Error ? error.message : 'Could not load audit history.');
@@ -338,6 +321,23 @@ export function AdministrationPage() {
     }
   };
 
+  const reactivateAccount = async (account: AccessAccount) => {
+    try {
+      const result = await api.adminReactivateAccessAccount(account.id);
+      setAccounts((previous) =>
+        previous.map((item) => (item.id === result.account.id ? result.account : item)),
+      );
+      setOneTimeCredential({
+        name: result.account.displayName,
+        password: result.temporaryPassword,
+      });
+      await loadAudit(1);
+      showToast(`${result.account.displayName} reactivated. Copy the new one-time password.`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not reactivate the account.');
+    }
+  };
+
   const resetPassword = async (account: AccessAccount) => {
     try {
       const result = await api.adminResetAccessPassword(account.id);
@@ -384,7 +384,18 @@ export function AdministrationPage() {
     if (next.action !== undefined) setAuditAction(next.action);
     if (next.from !== undefined) setAuditFrom(next.from);
     if (next.to !== undefined) setAuditTo(next.to);
-    void loadAudit(1, filters);
+
+    if (searchTimerRef.current !== null) {
+      window.clearTimeout(searchTimerRef.current);
+      searchTimerRef.current = null;
+    }
+    if (next.search !== undefined) {
+      searchTimerRef.current = window.setTimeout(() => {
+        void loadAudit(1, filters);
+      }, 300);
+    } else {
+      void loadAudit(1, filters);
+    }
   };
 
   const formatScopeValue = (value: string) =>
@@ -400,7 +411,7 @@ export function AdministrationPage() {
         : `Adjust ${weightTotal - 100}% less`;
 
   return (
-    <main className="administration-page">
+    <div className="administration-page">
       <header className="administration-heading">
         <div>
           <h1>Administration</h1>
@@ -469,493 +480,539 @@ export function AdministrationPage() {
         </article>
       </section>
 
-      <section className="administration-card">
-        <div className="administration-card-heading">
-          <div>
-            <h2>Company access and roles</h2>
-            <p>
-              Sign-in requires a company email. New accounts receive a one-time password and must
-              change it at first sign-in.
-            </p>
-          </div>
-          <span className="administration-chip teal">@saudigerman.com only</span>
-        </div>
-        <div className="admin-account-table">
-          <div className="admin-account-grid account-header" role="row">
-            <span aria-hidden="true" />
-            <span>Person</span>
-            <span>Role</span>
-            <span>Data scope</span>
-            <span>Status</span>
-            <span>Actions</span>
-          </div>
-          {accountLoading ? (
-            <div className="admin-table-message">Loading access accounts…</div>
-          ) : accounts.length === 0 ? (
-            <div className="admin-table-message">No company accounts have been assigned yet.</div>
-          ) : (
-            accounts.map((account) => {
-              const role = account.roles[0] ?? 'Employee';
-              const needsValues = ['DEPARTMENTS', 'DIRECT_REPORTS', 'SELF'].includes(
-                account.scopeType,
-              );
-              const broad =
-                account.scopeType === 'ORGANIZATION' && (role === 'Assessor' || role === 'Admin');
-              return (
-                <div className="admin-account-grid account-row" role="row" key={account.id}>
-                  <span className="admin-avatar" aria-hidden="true">
-                    {initials(account.displayName)}
-                  </span>
-                  <div className="admin-account-person">
-                    <strong>{account.displayName}</strong>
-                    <span>{account.email}</span>
-                  </div>
-                  <label className="admin-inline-field">
-                    <span className="sr-only">Role for {account.displayName}</span>
-                    <select
-                      value={role}
-                      onChange={(event) => {
-                        const nextRole = event.target.value as AccessRole;
-                        const nextScope = recommendedScope(nextRole);
-                        void updateAccount(account, {
-                          roles: [nextRole],
-                          scopeType: nextScope,
-                          scopeValues: nextScope === account.scopeType ? account.scopeValues : [],
-                        });
-                      }}
-                    >
-                      {roleOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="admin-scope-cell">
-                    <label className="admin-inline-field">
-                      <span className="sr-only">Data scope for {account.displayName}</span>
-                      <select
-                        value={account.scopeType}
-                        onChange={(event) =>
-                          void updateAccount(account, {
-                            scopeType: event.target.value as AccessScope,
-                          })
-                        }
-                      >
-                        {allowedScopes(role).map((scope) => (
-                          <option key={scope} value={scope}>
-                            {scopeLabel(scope)}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    {broad && <span className="administration-chip amber">Broad access</span>}
-                    {needsValues && (
-                      <label className="admin-inline-field scope-values">
-                        <span className="sr-only">Scope values for {account.displayName}</span>
-                        <input
-                          defaultValue={account.scopeValues.join(', ')}
-                          aria-label={`Scope values for ${account.displayName}`}
-                          placeholder="Scope values"
-                          onBlur={(event) => {
-                            const values = formatScopeValue(event.currentTarget.value);
-                            if (values.join(',') !== account.scopeValues.join(','))
-                              void updateAccount(account, { scopeValues: values });
-                          }}
-                        />
-                      </label>
-                    )}
-                  </div>
-                  <span className={`administration-chip ${account.active ? 'teal' : 'gray'}`}>
-                    {account.active ? 'Active' : 'Disabled'}
-                    {account.mustChangePassword ? ' · Password change required' : ''}
-                  </span>
-                  <div className="admin-row-actions">
-                    <button
-                      type="button"
-                      className="admin-text-button"
-                      onClick={() => void resetPassword(account)}
-                    >
-                      <KeyRound size={15} /> Reset password
-                    </button>
-                    {account.active && (
-                      <button
-                        type="button"
-                        className="admin-text-button danger"
-                        onClick={() => setDeactivateTarget(account)}
-                      >
-                        <UserRoundX size={15} /> Deactivate
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </section>
-
-      <section className="administration-card admin-add-access">
-        <div className="administration-card-heading">
-          <div>
-            <h2>Add access</h2>
-            <p>
-              A random temporary password is generated and shown once after the account is created.
-            </p>
-          </div>
-        </div>
-        <form className="admin-form-grid" onSubmit={(event) => void addAccount(event)}>
-          <label className="admin-field">
-            <span>Name</span>
-            <input
-              required
-              value={newName}
-              onChange={(event) => setNewName(event.target.value)}
-              autoComplete="name"
-            />
-          </label>
-          <label className="admin-field">
-            <span>Company email</span>
-            <input
-              required
-              type="email"
-              value={newEmail}
-              onChange={(event) => setNewEmail(event.target.value)}
-              autoComplete="email"
-            />
-          </label>
-          <label className="admin-field">
-            <span>Role</span>
-            <select
-              value={newRole}
-              onChange={(event) => {
-                const nextRole = event.target.value as AccessRole;
-                setNewRole(nextRole);
-                setNewScope(recommendedScope(nextRole));
-                setNewScopeValues('');
-              }}
-            >
-              {roleOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="admin-field">
-            <span>Data scope</span>
-            <select
-              value={newScope}
-              onChange={(event) => setNewScope(event.target.value as AccessScope)}
-            >
-              {allowedScopes(newRole).map((scope) => (
-                <option key={scope} value={scope}>
-                  {scopeLabel(scope)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="admin-field">
-            <span>HRIS employee IDs (optional)</span>
-            <input
-              value={newScopeValues}
-              onChange={(event) => setNewScopeValues(event.target.value)}
-              aria-describedby="admin-hris-help"
-            />
-          </label>
-          <span className="admin-field-help" id="admin-hris-help">
-            Separate IDs with commas.
-          </span>
+      <div className="admin-subtabs" role="tablist" aria-label="Administration sections">
+        {(
+          [
+            ['all', 'All Sections'],
+            ['access', 'Access & Accounts'],
+            ['roles', 'Roles & Permissions Matrix'],
+            ['policy', 'Governance Policy & SLA'],
+            ['audit', 'Audit Trail'],
+          ] as const
+        ).map(([key, label]) => (
           <button
-            className="admin-button primary add-access-button"
-            type="submit"
-            disabled={addingAccount}
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={adminTab === key}
+            className={`admin-subtab ${adminTab === key ? 'active' : ''}`}
+            onClick={() => setAdminTab(key)}
           >
-            {addingAccount ? 'Creating…' : 'Add and create one-time password'}
+            {label}
           </button>
-        </form>
-      </section>
-
-      <div className="administration-columns">
-        <div className="administration-column">
-          <section className="administration-card">
-            <div className="administration-card-heading">
-              <div>
-                <h2>Scoring weights</h2>
-                <p>Set the contribution each assessment method makes to the final score.</p>
-              </div>
-              <span className={`administration-chip ${weightTotal === 100 ? 'teal' : 'amber'}`}>
-                {weightStatus}
-              </span>
-            </div>
-            <div className="admin-policy-fields">
-              <WeightField
-                label="Competency-Based Interview (CBI)"
-                value={policy.cbiWeight}
-                onChange={(value) => changeWeight('cbiWeight', value)}
-                description="Evaluates leadership behaviors, culture alignment and emotional intelligence."
-              />
-              <WeightField
-                label="Strategic Case Study and Presentation"
-                value={policy.caseStudyWeight}
-                onChange={(value) => changeWeight('caseStudyWeight', value)}
-                description="Assesses analytical rigor, commercial problem-solving and executive synthesis."
-              />
-              <WeightField
-                label="Situational Roleplay and Simulation"
-                value={policy.simulationWeight}
-                onChange={(value) => changeWeight('simulationWeight', value)}
-                description="Observes stakeholder negotiation and conflict resolution."
-              />
-              <label className="admin-field passing-score">
-                <span>Minimum passing score</span>
-                <span className="admin-number-with-unit">
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="1"
-                    value={policy.passingScore}
-                    onChange={(event) =>
-                      updatePolicy((current) => ({
-                        ...current,
-                        passingScore: event.target.value === '' ? 0 : Number(event.target.value),
-                      }))
-                    }
-                  />
-                  <span>%</span>
-                </span>
-                <small>Candidates below this score are not ready.</small>
-              </label>
-            </div>
-            {validationErrors.some((error) => error.startsWith('Scoring weights')) && (
-              <p className="admin-validation-note" role="alert">
-                {validationErrors.find((error) => error.startsWith('Scoring weights'))}
-              </p>
-            )}
-          </section>
-
-          <section className="administration-card">
-            <div className="administration-card-heading">
-              <div>
-                <h2>Quality safeguards</h2>
-                <p>Controls applied to assessment and approval work.</p>
-              </div>
-            </div>
-            <label className="admin-toggle-row">
-              <input
-                type="checkbox"
-                checked={policy.blindGrading}
-                onChange={(event) =>
-                  updatePolicy((current) => ({ ...current, blindGrading: event.target.checked }))
-                }
-              />
-              <span>
-                <strong>Two-assessor blind consensus</strong>
-                <small>
-                  Assessors score independently before preliminary submissions are sealed.
-                </small>
-              </span>
-            </label>
-            <label className="admin-toggle-row">
-              <input
-                type="checkbox"
-                checked={policy.autoEscalate}
-                onChange={(event) =>
-                  updatePolicy((current) => ({ ...current, autoEscalate: event.target.checked }))
-                }
-              />
-              <span>
-                <strong>Automatic SLA escalation</strong>
-                <small>Escalate when review passes its SLA window.</small>
-              </span>
-            </label>
-          </section>
-        </div>
-
-        <div className="administration-column">
-          <section className="administration-card">
-            <div className="administration-card-heading">
-              <div>
-                <h2>SLA windows</h2>
-                <p>
-                  All values are hours. The windows below are the policy source used for SLA risk.
-                </p>
-              </div>
-              <span className="administration-chip indigo">Hours</span>
-            </div>
-            <SlaField
-              label="Eligibility screening"
-              description="HR intake and tenure validation"
-              hours={policy.slaWindows.eligibilityHours}
-              onChange={(value) => changeSla('eligibilityHours', value)}
-            />
-            <SlaField
-              label="Assessor execution and scoring"
-              description={`Simulation conduct and evidence rubric · ${policy.slaWindows.assessorHours / 24} days`}
-              hours={policy.slaWindows.assessorHours}
-              onChange={(value) => changeSla('assessorHours', value)}
-            />
-            <SlaField
-              label="Committee approval decision"
-              description="Sponsor sign-off or escalation"
-              hours={policy.slaWindows.committeeHours}
-              onChange={(value) => changeSla('committeeHours', value)}
-            />
-            <div className="admin-sla-total">
-              <strong>Total target turnaround</strong>
-              <b>{slaTotal} hours</b>
-              <span>{slaTotal / 24} days</span>
-            </div>
-            {validationErrors.some((error) => error.startsWith('Every SLA')) && (
-              <p className="admin-validation-note" role="alert">
-                {validationErrors.find((error) => error.startsWith('Every SLA'))}
-              </p>
-            )}
-          </section>
-
-          <section className="administration-card">
-            <div className="administration-card-heading">
-              <div>
-                <h2>Approval route</h2>
-                <p>Runs in this order after assessment results are ready.</p>
-              </div>
-            </div>
-            <ApprovalStep
-              number="1"
-              title="Lead assessor recommendation"
-              description="Validates competency evidence and submits the final rubric synthesis."
-              conditional={false}
-            />
-            <ApprovalStep
-              number="2"
-              title="Business unit VP sponsor"
-              description="Reviews business justification, budget readiness and head-count fit."
-              conditional={false}
-            />
-            <ApprovalStep
-              number="3"
-              title="Executive talent committee"
-              description="Only for executive tracks at L6 and above, or disputed outcomes."
-              conditional
-            />
-          </section>
-        </div>
+        ))}
       </div>
 
-      <section className="administration-card admin-audit-card">
-        <div className="administration-card-heading">
-          <div>
-            <h2>Audit trail</h2>
-            <p>
-              Records are loaded from the application database with the administrator who made each
-              change.
-            </p>
-          </div>
-          <span className="administration-chip amber">Integrity: Not verified</span>
-        </div>
-        <div className="admin-audit-filters">
-          <label className="admin-field search-field">
-            <span>Search actor, action or target</span>
-            <input
-              type="search"
-              value={auditSearch}
-              onChange={(event) => updateAuditFilters({ search: event.target.value })}
-            />
-          </label>
-          <label className="admin-field">
-            <span>Action type</span>
-            <select
-              value={auditAction}
-              onChange={(event) => updateAuditFilters({ action: event.target.value })}
-            >
-              <option value="">All actions</option>
-              {auditActions.map((action) => (
-                <option key={action} value={action}>
-                  {humanizeAction(action)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="admin-field">
-            <span>From date</span>
-            <input
-              type="date"
-              value={auditFrom}
-              onChange={(event) => updateAuditFilters({ from: event.target.value })}
-            />
-          </label>
-          <label className="admin-field">
-            <span>To date</span>
-            <input
-              type="date"
-              value={auditTo}
-              onChange={(event) => updateAuditFilters({ to: event.target.value })}
-            />
-          </label>
-        </div>
-        {auditError && (
-          <p className="administration-error" role="alert">
-            {auditError}
-          </p>
-        )}
-        <div className="admin-audit-table" aria-busy={auditLoading}>
-          <div className="admin-audit-grid audit-header" role="row">
-            <span>ID</span>
-            <span>Time</span>
-            <span>Actor</span>
-            <span>Action</span>
-            <span>Details</span>
-            <span>Proof hash</span>
-            <span>Integrity</span>
-          </div>
-          {auditLoading ? (
-            <div className="admin-table-message">Loading audit history…</div>
-          ) : auditItems.length === 0 ? (
-            <div className="admin-table-message">No audit events match these filters.</div>
-          ) : (
-            auditItems.map((item) => (
-              <div className="admin-audit-grid audit-row" role="row" key={item.id}>
-                <span className="admin-mono" title={item.id}>
-                  AUD-{item.id.slice(0, 8)}
-                </span>
-                <time dateTime={item.timestamp}>{formatAuditDate(item.timestamp)}</time>
-                <span>{item.actor}</span>
-                <span>{humanizeAction(item.action)}</span>
-                <span title={item.reason ?? item.target}>{item.reason || item.target}</span>
-                <span className="admin-mono" title={item.hash ?? 'No proof hash is stored'}>
-                  {item.hash ? `${item.hash.slice(0, 6)}…${item.hash.slice(-4)}` : '—'}
-                </span>
-                <span className="administration-chip amber">Not verified</span>
+      {(adminTab === 'all' || adminTab === 'access') && (
+        <>
+          <section className="administration-card">
+            <div className="administration-card-heading">
+              <div>
+                <h2>Company access and roles</h2>
+                <p>
+                  Sign-in requires a company email. New accounts receive a one-time password and
+                  must change it at first sign-in.
+                </p>
               </div>
-            ))
-          )}
-        </div>
-        <div className="admin-audit-pagination">
-          <span>
-            Showing {auditTotal === 0 ? 0 : (auditPage - 1) * 8 + 1}–
-            {Math.min(auditPage * 8, auditTotal)} of {auditTotal} events
-          </span>
-          <div>
-            <button
-              type="button"
-              className="admin-button secondary"
-              disabled={auditPage <= 1 || auditLoading}
-              onClick={() => void loadAudit(auditPage - 1)}
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              className="admin-button secondary"
-              disabled={auditPage * 8 >= auditTotal || auditLoading}
-              onClick={() => void loadAudit(auditPage + 1)}
-            >
-              Next
-            </button>
+              <span className="administration-chip teal">@saudigerman.com only</span>
+            </div>
+            <div className="admin-account-table">
+              <div className="admin-account-grid account-header" aria-hidden="true">
+                <span aria-hidden="true" />
+                <span>Person</span>
+                <span>Role</span>
+                <span>Data scope</span>
+                <span>Status</span>
+                <span>Actions</span>
+              </div>
+              {accountLoading ? (
+                <div className="admin-table-message">Loading access accounts…</div>
+              ) : accounts.length === 0 ? (
+                <div className="admin-table-message">
+                  No company accounts have been assigned yet.
+                </div>
+              ) : (
+                accounts.map((account) => {
+                  const role = account.roles[0] ?? 'Employee';
+                  const needsValues = ['DEPARTMENTS', 'DIRECT_REPORTS', 'SELF'].includes(
+                    account.scopeType,
+                  );
+                  const broad =
+                    account.scopeType === 'ORGANIZATION' &&
+                    (role === 'Assessor' || role === 'Admin');
+                  return (
+                    <div className="admin-account-grid account-row" key={account.id}>
+                      <span className="admin-avatar" aria-hidden="true">
+                        {initials(account.displayName)}
+                      </span>
+                      <div className="admin-account-person">
+                        <strong>{account.displayName}</strong>
+                        <span>{account.email}</span>
+                      </div>
+                      <label className="admin-inline-field">
+                        <span className="sr-only">Role for {account.displayName}</span>
+                        <select
+                          value={role}
+                          onChange={(event) => {
+                            const nextRole = event.target.value as AccessRole;
+                            const nextScope = recommendedScope(nextRole);
+                            void updateAccount(account, {
+                              roles: [nextRole],
+                              scopeType: nextScope,
+                              scopeValues:
+                                nextScope === account.scopeType ? account.scopeValues : [],
+                            });
+                          }}
+                        >
+                          {roleOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <div className="admin-scope-cell">
+                        <label className="admin-inline-field">
+                          <span className="sr-only">Data scope for {account.displayName}</span>
+                          <select
+                            value={account.scopeType}
+                            onChange={(event) =>
+                              void updateAccount(account, {
+                                scopeType: event.target.value as AccessScope,
+                              })
+                            }
+                          >
+                            {allowedScopes(role).map((scope) => (
+                              <option key={scope} value={scope}>
+                                {scopeLabel(scope)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        {broad && <span className="administration-chip amber">Broad access</span>}
+                        {needsValues && (
+                          <label className="admin-inline-field scope-values">
+                            <span className="sr-only">Scope values for {account.displayName}</span>
+                            <input
+                              defaultValue={account.scopeValues.join(', ')}
+                              aria-label={`Scope values for ${account.displayName}`}
+                              placeholder="Scope values"
+                              onBlur={(event) => {
+                                const values = formatScopeValue(event.currentTarget.value);
+                                if (values.join(',') !== account.scopeValues.join(','))
+                                  void updateAccount(account, { scopeValues: values });
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                      <span className={`administration-chip ${account.active ? 'teal' : 'gray'}`}>
+                        {account.active ? 'Active' : 'Disabled'}
+                        {account.mustChangePassword ? ' · Password change required' : ''}
+                      </span>
+                      <div className="admin-row-actions">
+                        <button
+                          type="button"
+                          className="admin-text-button"
+                          onClick={() => void resetPassword(account)}
+                        >
+                          <KeyRound size={15} /> Reset password
+                        </button>
+                        {account.active ? (
+                          <button
+                            type="button"
+                            className="admin-text-button danger"
+                            onClick={() => setDeactivateTarget(account)}
+                          >
+                            <UserRoundX size={15} /> Deactivate
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            className="admin-text-button"
+                            onClick={() => void reactivateAccount(account)}
+                          >
+                            <UserCheck size={15} /> Reactivate
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </section>
+
+          <section className="administration-card admin-add-access">
+            <div className="administration-card-heading">
+              <div>
+                <h2>Add access</h2>
+                <p>
+                  A random temporary password is generated and shown once after the account is
+                  created.
+                </p>
+              </div>
+            </div>
+            <form className="admin-form-grid" onSubmit={(event) => void addAccount(event)}>
+              <label className="admin-field">
+                <span>Name</span>
+                <input
+                  required
+                  value={newName}
+                  onChange={(event) => setNewName(event.target.value)}
+                  autoComplete="name"
+                />
+              </label>
+              <label className="admin-field">
+                <span>Company email</span>
+                <input
+                  required
+                  type="email"
+                  value={newEmail}
+                  onChange={(event) => setNewEmail(event.target.value)}
+                  autoComplete="email"
+                />
+              </label>
+              <label className="admin-field">
+                <span>Role</span>
+                <select
+                  value={newRole}
+                  onChange={(event) => {
+                    const nextRole = event.target.value as AccessRole;
+                    setNewRole(nextRole);
+                    setNewScope(recommendedScope(nextRole));
+                    setNewScopeValues('');
+                  }}
+                >
+                  {roleOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="admin-field">
+                <span>Data scope</span>
+                <select
+                  value={newScope}
+                  onChange={(event) => setNewScope(event.target.value as AccessScope)}
+                >
+                  {allowedScopes(newRole).map((scope) => (
+                    <option key={scope} value={scope}>
+                      {scopeLabel(scope)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="admin-field">
+                <span>HRIS employee IDs (optional)</span>
+                <input
+                  value={newScopeValues}
+                  onChange={(event) => setNewScopeValues(event.target.value)}
+                  aria-describedby="admin-hris-help"
+                />
+              </label>
+              <span className="admin-field-help" id="admin-hris-help">
+                Separate IDs with commas.
+              </span>
+              <button
+                className="admin-button primary add-access-button"
+                type="submit"
+                disabled={addingAccount}
+              >
+                {addingAccount ? 'Creating…' : 'Add and create one-time password'}
+              </button>
+            </form>
+          </section>
+        </>
+      )}
+
+      {(adminTab === 'all' || adminTab === 'roles') && <RolesMatrixSection accounts={accounts} />}
+
+      {(adminTab === 'all' || adminTab === 'policy') && (
+        <div className="administration-columns">
+          <div className="administration-column">
+            <section className="administration-card">
+              <div className="administration-card-heading">
+                <div>
+                  <h2>Scoring weights</h2>
+                  <p>Set the contribution each assessment method makes to the final score.</p>
+                </div>
+                <span className={`administration-chip ${weightTotal === 100 ? 'teal' : 'amber'}`}>
+                  {weightStatus}
+                </span>
+              </div>
+              <div className="admin-policy-fields">
+                <WeightField
+                  label="Competency-Based Interview (CBI)"
+                  value={policy.cbiWeight}
+                  onChange={(value) => changeWeight('cbiWeight', value)}
+                  description="Evaluates leadership behaviors, culture alignment and emotional intelligence."
+                />
+                <WeightField
+                  label="Strategic Case Study and Presentation"
+                  value={policy.caseStudyWeight}
+                  onChange={(value) => changeWeight('caseStudyWeight', value)}
+                  description="Assesses analytical rigor, commercial problem-solving and executive synthesis."
+                />
+                <WeightField
+                  label="Situational Roleplay and Simulation"
+                  value={policy.simulationWeight}
+                  onChange={(value) => changeWeight('simulationWeight', value)}
+                  description="Observes stakeholder negotiation and conflict resolution."
+                />
+                <label className="admin-field passing-score">
+                  <span>Minimum passing score</span>
+                  <span className="admin-number-with-unit">
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={policy.passingScore}
+                      onChange={(event) =>
+                        updatePolicy((current) => ({
+                          ...current,
+                          passingScore: event.target.value === '' ? 0 : Number(event.target.value),
+                        }))
+                      }
+                    />
+                    <span>%</span>
+                  </span>
+                  <small>Candidates below this score are not ready.</small>
+                </label>
+              </div>
+              {validationErrors.some((error) => error.startsWith('Scoring weights')) && (
+                <p className="admin-validation-note" role="alert">
+                  {validationErrors.find((error) => error.startsWith('Scoring weights'))}
+                </p>
+              )}
+            </section>
+
+            <section className="administration-card">
+              <div className="administration-card-heading">
+                <div>
+                  <h2>Quality safeguards</h2>
+                  <p>Controls applied to assessment and approval work.</p>
+                </div>
+              </div>
+              <label className="admin-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={policy.blindGrading}
+                  onChange={(event) =>
+                    updatePolicy((current) => ({ ...current, blindGrading: event.target.checked }))
+                  }
+                />
+                <span>
+                  <strong>Two-assessor blind consensus</strong>
+                  <small>
+                    Assessors score independently before preliminary submissions are sealed.
+                  </small>
+                </span>
+              </label>
+              <label className="admin-toggle-row">
+                <input
+                  type="checkbox"
+                  checked={policy.autoEscalate}
+                  onChange={(event) =>
+                    updatePolicy((current) => ({ ...current, autoEscalate: event.target.checked }))
+                  }
+                />
+                <span>
+                  <strong>Automatic SLA escalation</strong>
+                  <small>Escalate when review passes its SLA window.</small>
+                </span>
+              </label>
+            </section>
+          </div>
+
+          <div className="administration-column">
+            <section className="administration-card">
+              <div className="administration-card-heading">
+                <div>
+                  <h2>SLA windows</h2>
+                  <p>
+                    All values are hours. The windows below are the policy source used for SLA risk.
+                  </p>
+                </div>
+                <span className="administration-chip indigo">Hours</span>
+              </div>
+              <SlaField
+                label="Eligibility screening"
+                description="HR intake and tenure validation"
+                hours={policy.slaWindows.eligibilityHours}
+                onChange={(value) => changeSla('eligibilityHours', value)}
+              />
+              <SlaField
+                label="Assessor execution and scoring"
+                description={`Simulation conduct and evidence rubric · ${policy.slaWindows.assessorHours / 24} days`}
+                hours={policy.slaWindows.assessorHours}
+                onChange={(value) => changeSla('assessorHours', value)}
+              />
+              <SlaField
+                label="Committee approval decision"
+                description="Sponsor sign-off or escalation"
+                hours={policy.slaWindows.committeeHours}
+                onChange={(value) => changeSla('committeeHours', value)}
+              />
+              <div className="admin-sla-total">
+                <strong>Total target turnaround</strong>
+                <b>{slaTotal} hours</b>
+                <span>{slaTotal / 24} days</span>
+              </div>
+              {validationErrors.some((error) => error.startsWith('Every SLA')) && (
+                <p className="admin-validation-note" role="alert">
+                  {validationErrors.find((error) => error.startsWith('Every SLA'))}
+                </p>
+              )}
+            </section>
+
+            <section className="administration-card">
+              <div className="administration-card-heading">
+                <div>
+                  <h2>Approval route</h2>
+                  <p>Runs in this order after assessment results are ready.</p>
+                </div>
+              </div>
+              <ApprovalStep
+                number="1"
+                title="Lead assessor recommendation"
+                description="Validates competency evidence and submits the final rubric synthesis."
+                conditional={false}
+              />
+              <ApprovalStep
+                number="2"
+                title="Business unit VP sponsor"
+                description="Reviews business justification, budget readiness and head-count fit."
+                conditional={false}
+              />
+              <ApprovalStep
+                number="3"
+                title="Executive talent committee"
+                description="Only for executive tracks at L6 and above, or disputed outcomes."
+                conditional
+              />
+            </section>
           </div>
         </div>
-      </section>
+      )}
+
+      {(adminTab === 'all' || adminTab === 'audit') && (
+        <section className="administration-card admin-audit-card">
+          <div className="administration-card-heading">
+            <div>
+              <h2>Audit trail</h2>
+              <p>
+                Records are loaded from the application database with the administrator who made
+                each change.
+              </p>
+            </div>
+            <span className="administration-chip amber">Integrity: Not verified</span>
+          </div>
+          <div className="admin-audit-filters">
+            <label className="admin-field search-field">
+              <span>Search actor, action or target</span>
+              <input
+                type="search"
+                value={auditSearch}
+                onChange={(event) => updateAuditFilters({ search: event.target.value })}
+              />
+            </label>
+            <label className="admin-field">
+              <span>Action type</span>
+              <select
+                value={auditAction}
+                onChange={(event) => updateAuditFilters({ action: event.target.value })}
+              >
+                <option value="">All actions</option>
+                {auditActions.map((action) => (
+                  <option key={action} value={action}>
+                    {humanizeAction(action)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="admin-field">
+              <span>From date</span>
+              <input
+                type="date"
+                value={auditFrom}
+                onChange={(event) => updateAuditFilters({ from: event.target.value })}
+              />
+            </label>
+            <label className="admin-field">
+              <span>To date</span>
+              <input
+                type="date"
+                value={auditTo}
+                onChange={(event) => updateAuditFilters({ to: event.target.value })}
+              />
+            </label>
+          </div>
+          {auditError && (
+            <p className="administration-error" role="alert">
+              {auditError}
+            </p>
+          )}
+          <div className="admin-audit-table" aria-busy={auditLoading}>
+            <div className="admin-audit-grid audit-header" aria-hidden="true">
+              <span>ID</span>
+              <span>Time</span>
+              <span>Actor</span>
+              <span>Action</span>
+              <span>Details</span>
+              <span>Proof hash</span>
+              <span>Integrity</span>
+            </div>
+            {auditLoading ? (
+              <div className="admin-table-message">Loading audit history…</div>
+            ) : auditItems.length === 0 ? (
+              <div className="admin-table-message">No audit events match these filters.</div>
+            ) : (
+              auditItems.map((item) => (
+                <div className="admin-audit-grid audit-row" key={item.id}>
+                  <span className="admin-mono" title={item.id}>
+                    AUD-{item.id.slice(0, 8)}
+                  </span>
+                  <time dateTime={item.timestamp}>{formatAuditDate(item.timestamp)}</time>
+                  <span>{item.actor}</span>
+                  <span>{humanizeAction(item.action)}</span>
+                  <span title={item.reason ?? item.target}>{item.reason || item.target}</span>
+                  <span className="admin-mono" title={item.hash ?? 'No proof hash is stored'}>
+                    {item.hash ? `${item.hash.slice(0, 6)}…${item.hash.slice(-4)}` : '—'}
+                  </span>
+                  <span className="administration-chip amber">Not verified</span>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="admin-audit-pagination">
+            <span>
+              Showing {auditTotal === 0 ? 0 : (auditPage - 1) * 8 + 1}–
+              {Math.min(auditPage * 8, auditTotal)} of {auditTotal} events
+            </span>
+            <div>
+              <button
+                type="button"
+                className="admin-button secondary"
+                disabled={auditPage <= 1 || auditLoading}
+                onClick={() => void loadAudit(auditPage - 1)}
+              >
+                Previous
+              </button>
+              <button
+                type="button"
+                className="admin-button secondary"
+                disabled={auditPage * 8 >= auditTotal || auditLoading}
+                onClick={() => void loadAudit(auditPage + 1)}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {oneTimeCredential && (
         <div className="admin-modal-backdrop" role="presentation">
@@ -1112,7 +1169,7 @@ export function AdministrationPage() {
           System admin access is required to manage this page.
         </div>
       )}
-    </main>
+    </div>
   );
 }
 

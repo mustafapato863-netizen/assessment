@@ -5,12 +5,14 @@ import {
   decideEligibilityViaApi,
   finalizePlanViaApi,
   scheduleEventViaApi,
+  signInDemoSession,
 } from './fixtures/test-api';
 
 test.describe('AssessFlow Case Workspace Deepening Spec', () => {
   test('1. Audit timeline in case rail & Activity drawer with focus trap and Esc close', async ({
     page,
   }) => {
+    await signInDemoSession(page);
     // 1. Create and advance a case through multiple workflow steps to generate rich activity history
     const created = await createCaseViaApi({
       employeeName: `Audit Candidate ${Date.now().toString().slice(-4)}`,
@@ -27,7 +29,7 @@ test.describe('AssessFlow Case Workspace Deepening Spec', () => {
     await scheduleEventViaApi(caseId, 4);
 
     // Navigate to the case page
-    await page.goto(`/#/cases/${caseId}`);
+    await page.goto(`/cases/${caseId}`);
 
     // Wait for the Activity rail panel to be visible
     const activityPanel = page.locator('.activity-panel');
@@ -78,42 +80,27 @@ test.describe('AssessFlow Case Workspace Deepening Spec', () => {
   });
 
   test('2. Employee 360 history across reasons with result chips', async ({ page }) => {
-    await page.goto('/#/employees');
+    await signInDemoSession(page);
+    await page.goto('/employees');
 
-    // Verify page heading and pipeline note
+    await expect(page.locator('.page-heading .eyebrow')).toHaveText('TALENT SCOPE');
     await expect(page.locator('.page-heading h1')).toHaveText('Employees');
-    await expect(page.locator('.pipeline-note')).toBeVisible();
 
-    // Verify Employee 360 directory is present
-    const directory = page.locator('.panel', { hasText: /EMPLOYEE 360 DIRECTORY/i });
+    const directory = page.locator('.em-card[aria-label="Employee directory"]');
     await expect(directory).toBeVisible();
 
-    // Click on an employee context button (e.g., Omar Hassan or first available profile)
-    const employeeProfileBtn = directory.locator('button.secondary-button').first();
-    await expect(employeeProfileBtn).toBeVisible();
-    const employeeName = await employeeProfileBtn.locator('strong').innerText();
-    await employeeProfileBtn.click();
+    const firstRow = directory.locator('.em-row').first();
+    await expect(firstRow).toBeVisible();
+    await firstRow.click();
 
-    // Verify transition to Employee 360 view
-    await expect(page.locator('.page-heading .eyebrow')).toHaveText('EMPLOYEE 360');
-    await expect(page.locator('.page-heading h1')).toHaveText(employeeName);
-    await expect(page.locator('.employee-360-summary')).toBeVisible();
-
-    // Verify chronological case table is rendered with StatusBadge
-    const caseTable = page.locator('.cases-panel table');
-    await expect(caseTable).toBeVisible();
-    await expect(caseTable.locator('.status-badge').first()).toBeVisible();
-
-    // Verify "Back to all employees" button returns to directory
-    const backBtn = page.getByRole('button', { name: /Back to all employees/i });
-    await expect(backBtn).toBeVisible();
-    await backBtn.click();
-    await expect(page.locator('.page-heading .eyebrow')).toHaveText('TALENT SCOPE');
+    await expect(page.locator('.em-detail')).toBeVisible();
+    await expect(page.getByRole('link', { name: /Open full case/i }).first()).toBeVisible();
   });
 
   test('3. Attachment upload, 10MB validation check, and scan status gate in EvidencePanel', async ({
     page,
   }) => {
+    await signInDemoSession(page);
     // Create case and advance to IN_PROGRESS so EvidencePanel is active
     const created = await createCaseViaApi({
       employeeName: `Attachment Candidate ${Date.now().toString().slice(-4)}`,
@@ -124,7 +111,7 @@ test.describe('AssessFlow Case Workspace Deepening Spec', () => {
     await finalizePlanViaApi(caseId, 3);
     await scheduleEventViaApi(caseId, 4);
 
-    await page.goto(`/#/cases/${caseId}`);
+    await page.goto(`/cases/${caseId}`);
 
     const evidencePanel = page.locator('.evidence-panel');
     await expect(evidencePanel).toBeVisible();
@@ -138,29 +125,22 @@ test.describe('AssessFlow Case Workspace Deepening Spec', () => {
       buffer: Buffer.alloc(11 * 1024 * 1024), // 11MB
     });
 
-    // Verify client error message is displayed
-    const notice = evidencePanel.locator('.restricted-callout');
-    await expect(notice).toBeVisible();
-    await expect(notice).toContainText(/exceeds 10MB maximum limit/i);
+    await expect(evidencePanel.getByText(/exceeds 10MB maximum limit/i)).toBeVisible();
 
     // 2. Upload valid file under 10MB
     await fileInput.setInputFiles({
       name: 'behavioral-evidence-interview.pdf',
       mimeType: 'application/pdf',
-      buffer: Buffer.alloc(512 * 1024), // 512KB
+      buffer: Buffer.alloc(64 * 1024), // 64KB
     });
 
-    // Verify the attachment item appears in the list
     const attachmentItem = evidencePanel.locator('.attachment-item', {
       hasText: 'behavioral-evidence-interview.pdf',
     });
     await expect(attachmentItem).toBeVisible();
-
-    // Verify scan-status chip is displayed (PENDING)
-    await expect(attachmentItem.locator('.status-badge')).toContainText(/Scan pending|PENDING/i);
-
-    // Verify preview link is NOT available while scan is pending, and "Scan pending" note is displayed
-    await expect(attachmentItem.locator('.scan-pending-note')).toBeVisible();
-    await expect(attachmentItem.getByRole('button', { name: /Preview/i })).not.toBeVisible();
+    await expect(attachmentItem.getByText(/Scan pending|PENDING/i).first()).toBeVisible();
+    await expect(
+      attachmentItem.locator('button[title="Preview clean attachment"]'),
+    ).not.toBeVisible();
   });
 });

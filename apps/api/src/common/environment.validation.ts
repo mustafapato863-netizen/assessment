@@ -3,6 +3,7 @@ interface ProductionEnvironment {
   DATA_MODE?: string;
   AUTH_JWT_SECRET?: string;
   DATABASE_URL?: string;
+  ENTRA_SKIP_SIGNATURE_VERIFY?: string;
 }
 
 function databasePassword(databaseUrl: string): string | null {
@@ -41,6 +42,10 @@ export function validateProductionEnvironment(
   const secret = environment.AUTH_JWT_SECRET?.trim() ?? '';
   if (secret.length < 32 || /replace-with/i.test(secret)) {
     invalidVariables.push('AUTH_JWT_SECRET');
+  }
+
+  if (environment.ENTRA_SKIP_SIGNATURE_VERIFY === 'true') {
+    invalidVariables.push('ENTRA_SKIP_SIGNATURE_VERIFY');
   }
 
   const password = environment.DATABASE_URL ? databasePassword(environment.DATABASE_URL) : null;

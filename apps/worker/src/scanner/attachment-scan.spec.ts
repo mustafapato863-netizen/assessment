@@ -288,5 +288,26 @@ describe('Attachment Scanner & Worker Job', () => {
       expect((await repo.findById('batch-malware'))?.scanStatus).toBe('REJECTED');
       expect((await repo.findById('batch-corrupt'))?.scanStatus).toBe('FAILED');
     });
+
+    it('prevents double-claiming a pending attachment under concurrent claimPending calls', async () => {
+      const repo = new InMemoryAttachmentScanRepository();
+      repo.add({
+        id: 'race-1',
+        caseId: 'c1',
+        fileName: 'concurrent.pdf',
+        contentType: 'application/pdf',
+        sizeBytes: 256,
+        storageKey: 'k-race',
+        classification: 'EVIDENCE',
+        scanStatus: 'PENDING',
+      });
+
+      const [firstClaim, secondClaim] = await Promise.all([
+        repo.claimPending('race-1'),
+        repo.claimPending('race-1'),
+      ]);
+      const claimedCount = [firstClaim, secondClaim].filter(Boolean).length;
+      expect(claimedCount).toBe(1);
+    });
   });
 });

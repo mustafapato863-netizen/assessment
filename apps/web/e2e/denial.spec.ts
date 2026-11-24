@@ -5,11 +5,13 @@ import {
   decideEligibilityViaApi,
   finalizePlanViaApi,
   scheduleEventViaApi,
+  signInDemoSession,
   submitCaseViaApi,
 } from './fixtures/test-api';
 
 test.describe('AssessFlow Denial & Invariant Specs', () => {
   test('Denial 1: Stale-version 409 (concurrency conflict protection)', async ({ page }) => {
+    await signInDemoSession(page);
     // 1. Create and submit case via API -> version becomes 2
     const created = await createCaseViaApi({
       employeeName: `Stale Test Candidate ${Date.now().toString().slice(-4)}`,
@@ -25,9 +27,15 @@ test.describe('AssessFlow Denial & Invariant Specs', () => {
 
     // 3. UI denial verification: Open case in browser
     await page.goto('/');
-    await page.getByRole('button', { name: /Assessments/i }).click();
+    await page
+      .getByRole('button', { name: /Assessments/i })
+      .first()
+      .click();
     await page.getByPlaceholder('Search case, employee, department…').fill(created.employeeName);
-    await page.getByText(created.employeeName).first().click();
+    await page
+      .getByRole('link', { name: new RegExp(created.employeeName, 'i') })
+      .first()
+      .click();
     await expect(page.locator('.case-header-side .status-badge')).toContainText(
       'Pending eligibility',
     );
@@ -38,7 +46,9 @@ test.describe('AssessFlow Denial & Invariant Specs', () => {
 
     // Now, without refreshing the page, the UI still holds version 2. Attempt "Mark not eligible" with reason
     await page.getByRole('button', { name: /Mark not eligible/i }).click();
-    await page.locator('#eligibility-reason').fill('Conflicting decision attempt from stale session.');
+    await page
+      .locator('#eligibility-reason')
+      .fill('Conflicting decision attempt from stale session.');
     await page.getByRole('button', { name: /Confirm decision/i }).click();
 
     // Verify UI displays conflict alert (409) with refresh prompt
@@ -81,34 +91,31 @@ test.describe('AssessFlow Denial & Invariant Specs', () => {
     const attachment = await attRes.json();
 
     // Previewing before anti-malware scan completes is rejected with 422 SCAN_NOT_CLEAN
-    const previewRes = await request.get(
-      `${API_BASE_URL}/attachments/${attachment.id}/preview`,
-      {
-        headers: { 'x-actor-id': 'e2e-tester' },
-      },
-    );
+    const previewRes = await request.get(`${API_BASE_URL}/attachments/${attachment.id}/preview`, {
+      headers: { 'x-actor-id': 'e2e-tester' },
+    });
     expect(previewRes.status()).toBe(422);
     const previewBody = await previewRes.json();
     expect(previewBody.error?.code).toBe('SCAN_NOT_CLEAN');
 
-    // 3. UI validation: Drawer prevents submission when required fields are missing
-    await page.goto('/');
-    await page.getByRole('button', { name: /New assessment/i }).first().click();
-    const drawer = page.getByRole('dialog');
-    await expect(drawer).toBeVisible();
+    // 3. UI validation: New assessment page prevents submission when required fields are missing
+    await signInDemoSession(page);
+    await page.goto('/cases/new');
+    const form = page.locator('form').first();
+    await expect(form).toBeVisible();
 
     // Click "Save draft" with blank form
     await page.getByRole('button', { name: /Save draft/i }).click();
 
     // Verify client-side field validation errors are displayed
-    await expect(drawer.locator('.field-error').first()).toBeVisible();
-    await expect(drawer).toBeVisible();
+    await expect(form.locator('.field-error').first()).toBeVisible();
   });
 
   test('Denial 3: Submitted-evidence immutability (audit seal enforcement)', async ({
     page,
     request,
   }) => {
+    await signInDemoSession(page);
     // 1. Prepare case up to SCHEDULED state via API
     const created = await createCaseViaApi({
       employeeName: `Immutability Test ${Date.now().toString().slice(-4)}`,
@@ -123,26 +130,36 @@ test.describe('AssessFlow Denial & Invariant Specs', () => {
 
     // 2. Submit evidence via UI in browser
     await page.goto('/');
-    await page.getByRole('button', { name: /Assessments/i }).click();
+    await page
+      .getByRole('button', { name: /Assessments/i })
+      .first()
+      .click();
     await page.getByPlaceholder('Search case, employee, department…').fill(created.employeeName);
-    await page.getByText(created.employeeName).first().click();
+    await page
+      .getByRole('link', { name: new RegExp(created.employeeName, 'i') })
+      .first()
+      .click();
 
     const evidencePanel = page.locator('.evidence-panel');
     await expect(evidencePanel).toBeVisible();
 
-    const textarea = evidencePanel.locator('textarea');
+    const textarea = evidencePanel.getByPlaceholder(
+      /Detail the candidate's observed competencies/i,
+    );
     await textarea.fill(
       'Candidate exhibited outstanding analytical and situational leadership responses during live exercise.',
     );
-    await evidencePanel.getByRole('button', { name: /Submit assessor evidence/i }).click();
+    await evidencePanel.getByRole('button', { name: /Submit (assessor )?evidence/i }).click();
 
     // 3. UI immutability verification: evidence is sealed and locked
     await expect(evidencePanel.getByText('Evidence submitted & locked')).toBeVisible();
     await expect(
       evidencePanel.getByText('This evidence record is sealed and read-only for audit integrity.'),
     ).toBeVisible();
-    await expect(textarea).toBeDisabled();
-    await expect(evidencePanel.getByRole('button', { name: /Submit assessor evidence/i })).not.toBeVisible();
+    await expect(evidencePanel.getByLabel(/Submitted summary/i)).toBeDisabled();
+    await expect(
+      evidencePanel.getByRole('button', { name: /Submit (assessor )?evidence/i }),
+    ).not.toBeVisible();
 
     // 4. API lifecycle immutability verification:
     // Once the assessment moves forward (finalize result), any attempt to submit new evidence

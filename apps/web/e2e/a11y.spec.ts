@@ -5,12 +5,14 @@ import {
   decideEligibilityViaApi,
   finalizePlanViaApi,
   scheduleEventViaApi,
+  signInDemoSession,
   submitCaseViaApi,
   API_BASE_URL,
 } from './fixtures/test-api';
 
 test.describe('AssessFlow Accessibility (WCAG 2.2 AA) & axe-core Scan Specs', () => {
   test('A11y Scan 1: Case workspace view (WCAG 2.2 AA compliance spot scan)', async ({ page }) => {
+    await signInDemoSession(page);
     // 1. Seed fresh case via API
     const created = await createCaseViaApi({
       employeeName: `A11y Case Workspace ${Date.now().toString().slice(-4)}`,
@@ -19,9 +21,15 @@ test.describe('AssessFlow Accessibility (WCAG 2.2 AA) & axe-core Scan Specs', ()
 
     // 2. Open case in browser
     await page.goto('/');
-    await page.getByRole('button', { name: /Assessments/i }).click();
+    await page
+      .getByRole('button', { name: /Assessments/i })
+      .first()
+      .click();
     await page.getByPlaceholder('Search case, employee, department…').fill(created.employeeName);
-    await page.getByText(created.employeeName).first().click();
+    await page
+      .getByRole('link', { name: new RegExp(created.employeeName, 'i') })
+      .first()
+      .click();
 
     // Ensure Case layout has loaded
     await expect(page.locator('.case-layout')).toBeVisible();
@@ -38,7 +46,10 @@ test.describe('AssessFlow Accessibility (WCAG 2.2 AA) & axe-core Scan Specs', ()
     );
 
     if (criticalOrSerious.length > 0) {
-      console.warn('axe-core findings in Case Workspace:', JSON.stringify(criticalOrSerious, null, 2));
+      console.warn(
+        'axe-core findings in Case Workspace:',
+        JSON.stringify(criticalOrSerious, null, 2),
+      );
     }
 
     expect(criticalOrSerious).toEqual([]);
@@ -48,6 +59,7 @@ test.describe('AssessFlow Accessibility (WCAG 2.2 AA) & axe-core Scan Specs', ()
     page,
     request,
   }) => {
+    await signInDemoSession(page);
     // 1. Prepare a case advanced to PENDING_APPROVAL via API
     const created = await createCaseViaApi({
       employeeName: `Approval A11y ${Date.now().toString().slice(-4)}`,
@@ -91,9 +103,15 @@ test.describe('AssessFlow Accessibility (WCAG 2.2 AA) & axe-core Scan Specs', ()
 
     // 2. Open this case in browser (state is now PENDING_APPROVAL)
     await page.goto('/');
-    await page.getByRole('button', { name: /Assessments/i }).click();
+    await page
+      .getByRole('button', { name: /Assessments/i })
+      .first()
+      .click();
     await page.getByPlaceholder('Search case, employee, department…').fill(created.employeeName);
-    await page.getByText(created.employeeName).first().click();
+    await page
+      .getByRole('link', { name: new RegExp(created.employeeName, 'i') })
+      .first()
+      .click();
 
     // Verify decision & approval panel is rendered
     const decisionPanel = page.locator('.decision-panel');
@@ -111,7 +129,10 @@ test.describe('AssessFlow Accessibility (WCAG 2.2 AA) & axe-core Scan Specs', ()
     );
 
     if (criticalOrSerious.length > 0) {
-      console.warn('axe-core findings in Approval View:', JSON.stringify(criticalOrSerious, null, 2));
+      console.warn(
+        'axe-core findings in Approval View:',
+        JSON.stringify(criticalOrSerious, null, 2),
+      );
     }
 
     expect(criticalOrSerious).toEqual([]);
@@ -158,12 +179,19 @@ test.describe('AssessFlow Accessibility (WCAG 2.2 AA) & axe-core Scan Specs', ()
     });
 
     // 2. Open approval view with mobile viewport
+    await signInDemoSession(page);
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto('/');
     await page.locator('.mobile-menu').click();
-    await page.getByRole('button', { name: /Assessments/i }).click();
+    await page
+      .getByRole('button', { name: /Assessments/i })
+      .first()
+      .click();
     await page.getByPlaceholder('Search case, employee, department…').fill(created.employeeName);
-    await page.getByText(created.employeeName).first().click();
+    await page
+      .getByRole('link', { name: new RegExp(created.employeeName, 'i') })
+      .first()
+      .click();
 
     // Verify approval action buttons have compliant touch targets (>= 38px height, >= 40px width)
     const approveBtn = page.getByRole('button', { name: /Approve/i }).first();

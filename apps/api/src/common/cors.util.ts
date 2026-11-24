@@ -3,18 +3,21 @@
  * Origins are comma-separated and whitespace around each entry is ignored.
  */
 
-export const CORS_ALLOWED_HEADERS = [
+const BASE_CORS_HEADERS = [
   'Content-Type',
   'Authorization',
   'X-Requested-With',
   'x-correlation-id',
   'idempotency-key',
   'Idempotency-Key',
-  'x-actor-id',
-  'x-actor-role',
-  'x-actor-name',
-  'x-actor-roles',
 ];
+
+const DEV_ONLY_ACTOR_HEADERS = ['x-actor-id', 'x-actor-role', 'x-actor-name', 'x-actor-roles'];
+
+export const CORS_ALLOWED_HEADERS =
+  process.env.NODE_ENV === 'production'
+    ? BASE_CORS_HEADERS
+    : [...BASE_CORS_HEADERS, ...DEV_ONLY_ACTOR_HEADERS];
 
 export const CORS_EXPOSED_HEADERS = ['x-correlation-id', 'Retry-After'];
 

@@ -19,6 +19,8 @@ import type { AssessmentCaseSummary } from '@assessflow/contracts';
 import { useQuery } from '@tanstack/react-query';
 import { api, type ApiRequestError } from '../lib/api';
 import { reasonLabels, statusLabels, statusTone } from '../lib/labels';
+import { formatDate, initials } from '../lib/format';
+import { queryKeys } from '../lib/query-keys';
 import { formatCaseId } from '../lib/format-case-id';
 
 export function CaseCodeDisplay({
@@ -93,7 +95,7 @@ export function StatusBadge({ status }: { status: string }) {
               : CircleDashed;
   return (
     <span className={`status-badge ${tone}`}>
-      <Icon size={13} strokeWidth={2.4} />
+      <Icon size={13} strokeWidth={2.4} aria-hidden="true" />
       {statusLabels[status] ?? status}
     </span>
   );
@@ -136,7 +138,9 @@ export function PanelHeader({
   return (
     <div className="panel-header">
       <div className="panel-title">
-        <span className="panel-icon">{icon}</span>
+        <span className="panel-icon" aria-hidden="true">
+          {icon}
+        </span>
         <h2 title={titleTooltip}>{title}</h2>
       </div>
       {action}
@@ -161,7 +165,7 @@ export function MetricCard({
     <article className={`metric-card ${metric.tone}`}>
       <div className="metric-top">
         <span>{metric.label}</span>
-        <span className="metric-icon">
+        <span className="metric-icon" aria-hidden="true">
           <Icon size={17} />
         </span>
       </div>
@@ -170,7 +174,7 @@ export function MetricCard({
         <b>{metric.trend}</b>
         <span>{metric.context}</span>
       </div>
-      <div className="metric-spark">
+      <div className="metric-spark" aria-hidden="true">
         <i />
       </div>
     </article>
@@ -179,7 +183,7 @@ export function MetricCard({
 
 export function SkeletonMetric() {
   return (
-    <article className="metric-card skeleton-card">
+    <article className="metric-card skeleton-card" aria-hidden="true">
       <div className="skeleton-line short" />
       <div className="skeleton-line number" />
       <div className="skeleton-line" />
@@ -240,15 +244,15 @@ export function RailItem({ label, value, tone }: { label: string; value: string;
 
 export function CaseResultChip({ caseId }: { caseId: string }) {
   const { data: result } = useQuery({
-    queryKey: ['result', caseId],
+    queryKey: queryKeys.caseResult(caseId),
     queryFn: () => api.getResult<{ resultCode?: string }>(caseId).catch(() => null),
     staleTime: 60_000,
   });
 
   if (!result?.resultCode) {
     return (
-      <span className="status-badge info" style={{ opacity: 0.75 }}>
-        <CircleDashed size={13} />
+      <span className="status-badge info" style={{ opacity: 0.78 }}>
+        <CircleDashed size={13} aria-hidden="true" />
         Pending result
       </span>
     );
@@ -267,16 +271,18 @@ export function CaseTable({
   onSelectEmployee?: (employeeId: string, employeeName: string) => void;
   showResultChips?: boolean;
 }) {
-  if (!cases.length)
+  if (!cases.length) {
     return (
-      <div className="empty-state">
-        <div className="empty-icon">
+      <div className="empty-state" role="status">
+        <div className="empty-icon" aria-hidden="true">
           <Search size={21} />
         </div>
         <strong>No cases found</strong>
-        <span>Try changing the search or create a new assessment request.</span>
+        <span>Try changing the search filter or create a new assessment request.</span>
       </div>
     );
+  }
+
   return (
     <div className="table-wrap">
       <table>
@@ -309,11 +315,7 @@ export function CaseTable({
                     }
                     title={onSelectEmployee ? 'View employee 360 history' : undefined}
                   >
-                    {item.employeeName
-                      .split(' ')
-                      .map((name) => name[0])
-                      .join('')
-                      .slice(0, 2)}
+                    {initials(item.employeeName)}
                   </div>
                   <div>
                     <strong>
@@ -343,7 +345,9 @@ export function CaseTable({
                 </div>
               </td>
               <td>
-                <span className="reason-label">{reasonLabels[item.assessmentReason]}</span>
+                <span className="reason-label">
+                  {reasonLabels[item.assessmentReason] ?? item.assessmentReason}
+                </span>
                 <small>{item.targetRole}</small>
               </td>
               <td>
@@ -359,16 +363,12 @@ export function CaseTable({
               )}
               <td>{item.owner}</td>
               <td>
-                <span>
-                  {new Date(item.requestedAt).toLocaleDateString('en', {
-                    day: '2-digit',
-                    month: 'short',
-                  })}
-                </span>
+                <span>{formatDate(item.requestedAt, { day: '2-digit', month: 'short' })}</span>
                 <small>{item.ageLabel}</small>
               </td>
               <td>
                 <button
+                  type="button"
                   className="row-action"
                   aria-label={`Open ${item.caseCode}`}
                   onClick={(event) => {
@@ -419,8 +419,8 @@ export function Field({
 
 export function LoadingRows() {
   return (
-    <div className="loading-list">
-      <div className="loader-ring" />
+    <div className="loading-list" role="status" aria-live="polite">
+      <div className="loader-ring" aria-hidden="true" />
       <span>Loading workspace data…</span>
     </div>
   );
@@ -437,7 +437,7 @@ export function ErrorBanner({
 }) {
   return (
     <div className="error-banner" role="alert">
-      <ShieldAlert size={18} />
+      <ShieldAlert size={18} aria-hidden="true" />
       <span>{message}</span>
       {onRetry && (
         <button
@@ -455,8 +455,9 @@ export function ErrorBanner({
 }
 
 export function InlineError({ error, onRefresh }: { error: unknown; onRefresh?: () => void }) {
-  const apiError = error as ApiRequestError;
+  const apiError = error as ApiRequestError | undefined;
   const isConflict =
+    apiError?.status === 409 ||
     apiError?.code === 'CONCURRENCY_CONFLICT' ||
     apiError?.message?.toLowerCase().includes('conflict') ||
     apiError?.message?.toLowerCase().includes('another session') ||
@@ -464,7 +465,7 @@ export function InlineError({ error, onRefresh }: { error: unknown; onRefresh?: 
 
   return (
     <div className="inline-error" role="alert">
-      <AlertTriangle size={16} />
+      <AlertTriangle size={16} aria-hidden="true" />
       <div style={{ display: 'grid', gap: '3px', flex: 1 }}>
         <span>{apiError?.message ?? 'The action could not be completed.'}</span>
         {isConflict && (
@@ -478,9 +479,9 @@ export function InlineError({ error, onRefresh }: { error: unknown; onRefresh?: 
           type="button"
           className="secondary-button"
           style={{
-            minHeight: '26px',
-            padding: '0 8px',
-            fontSize: '11px',
+            minHeight: '30px',
+            padding: '0 10px',
+            fontSize: '12px',
             marginInlineStart: 'auto',
           }}
           onClick={onRefresh}

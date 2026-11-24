@@ -27,7 +27,14 @@ import {
   PrismaRetentionRepository,
 } from './retention';
 
-const intervalMs = Number(process.env.WORKER_HEARTBEAT_MS ?? 30_000);
+const rawInterval = Number(process.env.WORKER_HEARTBEAT_MS);
+const intervalMs = Number.isFinite(rawInterval) && rawInterval >= 5000 ? rawInterval : 30_000;
+const rawRetentionInterval = Number(process.env.RETENTION_HEARTBEAT_MS);
+const retentionIntervalMs =
+  Number.isFinite(rawRetentionInterval) && rawRetentionInterval >= 60_000
+    ? rawRetentionInterval
+    : 3_600_000; // Default 1 hour
+
 export const queueNames = [
   'outbox',
   'reminders',
@@ -50,7 +57,7 @@ export const QUEUE_CONFIGS: Record<QueueName, QueueConfig> = {
   outbox: {
     attempts: 5,
     backoff: { type: 'exponential', delay: 2000 },
-    removeOnFail: false, // BullMQ dead-letter preservation
+    removeOnFail: false,
   },
   reminders: {
     attempts: 3,
@@ -74,21 +81,20 @@ export const QUEUE_CONFIGS: Record<QueueName, QueueConfig> = {
   },
 };
 
-const redisUrl = process.env.REDIS_URL;
+const redisUrl = process.env.REDIS_URL?.trim();
 const queues: Queue[] = [];
 const workers: Worker[] = [];
+const redisConnections: IORedis[] = [];
 
 const isDatabaseMode = process.env.DATA_MODE === 'database';
 const prisma = isDatabaseMode ? new PrismaClient() : undefined;
 
-// Scanner wiring
 const scanRepository = prisma
   ? new PrismaAttachmentScanRepository(prisma)
   : new InMemoryAttachmentScanRepository();
 const scanner = new LocalAllowListStubScanner();
 export const scanProcessor = new AttachmentScanJobProcessor(scanRepository, scanner);
 
-// Retention enforcement wiring (BIZ-008 hold-first)
 const retentionRepository = prisma
   ? new PrismaRetentionRepository(prisma)
   : new InMemoryRetentionRepository();
@@ -99,6 +105,7 @@ console.info(
     service: 'assessflow-worker',
     status: 'started',
     intervalMs,
+    retentionIntervalMs,
     mode: redisUrl ? 'redis' : 'stub',
     queues: queueNames,
     scanner: scanner.name,
@@ -107,12 +114,14 @@ console.info(
 );
 
 if (redisUrl) {
-  const connection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
+  const queueConnection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
+  redisConnections.push(queueConnection);
+
   for (const name of queueNames) {
     const config = QUEUE_CONFIGS[name];
     queues.push(
       new Queue(name, {
-        connection,
+        connection: queueConnection,
         defaultJobOptions: {
           attempts: config.attempts,
           backoff: config.backoff,
@@ -120,6 +129,10 @@ if (redisUrl) {
         },
       }),
     );
+
+    // BullMQ Workers issue blocking Redis commands; give each worker a dedicated connection.
+    const workerConnection = new IORedis(redisUrl, { maxRetriesPerRequest: null });
+    redisConnections.push(workerConnection);
 
     const worker = new Worker(
       name,
@@ -137,7 +150,9 @@ if (redisUrl) {
         if (name === 'attachment-scan') {
           const attachmentId = job.data?.attachmentId as string | undefined;
           if (attachmentId) {
-            const scanResult = await scanProcessor.processAttachment(attachmentId);
+            const scanResult = await scanProcessor.processAttachment(attachmentId, {
+              rethrowOnError: true,
+            });
             return { acknowledged: true, queue: name, jobId: job.id, scanResult };
           }
           const batchResult = await scanProcessor.processPendingBatch();
@@ -155,10 +170,9 @@ if (redisUrl) {
           }
         }
 
-        // Job handlers become adapter-backed modules in the operations phase.
         return { acknowledged: true, queue: name, jobId: job.id };
       },
-      { connection },
+      { connection: workerConnection },
     );
 
     worker.on('failed', (job, err) => {
@@ -184,61 +198,74 @@ if (redisUrl) {
   }
 }
 
+let scanRunning = false;
+let lastRetentionRunAt = 0;
+
 const heartbeat = async () => {
+  if (scanRunning) return;
+  scanRunning = true;
   try {
-    const scanBatch = await scanProcessor.processPendingBatch();
-    if (scanBatch.processed > 0) {
-      console.info(
-        JSON.stringify({
-          service: 'assessflow-worker',
-          event: 'attachment-scan-batch',
-          processed: scanBatch.processed,
-          clean: scanBatch.clean,
-          rejected: scanBatch.rejected,
-          failed: scanBatch.failed,
-        }),
-      );
+    try {
+      const scanBatch = await scanProcessor.processPendingBatch();
+      if (scanBatch.processed > 0) {
+        console.info(
+          JSON.stringify({
+            service: 'assessflow-worker',
+            event: 'attachment-scan-batch',
+            processed: scanBatch.processed,
+            clean: scanBatch.clean,
+            rejected: scanBatch.rejected,
+            failed: scanBatch.failed,
+          }),
+        );
+      }
+    } catch (err: unknown) {
+      console.error('Error during periodic scan batch:', err);
     }
-  } catch (err: unknown) {
-    console.error('Error during periodic scan batch:', err);
-  }
 
-  try {
-    const retentionBatch = await retentionProcessor.processRetentionEnforcement();
-    if (retentionBatch.totalFlaggedForReview > 0) {
-      console.info(
-        JSON.stringify({
-          service: 'assessflow-worker',
-          event: 'retention-periodic-batch',
-          categoriesEvaluated: retentionBatch.processedCategories,
-          totalChecked: retentionBatch.totalRowsChecked,
-          flaggedForReview: retentionBatch.totalFlaggedForReview,
-          hardDeletes: 0,
-          holdFirstEnforced: true,
-        }),
-      );
+    const now = Date.now();
+    if (now - lastRetentionRunAt >= retentionIntervalMs) {
+      lastRetentionRunAt = now;
+      try {
+        const retentionBatch = await retentionProcessor.processRetentionEnforcement();
+        if (retentionBatch.totalFlaggedForReview > 0) {
+          console.info(
+            JSON.stringify({
+              service: 'assessflow-worker',
+              event: 'retention-periodic-batch',
+              categoriesEvaluated: retentionBatch.processedCategories,
+              totalChecked: retentionBatch.totalRowsChecked,
+              flaggedForReview: retentionBatch.totalFlaggedForReview,
+              hardDeletes: 0,
+              holdFirstEnforced: true,
+            }),
+          );
+        }
+      } catch (err: unknown) {
+        console.error('Error during periodic retention enforcement:', err);
+      }
     }
-  } catch (err: unknown) {
-    console.error('Error during periodic retention enforcement:', err);
-  }
 
-  console.info(
-    JSON.stringify({
-      service: 'assessflow-worker',
-      event: 'heartbeat',
-      timestamp: new Date().toISOString(),
-      jobs: queueNames,
-    }),
-  );
+    console.info(
+      JSON.stringify({
+        service: 'assessflow-worker',
+        event: 'heartbeat',
+        timestamp: new Date().toISOString(),
+        jobs: queueNames,
+      }),
+    );
+  } finally {
+    scanRunning = false;
+  }
 };
 
 const timer = setInterval(() => void heartbeat(), intervalMs);
 const shutdown = async () => {
   clearInterval(timer);
-  await Promise.all(workers.map((worker) => worker.close()));
-  await Promise.all(queues.map((queue) => queue.close()));
+  await Promise.allSettled(workers.map((worker) => worker.close()));
+  await Promise.allSettled(queues.map((queue) => queue.close()));
+  await Promise.allSettled(redisConnections.map((conn) => conn.quit()));
   if (prisma) await prisma.$disconnect();
 };
 process.once('SIGTERM', () => void shutdown());
 process.once('SIGINT', () => void shutdown());
-

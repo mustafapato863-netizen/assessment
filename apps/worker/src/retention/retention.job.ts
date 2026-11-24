@@ -3,7 +3,7 @@ import type {
   RetentionEvaluationSummary,
   RetentionRepository,
 } from './retention.interface';
-import { evaluateCategoryPolicy } from './retention-math';
+import { calculateCutoffDate, evaluateCategoryPolicy } from './retention-math';
 
 export class RetentionJobProcessor {
   constructor(private readonly repository: RetentionRepository) {}
@@ -22,9 +22,15 @@ export class RetentionJobProcessor {
 
     for (const policy of policies) {
       let rows: any[] = [];
-      // Hold-first check: if legal hold is enabled or inactive, avoid unnecessary DB queries
-      if (!policy.legalHoldEnabled && policy.active && policy.retentionDays && policy.retentionDays > 0) {
-        rows = await this.repository.findCandidates(policy.category, limit);
+      // Hold-first check: skip legal-hold or inactive policies completely
+      if (
+        !policy.legalHoldEnabled &&
+        policy.active &&
+        policy.retentionDays &&
+        policy.retentionDays > 0
+      ) {
+        const cutoffDate = calculateCutoffDate(now, policy.retentionDays);
+        rows = await this.repository.findCandidates(policy.category, limit, cutoffDate);
       }
 
       const summary = evaluateCategoryPolicy(policy, rows, now);
@@ -32,9 +38,14 @@ export class RetentionJobProcessor {
       totalRowsChecked += summary.totalChecked;
       totalFlaggedForReview += summary.flaggedCount;
 
-      // Soft-flag each identified row (no hard deletes)
-      for (const flag of summary.flaggedItems) {
-        await this.repository.softFlagForReview(flag);
+      if (summary.flaggedItems.length > 0) {
+        if (this.repository.softFlagBatchForReview) {
+          await this.repository.softFlagBatchForReview(summary.flaggedItems);
+        } else {
+          for (const flag of summary.flaggedItems) {
+            await this.repository.softFlagForReview(flag);
+          }
+        }
       }
     }
 
@@ -42,7 +53,7 @@ export class RetentionJobProcessor {
       processedCategories: policies.length,
       totalRowsChecked,
       totalFlaggedForReview,
-      totalDeleted: 0, // Strict invariant: 0 deletes in pilot
+      totalDeleted: 0, // Strict invariant: 0 deletes
       policies: summaries,
       evaluatedAt: now,
     };

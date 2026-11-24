@@ -1,12 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { AssessmentCaseSummary } from '@assessflow/contracts';
 import { ErrorBanner, LoadingRows } from '../components/ui';
 import { api } from '../lib/api';
 import { reasonLabels } from '../lib/labels';
+import { queryKeys } from '../lib/query-keys';
 import { mapAssessmentCase } from './assessment-case-adapter';
-import { developmentKpis, mapDevelopmentPlan, type DevelopmentPlanData } from './development-logic';
-import { ACTION_DUE_SOON_DAYS, STAGE_LABELS } from '../shared/definitions';
+import { mapDevelopmentPlan, type DevelopmentPlanData } from './development-logic';
+import { STAGE_LABELS } from '../shared/definitions';
 import {
   applyFilters,
   byDepartment,
@@ -28,6 +29,8 @@ function BarCard({
   meta,
   rows,
   highlightKey,
+  selectedKey,
+  onSelectKey,
   scrollable = false,
   children,
 }: {
@@ -35,6 +38,8 @@ function BarCard({
   meta: string;
   rows: ReturnType<typeof byStage>;
   highlightKey?: string | null;
+  selectedKey?: string;
+  onSelectKey?: (key: string) => void;
   scrollable?: boolean;
   children?: ReactNode;
 }) {
@@ -45,21 +50,50 @@ function BarCard({
         <span className="in-sub">{meta}</span>
       </div>
       <ul className={`in-bars${scrollable ? ' in-bars--scrollable' : ''}`}>
-        {rows.map((row) => (
-          <li key={row.key} className={`in-bar${row.count === 0 ? ' is-zero' : ''}`}>
-            <span className="in-bar__label" title={row.label}>
-              {row.label}
-            </span>
-            <span className="in-bar__track" aria-hidden="true">
-              <i
-                className={row.key === highlightKey ? 'is-hot' : ''}
-                style={{ width: `${row.barPercent}%` }}
-              />
-            </span>
-            <b>{row.count}</b>
-            <span className="in-bar__pct">{row.percent}%</span>
-          </li>
-        ))}
+        {rows.map((row) => {
+          const interactive = Boolean(onSelectKey) && row.count > 0;
+          const isSelected = Boolean(selectedKey) && selectedKey === row.key;
+          const content = (
+            <>
+              <span className="in-bar__label" title={row.label}>
+                {row.label}
+              </span>
+              <span className="in-bar__track" aria-hidden="true">
+                <i
+                  className={row.key === highlightKey || isSelected ? 'is-hot' : ''}
+                  style={{ width: `${row.barPercent}%` }}
+                />
+              </span>
+              <b>{row.count}</b>
+              <span className="in-bar__pct">{row.percent}%</span>
+            </>
+          );
+          return (
+            <li
+              key={row.key}
+              className={`in-bar${row.count === 0 ? ' is-zero' : ''}`}
+              style={isSelected ? { fontWeight: 700, color: 'var(--primary)' } : undefined}
+            >
+              {interactive ? (
+                <button
+                  type="button"
+                  onClick={() => onSelectKey?.(isSelected ? '' : row.key)}
+                  title={isSelected ? `Clear ${row.label} filter` : `Filter by ${row.label}`}
+                  style={{
+                    display: 'contents',
+                    textAlign: 'inherit',
+                    color: 'inherit',
+                    font: 'inherit',
+                  }}
+                >
+                  {content}
+                </button>
+              ) : (
+                content
+              )}
+            </li>
+          );
+        })}
       </ul>
       {children}
     </section>
@@ -98,45 +132,56 @@ function FilterSelect({
 
 export function InsightsPage() {
   const [filters, setFilters] = useState<InsightFilters>(EMPTY_FILTERS);
+
   const casesQuery = useQuery({
-    queryKey: ['cases'],
+    queryKey: queryKeys.cases(),
     queryFn: () => api.cases(),
-    staleTime: 30_000,
+    staleTime: 60_000,
+  });
+
+  const devPlansQuery = useQuery({
+    queryKey: queryKeys.developmentPlans(),
+    queryFn: () => api.developmentPlans(),
+    staleTime: 60_000,
   });
 
   const developmentCases = useMemo(
     () => (casesQuery.data ?? []).filter((item) => item.status === 'DEVELOPMENT_IN_PROGRESS'),
     [casesQuery.data],
   );
-  const developmentPlanQueries = useQueries({
-    queries: developmentCases.map((item) => ({
-      queryKey: ['development', item.id],
-      queryFn: () => api.getDevelopment<DevelopmentPlanData>(item.id).catch(() => null),
-      staleTime: 30_000,
-    })),
-  });
+
+  const planByCaseId = useMemo(
+    () => new Map((devPlansQuery.data ?? []).map((p) => [p.caseId, p])),
+    [devPlansQuery.data],
+  );
 
   const cases = useMemo(
     () => (casesQuery.data ?? []).map((item) => mapAssessmentCase(item as AssessmentCaseSummary)),
     [casesQuery.data],
   );
-  const developmentPlans = useMemo(
-    () =>
-      developmentCases.map((item, index) =>
-        mapDevelopmentPlan(
-          mapAssessmentCase(item as AssessmentCaseSummary),
-          developmentPlanQueries[index]?.data ?? null,
-        ),
-      ),
-    [developmentCases, developmentPlanQueries],
-  );
-  const developmentCount = useMemo(
-    () => developmentKpis(developmentPlans).activePlans,
-    [developmentPlans],
-  );
 
   const options = useMemo(() => filterOptions(cases), [cases]);
   const filtered = useMemo(() => applyFilters(cases, filters), [cases, filters]);
+  const filteredIds = useMemo(() => new Set(filtered.map((item) => item.id)), [filtered]);
+
+  const filteredDevelopmentPlans = useMemo(
+    () =>
+      developmentCases
+        .filter((item) => filteredIds.has(item.id))
+        .map((item) =>
+          mapDevelopmentPlan(
+            mapAssessmentCase(item as AssessmentCaseSummary),
+            (planByCaseId.get(item.id) as DevelopmentPlanData | undefined) ?? null,
+          ),
+        ),
+    [developmentCases, filteredIds, planByCaseId],
+  );
+
+  const developmentCount = useMemo(
+    () => filteredDevelopmentPlans.filter((plan) => !plan.archived).length,
+    [filteredDevelopmentPlans],
+  );
+
   const kpis = useMemo(
     () => insightsKpis(filtered, { developmentCount }),
     [filtered, developmentCount],
@@ -172,10 +217,10 @@ export function InsightsPage() {
     ).length,
   };
   const hasCandidates = candidateSummary.assessed > 0;
-  const developmentLoading = developmentPlanQueries.some((query) => query.isLoading);
 
   const setFilter = (key: keyof InsightFilters) => (value: string) =>
     setFilters((current) => ({ ...current, [key]: value }));
+
   const exportAggregates = () => {
     const csv = aggregatesToCsv([
       { title: 'By status', rows: statusRows },
@@ -186,7 +231,7 @@ export function InsightsPage() {
     downloadCsv('assessflow-aggregates.csv', csv);
   };
 
-  if (casesQuery.isLoading || developmentLoading) return <LoadingRows />;
+  if (casesQuery.isLoading || devPlansQuery.isLoading) return <LoadingRows />;
   if (casesQuery.isError) {
     return (
       <ErrorBanner
@@ -205,7 +250,7 @@ export function InsightsPage() {
             {isFiltering
               ? `Showing ${filtered.length} of ${cases.length} cases.`
               : `Showing all ${cases.length} cases in this workspace.`}{' '}
-            Filter to compare reasons, stages and departments.
+            Filter or click any chart bar to compare reasons, stages, and departments.
           </p>
         </div>
         <button type="button" className="in-btn" onClick={exportAggregates}>
@@ -289,23 +334,35 @@ export function InsightsPage() {
       </section>
 
       <div className="in-grid">
-        <BarCard title="By status" meta={`${statusRows.length} statuses`} rows={statusRows} />
+        <BarCard
+          title="By status"
+          meta={`${statusRows.length} statuses`}
+          rows={statusRows}
+          selectedKey={filters.status}
+          onSelectKey={setFilter('status')}
+        />
         <BarCard
           title="By stage"
           meta="Workflow order"
           rows={stageRows}
           highlightKey={bottleneck?.count ? bottleneck.key : null}
+          selectedKey={filters.stage}
+          onSelectKey={setFilter('stage')}
         />
         <BarCard
           title="By department"
           meta={`${departmentRows.length} departments`}
           rows={departmentRows}
+          selectedKey={filters.dept}
+          onSelectKey={setFilter('dept')}
           scrollable
         />
         <BarCard
           title="By reason"
           meta={`${reasonRows.filter((row) => row.count > 0).length} reasons with cases`}
           rows={reasonRows}
+          selectedKey={filters.reason}
+          onSelectKey={setFilter('reason')}
         >
           <p className="in-note">Reasons with no cases are shown at the bottom, in grey.</p>
         </BarCard>

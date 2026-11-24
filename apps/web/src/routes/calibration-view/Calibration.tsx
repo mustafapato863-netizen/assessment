@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import './calibration.css';
+import { initials } from '../../lib/format';
 import {
   READINESS,
   readinessMeta,
@@ -29,24 +31,6 @@ import type {
   ReadinessKey,
 } from './calibrationLogic';
 
-/*
-  شكل البيانات المتوقع لكل مرشح في candidates (عدّل أسماء الحقول حسب مشروعك):
-  { id, name, department, currentLevel (3 أو "L3"), targetLevel (6 أو "L6"), currentRole, targetRole,
-    readiness: 'ready_now' | 'with_development' | 'not_ready' | 'pending_evaluation' (أي قيمة تانية = pending),
-    box: 1..9   (أو بدله: performance + potential = 'low' | 'medium' | 'high'),
-    href: '#/assessments/123' }
-  props: candidates, title (اسم دورة الـ calibration)
-*/
-
-const initials = (name: string) =>
-  name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase();
-
 function ReadinessChip({ value }: { value: string | null | undefined }) {
   const m = readinessMeta(normalizeReadiness(value));
   return (
@@ -70,9 +54,13 @@ function CandidateRow({ c }: { c: CalibrationCandidate }) {
       </span>
       <div className="cb-cand__txt">
         {c.href ? (
-          <a href={c.href} className="cb-cand__name" title={`${c.name} · ${c.targetRole || ''}`}>
+          <Link
+            to={c.href.replace(/^#/, '')}
+            className="cb-cand__name"
+            title={`${c.name} · ${c.targetRole || ''}`}
+          >
             {c.name}
-          </a>
+          </Link>
         ) : (
           <span className="cb-cand__name" title={c.targetRole || ''}>
             {c.name}
@@ -442,7 +430,7 @@ export default function Calibration({
                         aria-pressed={on}
                         aria-label={`Box ${n}, ${b.name}: ${b.count} candidates, ${b.percent}%`}
                         style={{
-                          background: `rgba(67,56,202,${(0.06 + (b.count / stats.maxCount) * 0.4).toFixed(2)})`,
+                          background: `rgba(0, 132, 206, ${(0.06 + (b.count / stats.maxCount) * 0.34).toFixed(2)})`,
                         }}
                         onClick={() => update({ box: n })}
                       >

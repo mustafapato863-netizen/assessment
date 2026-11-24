@@ -44,9 +44,13 @@ import {
 } from '@assessflow/contracts';
 import { PrismaService } from '../database/prisma.service';
 import { PrismaCasesRepository } from './prisma-cases.repository';
-import { actionsForStatus } from './workflow-actions';
+import { actionsForActor, actionsForStatus } from './workflow-actions';
 import { randomUUID } from 'crypto';
+import { basename } from 'node:path';
 import { getActorContext, type AuthActor } from '../auth';
+import { currentCorrelationId } from '../common/correlation.context';
+import { readAttachmentBytes, storeAttachmentBytes } from './attachment-storage.util';
+import { RESULT_RELEASE_STATUSES } from '../access/access-accounts.service';
 
 type CaseRecord = AssessmentCaseDetail;
 
@@ -90,57 +94,47 @@ export class CasesService {
   getOverview(): OverviewResponse | Promise<OverviewResponse> {
     if (this.repository) return this.repository.getOverview();
     const values = [...this.cases.values()];
+    const activeCases = values.filter(
+      (item) => item.status !== 'CLOSED' && item.status !== 'CANCELLED',
+    ).length;
+    const pendingElig = values.filter((item) => item.status === 'PENDING_ELIGIBILITY').length;
+    const pendingApproval = values.filter((item) => item.status === 'PENDING_APPROVAL').length;
+    const overdue = values.filter((item) => item.status === 'REASSESSMENT_DUE').length;
+    const activeDev = values.filter((item) => item.status === 'DEVELOPMENT_IN_PROGRESS').length;
+    const employeeCount = new Set(
+      values
+        .filter((item) => item.candidateType !== 'NEW_CANDIDATE')
+        .map((item) => item.employeeId),
+    ).size;
     return {
       metrics: [
         {
           label: 'Active assessments',
-          value: values.filter((item) => item.status !== 'CLOSED').length,
+          value: activeCases,
           context: 'Across your scope',
-          trend:
-            values.filter((item) => item.status !== 'CLOSED').length > 0
-              ? '+X% vs last cycle'
-              : 'No active assessments',
-          tone:
-            values.filter((item) => item.status !== 'CLOSED').length > 0 ? 'positive' : 'neutral',
+          trend: activeCases > 0 ? `${activeCases} active in cycle` : 'No active assessments',
+          tone: activeCases > 0 ? 'positive' : 'neutral',
         },
         {
           label: 'Pending eligibility',
-          value: values.filter((item) => item.status === 'PENDING_ELIGIBILITY').length,
+          value: pendingElig,
           context: 'Needs HR review',
-          trend:
-            values.filter((item) => item.status === 'PENDING_ELIGIBILITY').length > 0
-              ? 'X due today'
-              : 'None due today',
-          tone:
-            values.filter((item) => item.status === 'PENDING_ELIGIBILITY').length > 0
-              ? 'warning'
-              : 'positive',
+          trend: pendingElig > 0 ? `${pendingElig} awaiting review` : 'None pending',
+          tone: pendingElig > 0 ? 'warning' : 'positive',
         },
         {
           label: 'Pending approvals',
-          value: values.filter((item) => item.status === 'PENDING_APPROVAL').length,
+          value: pendingApproval,
           context: 'Decision queue',
-          trend:
-            values.filter((item) => item.status === 'PENDING_APPROVAL').length > 0
-              ? 'X pending'
-              : 'None pending',
-          tone:
-            values.filter((item) => item.status === 'PENDING_APPROVAL').length > 0
-              ? 'warning'
-              : 'positive',
+          trend: pendingApproval > 0 ? `${pendingApproval} pending` : 'None pending',
+          tone: pendingApproval > 0 ? 'warning' : 'positive',
         },
         {
           label: 'Overdue follow-up',
-          value: values.filter((item) => item.status === 'DEVELOPMENT_IN_PROGRESS').length,
+          value: overdue,
           context: 'Development actions',
-          trend:
-            values.filter((item) => item.status === 'DEVELOPMENT_IN_PROGRESS').length > 0
-              ? '-X% vs last cycle'
-              : 'No overdue follow-up',
-          tone:
-            values.filter((item) => item.status === 'DEVELOPMENT_IN_PROGRESS').length > 0
-              ? 'danger'
-              : 'positive',
+          trend: overdue > 0 ? `${overdue} reassessment due` : 'No overdue follow-up',
+          tone: overdue > 0 ? 'danger' : 'positive',
         },
       ],
       tasks: [
@@ -216,6 +210,12 @@ export class CasesService {
         },
       ],
       slaWindows: { ...DEFAULT_SLA_WINDOWS },
+      navCounts: {
+        activeCases,
+        openTasks: 3,
+        employees: employeeCount,
+        activeDevelopment: activeDev,
+      },
     };
   }
 
@@ -245,13 +245,45 @@ export class CasesService {
     );
   }
 
+  listDevelopmentPlans(actor: AuthActor = getActorContext()) {
+    if (this.repository) return this.repository.listDevelopmentPlans(actor);
+    return [...this.cases.values()]
+      .filter((item) => Boolean(this.exp(item.id).development))
+      .map((item) => ({
+        id: `dev-${item.id}`,
+        caseId: item.id,
+        ownerName: item.owner,
+        actionPlan: null,
+        learningManagementSystem: null,
+        targetDate: null,
+        status: item.status === 'CLOSED' ? 'COMPLETED' : 'IN_PROGRESS',
+        actions: (this.exp(item.id).development?.actions ?? []).map((action, index) =>
+          typeof action === 'object' && action !== null
+            ? { id: `act-${item.id}-${index}`, ...(action as Record<string, unknown>) }
+            : { id: `act-${item.id}-${index}`, title: String(action) },
+        ),
+        caseSummary: {
+          caseCode: item.caseCode,
+          employeeId: item.employeeId,
+          employeeName: item.employeeName,
+          department: item.department,
+          targetRole: item.targetRole,
+          status: item.status,
+          candidateType: item.candidateType,
+          hiringOutcome: item.hiringOutcome,
+          hiringOutcomeReason: item.hiringOutcomeReason ?? null,
+        },
+      }));
+  }
+
   list(filters: {
     status?: string;
     search?: string;
+    limit?: number;
   }): AssessmentCaseSummary[] | Promise<AssessmentCaseSummary[]> {
     if (this.repository) return this.repository.list(filters);
     const search = filters.search?.trim().toLowerCase();
-    return [...this.cases.values()]
+    const list = [...this.cases.values()]
       .filter((item) => !filters.status || item.status === filters.status)
       .filter(
         (item) =>
@@ -262,6 +294,7 @@ export class CasesService {
       )
       .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt))
       .map((item) => this.withActions(item));
+    return filters.limit ? list.slice(0, filters.limit) : list;
   }
 
   get(caseId: string): AssessmentCaseDetail | Promise<AssessmentCaseDetail> {
@@ -432,36 +465,6 @@ export class CasesService {
     actor?: AuthActor,
   ): AssessmentCaseDetail | Promise<AssessmentCaseDetail> {
     const currentActor = actor ?? getActorContext();
-    // Managers (Requester) may only raise requests for people in their own team scope.
-    if (
-      !currentActor.roles.some((role) => ['Assessor', 'Admin'].includes(role)) &&
-      input.candidateType !== 'NEW_CANDIDATE' &&
-      !['DIRECT_REPORTS', 'DEPARTMENTS', 'ORGANIZATION'].includes(
-        currentActor.scopeType ?? 'ORGANIZATION',
-      )
-    ) {
-      throw new ForbiddenException(
-        'Your account has no team assigned. Ask an administrator to set your direct reports or departments.',
-      );
-    }
-    if (
-      currentActor.scopeType === 'DIRECT_REPORTS' &&
-      input.candidateType !== 'NEW_CANDIDATE' &&
-      !(currentActor.scopeValues ?? []).includes(input.employeeId)
-    ) {
-      throw new ForbiddenException(
-        'You can only request assessments for your assigned direct reports.',
-      );
-    }
-    if (
-      currentActor.scopeType === 'DEPARTMENTS' &&
-      !(currentActor.scopeValues ?? []).includes(input.department)
-    ) {
-      throw new ForbiddenException(
-        'You can only request assessments in your assigned departments.',
-      );
-    }
-    if (this.repository) return this.repository.create(input, actor);
     const parsed = createCaseSchema.safeParse(input);
     if (!parsed.success) {
       throw new BadRequestException(
@@ -472,8 +475,42 @@ export class CasesService {
         ),
       );
     }
-
     const data = parsed.data;
+    const isAdminOrAssessor = currentActor.roles.some((role) =>
+      ['Assessor', 'Admin'].includes(role),
+    );
+    if (
+      !isAdminOrAssessor &&
+      !['DIRECT_REPORTS', 'DEPARTMENTS', 'ORGANIZATION'].includes(
+        currentActor.scopeType ?? 'ORGANIZATION',
+      )
+    ) {
+      throw new ForbiddenException(
+        'Your account has no team assigned. Ask an administrator to set your direct reports or departments.',
+      );
+    }
+    if (
+      !isAdminOrAssessor &&
+      currentActor.scopeType === 'DIRECT_REPORTS' &&
+      (data.candidateType === 'NEW_CANDIDATE' ||
+        !(currentActor.scopeValues ?? []).includes(data.employeeId))
+    ) {
+      throw new ForbiddenException(
+        data.candidateType === 'NEW_CANDIDATE'
+          ? 'External recruitment requests require department or organization scope.'
+          : 'You can only request assessments for your assigned direct reports.',
+      );
+    }
+    if (
+      !isAdminOrAssessor &&
+      currentActor.scopeType === 'DEPARTMENTS' &&
+      !(currentActor.scopeValues ?? []).includes(data.department)
+    ) {
+      throw new ForbiddenException(
+        'You can only request assessments in your assigned departments.',
+      );
+    }
+    if (this.repository) return this.repository.create(data, currentActor);
     const caseCode = `AF-2026-${String(this.nextCaseNumber++).padStart(5, '0')}`;
     const id = `case-${caseCode.toLowerCase()}`;
     const now = new Date().toISOString();
@@ -788,8 +825,7 @@ export class CasesService {
     input: FinalizeResultInput,
     actor?: { id: string; name: string },
   ): AssessmentCaseDetail | Promise<AssessmentCaseDetail> {
-    void actor;
-    if (this.repository) return this.repository.finalizeResult(caseId, input);
+    if (this.repository) return this.repository.finalizeResult(caseId, input, actor);
     const record = this.require(caseId);
     this.requireTransition(
       record,
@@ -797,7 +833,7 @@ export class CasesService {
       input.expectedVersion,
       'A result can only be finalized while assessment is in progress.',
     );
-    this.exp(caseId).result = { resultCode: input.resultCode };
+    this.exp(caseId).result = { resultCode: input.resultCode ?? 'INCOMPLETE' };
     return this.moveTo(
       record,
       'RESULT_FINALIZED',
@@ -857,8 +893,7 @@ export class CasesService {
     input: SubmitRecommendationInput,
     actor?: { id: string; name: string },
   ): AssessmentCaseDetail | Promise<AssessmentCaseDetail> {
-    void actor;
-    if (this.repository) return this.repository.submitRecommendation(caseId, input);
+    if (this.repository) return this.repository.submitRecommendation(caseId, input, actor);
     const record = this.require(caseId);
     this.requireTransition(
       record,
@@ -889,8 +924,7 @@ export class CasesService {
   ):
     | (AssessmentCaseDetail & { stepId: string })
     | Promise<AssessmentCaseDetail & { stepId: string }> {
-    void actor;
-    if (this.repository) return this.repository.decideApproval(stepId, input);
+    if (this.repository) return this.repository.decideApproval(stepId, input, actor);
     const record = [...this.cases.values()].find((item) =>
       this.exp(item.id).steps.some((step) => step.id === stepId),
     );
@@ -1078,9 +1112,14 @@ export class CasesService {
     return result;
   }
 
-  getRecommendation(caseId: string): unknown | Promise<unknown> {
-    if (this.repository) return this.repository.getRecommendation(caseId);
-    const recommendation = this.exp(this.require(caseId).id).recommendation;
+  getRecommendation(
+    caseId: string,
+    actor: AuthActor = getActorContext(),
+  ): unknown | Promise<unknown> {
+    if (this.repository) return this.repository.getRecommendation(caseId, actor);
+    const record = this.require(caseId);
+    this.assertReleasedForViewer(record, actor);
+    const recommendation = this.exp(record.id).recommendation;
     if (!recommendation)
       throw new NotFoundException(
         this.error('RECOMMENDATION_NOT_FOUND', 'No recommendation exists for this case yet.'),
@@ -1088,20 +1127,41 @@ export class CasesService {
     return recommendation;
   }
 
-  listApprovalSteps(caseId: string): unknown[] | Promise<unknown[]> {
-    if (this.repository) return this.repository.listApprovalSteps(caseId);
-    this.require(caseId);
+  listApprovalSteps(
+    caseId: string,
+    actor: AuthActor = getActorContext(),
+  ): unknown[] | Promise<unknown[]> {
+    if (this.repository) return this.repository.listApprovalSteps(caseId, actor);
+    const record = this.require(caseId);
+    this.assertReleasedForViewer(record, actor);
     return this.exp(caseId).steps;
   }
 
-  getDevelopment(caseId: string): unknown | Promise<unknown> {
-    if (this.repository) return this.repository.getDevelopment(caseId);
-    const development = this.exp(this.require(caseId).id).development;
+  getDevelopment(caseId: string, actor: AuthActor = getActorContext()): unknown | Promise<unknown> {
+    if (this.repository) return this.repository.getDevelopment(caseId, actor);
+    const record = this.require(caseId);
+    this.assertReleasedForViewer(record, actor);
+    const development = this.exp(record.id).development;
     if (!development)
       throw new NotFoundException(
         this.error('DEVELOPMENT_NOT_FOUND', 'No development plan exists for this case yet.'),
       );
     return development;
+  }
+
+  private assertReleasedForViewer(record: CaseRecord, actor: AuthActor) {
+    const isRestricted =
+      actor.roles.some((r) => ['Employee', 'EmployeeManager', 'Requester'].includes(r)) &&
+      !actor.roles.some((r) => ['Assessor', 'Admin', 'HR', 'BusinessApprover'].includes(r));
+    if (
+      isRestricted &&
+      (!record.feedbackReleasedAt ||
+        !(RESULT_RELEASE_STATUSES as readonly string[]).includes(record.status))
+    ) {
+      throw new NotFoundException(
+        this.error('CASE_NOT_FOUND', 'This assessment case could not be found.'),
+      );
+    }
   }
 
   private require(caseId: string): CaseRecord {
@@ -1124,7 +1184,13 @@ export class CasesService {
   }
 
   private withActions(record: CaseRecord): CaseRecord {
-    return { ...record, availableActions: actionsForStatus(record.status) };
+    const actor = getActorContext();
+    return {
+      ...record,
+      availableActions: actor.roles.length
+        ? actionsForActor(record.status, actor.roles)
+        : actionsForStatus(record.status),
+    };
   }
 
   private defaultEligibility(candidateType?: string) {
@@ -1200,7 +1266,7 @@ export class CasesService {
   }
 
   private error(code: string, message: string, fieldErrors?: Record<string, string[]>) {
-    return { error: { code, message, fieldErrors, correlationId: randomUUID() } };
+    return { error: { code, message, fieldErrors, correlationId: currentCorrelationId() } };
   }
 
   private seed() {
@@ -1309,36 +1375,50 @@ export class CasesService {
     });
   }
 
-  createAttachment(
+  async createAttachment(
     input: CreateAttachmentInput,
     actor: { id: string; name: string } = { id: 'demo-user', name: 'Demo user' },
-  ): Promise<AttachmentSummary> | AttachmentSummary {
-    if (!input.classification || input.classification.trim().length === 0) {
+  ): Promise<AttachmentSummary> {
+    if (!input || typeof input !== 'object') {
+      throw new BadRequestException(
+        this.error('VALIDATION_ERROR', 'Attachment payload is required.'),
+      );
+    }
+    const rawClassification =
+      typeof input.classification === 'string' ? input.classification.trim() : '';
+    if (!rawClassification) {
       throw new BadRequestException({
         error: {
           code: 'CLASSIFICATION_REQUIRED',
           message: 'Attachment classification is required',
           fieldErrors: { classification: ['Classification is required'] },
+          correlationId: currentCorrelationId(),
         },
       });
     }
-
-    if (!isAllowedAttachmentType(input.fileName, input.contentType)) {
+    const rawFileName = typeof input.fileName === 'string' ? input.fileName.trim() : '';
+    const rawContentType = typeof input.contentType === 'string' ? input.contentType.trim() : '';
+    if (!rawFileName || !rawContentType || !isAllowedAttachmentType(rawFileName, rawContentType)) {
       throw new BadRequestException({
         error: {
           code: 'INVALID_FILE_TYPE',
-          message: `File type '${input.contentType}' or file extension is not allowed. Permitted types: PDF, DOC, DOCX, JPG, PNG.`,
+          message: `File type '${rawContentType}' or file extension is not allowed. Permitted types: PDF, DOC, DOCX, JPG, PNG.`,
           fieldErrors: { contentType: ['Must be an allowed type: PDF, DOC, DOCX, JPG, PNG'] },
+          correlationId: currentCorrelationId(),
         },
       });
     }
-
-    if (input.sizeBytes <= 0 || input.sizeBytes > MAX_ATTACHMENT_SIZE_BYTES) {
+    if (
+      typeof input.sizeBytes !== 'number' ||
+      input.sizeBytes <= 0 ||
+      input.sizeBytes > MAX_ATTACHMENT_SIZE_BYTES
+    ) {
       throw new BadRequestException({
         error: {
           code: 'FILE_TOO_LARGE',
           message: `File size exceeds 10MB maximum limit (${MAX_ATTACHMENT_SIZE_BYTES} bytes).`,
           fieldErrors: { sizeBytes: ['File size exceeds 10MB limit'] },
+          correlationId: currentCorrelationId(),
         },
       });
     }
@@ -1353,19 +1433,23 @@ export class CasesService {
         error: {
           code: 'CASE_NOT_FOUND',
           message: `Case '${input.caseId}' not found.`,
+          correlationId: currentCorrelationId(),
         },
       });
     }
 
     const id = randomUUID();
-    const storageKey = input.storageKey ?? `quarantine/${input.caseId}/${id}-${input.fileName}`;
+    const safeName = basename(rawFileName).replace(/[\/]/g, '_');
+    const storageKey = `quarantine/${input.caseId}/${id}-${safeName}`;
+    await storeAttachmentBytes(storageKey, input.contentBase64);
+
     const record: AttachmentItem = {
       id,
       caseId: input.caseId,
       evidenceId: input.evidenceId ?? null,
-      classification: input.classification.trim(),
-      fileName: input.fileName.trim(),
-      contentType: input.contentType.toLowerCase().trim(),
+      classification: rawClassification,
+      fileName: safeName,
+      contentType: rawContentType.toLowerCase(),
       sizeBytes: BigInt(input.sizeBytes),
       storageKey,
       scanStatus: 'PENDING',
@@ -1434,7 +1518,7 @@ export class CasesService {
       fileName: attachment.fileName,
       contentType: attachment.contentType,
       scanStatus: attachment.scanStatus,
-      previewUrl: `https://storage.local/clean/${attachment.storageKey}?action=preview`,
+      previewUrl: `/api/v1/assessflow/attachments/clean/${attachment.id}?mode=preview`,
     };
   }
 
@@ -1446,7 +1530,21 @@ export class CasesService {
       fileName: attachment.fileName,
       contentType: attachment.contentType,
       scanStatus: attachment.scanStatus,
-      downloadUrl: `https://storage.local/clean/${attachment.storageKey}?action=download`,
+      downloadUrl: `/api/v1/assessflow/attachments/clean/${attachment.id}?mode=download`,
+    };
+  }
+
+  async readCleanAttachmentFile(attachmentId: string, actor: AuthActor) {
+    const attachment = await this.getAttachment(attachmentId);
+    this.assertScanClean(attachment);
+    if (this.repository) {
+      await this.repository.logAttachmentAccess(attachment.caseId, attachment.id, actor.id);
+    }
+    const buffer = await readAttachmentBytes(attachment.storageKey, attachment.fileName);
+    return {
+      fileName: attachment.fileName,
+      contentType: attachment.contentType,
+      buffer,
     };
   }
 
@@ -1501,11 +1599,11 @@ export class CasesService {
       scannedAt: item.scannedAt ?? null,
       downloadUrl:
         item.scanStatus === 'CLEAN'
-          ? `https://storage.local/clean/${item.storageKey}?action=download`
+          ? `/api/v1/assessflow/attachments/clean/${item.id}?mode=download`
           : null,
       previewUrl:
         item.scanStatus === 'CLEAN'
-          ? `https://storage.local/clean/${item.storageKey}?action=preview`
+          ? `/api/v1/assessflow/attachments/clean/${item.id}?mode=preview`
           : null,
     };
   }

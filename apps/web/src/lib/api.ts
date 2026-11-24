@@ -17,11 +17,13 @@ import type {
   CreateAttachmentInput,
   CreateCaseInput,
   DecideApprovalInput,
+  DevelopmentPlanWithCaseDto,
   EligibilityDecisionInput,
   FinalizePlanInput,
   FinalizeResultInput,
   OverviewResponse,
   ReopenResultInput,
+  RolePermissionMatrixEntry,
   SaveEvidenceInput,
   ScheduleEventInput,
   ScheduleReassessmentInput,
@@ -30,7 +32,7 @@ import type {
   ScorecardConfig,
   ScorecardRatings,
 } from '@assessflow/contracts';
-import { getActiveUser, getAuthToken } from './auth';
+import { getActiveUser, getAuthToken, logout, markTemporaryPasswordChanged } from './auth';
 
 export type EventScheduleResult = AssessmentCaseDetail & { eventId: string };
 
@@ -67,12 +69,7 @@ export type AccessRole =
   | 'EmployeeManager';
 
 export type AccessScope =
-  | 'NONE'
-  | 'ORGANIZATION'
-  | 'DEPARTMENTS'
-  | 'DIRECT_REPORTS'
-  | 'ASSIGNED'
-  | 'SELF';
+  'NONE' | 'ORGANIZATION' | 'DEPARTMENTS' | 'DIRECT_REPORTS' | 'ASSIGNED' | 'SELF';
 
 export interface AccessAccount {
   id: string;
@@ -115,6 +112,7 @@ export interface AdminAuditEvent {
 
 export interface AdminAuditPage {
   items: AdminAuditEvent[];
+  availableActions?: string[];
   total: number;
   page: number;
   pageSize: number;
@@ -178,14 +176,21 @@ export interface AssessorAccountOption {
   roles: AccessRole[];
 }
 
+export interface HealthReadyStatus {
+  status: string;
+  service?: string;
+  version?: string;
+  dataStore?: string;
+  latencyMs?: number;
+  timestamp: string;
+}
+
 function resolveBaseUrl(): string {
   const envUrl = import.meta.env.VITE_API_URL?.trim();
   if (!envUrl) {
-    throw new Error(
-      'VITE_API_URL is not configured. Set it to the AssessFlow API base URL before starting the web app.',
-    );
+    return '/api/v1/assessflow';
   }
-  return envUrl;
+  return envUrl.replace(/\/+$/, '');
 }
 
 const activeBaseUrl = resolveBaseUrl();
@@ -202,15 +207,95 @@ export class ApiRequestError extends Error {
     readonly fieldErrors: Record<string, string[]> = {},
     readonly scanStatus?: string,
     readonly scanReason?: string | null,
+    readonly status = 0,
+    readonly correlationId?: string,
+    readonly retryAfterSeconds?: number,
   ) {
     super(message);
+    this.name = 'ApiRequestError';
   }
 }
 
+interface ParsedErrorBody {
+  error?: {
+    code?: string;
+    message?: string;
+    fieldErrors?: Record<string, string[]>;
+    scanStatus?: string;
+    scanReason?: string | null;
+    correlationId?: string;
+    retryAfterSeconds?: number;
+  };
+  code?: string;
+  message?: string | string[];
+  fieldErrors?: Record<string, string[]>;
+}
+
+function generateIdempotencyKey(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `idemp-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+async function parseErrorAndThrow(
+  response: Response,
+  path: string,
+  hadToken: boolean,
+): Promise<never> {
+  let body: ParsedErrorBody = {};
+  const contentType = response.headers.get('content-type') ?? '';
+  try {
+    if (contentType.includes('application/json')) {
+      body = (await response.json()) as ParsedErrorBody;
+    } else {
+      const text = await response.text();
+      if (text.trim()) body = { message: text.trim().slice(0, 240) };
+    }
+  } catch {
+    body = {};
+  }
+
+  if (
+    response.status === 401 &&
+    hadToken &&
+    !path.startsWith('/auth/login') &&
+    !path.startsWith('/health')
+  ) {
+    logout('expired');
+  }
+
+  const nested = body.error;
+  const flatMessage = Array.isArray(body.message)
+    ? body.message.join(', ')
+    : typeof body.message === 'string'
+      ? body.message
+      : undefined;
+  const message =
+    nested?.message?.trim() ||
+    flatMessage?.trim() ||
+    (response.status === 401
+      ? 'Your session has expired. Please sign in again.'
+      : response.status === 403
+        ? 'You do not have permission to perform this action.'
+        : 'The request could not be completed.');
+
+  throw new ApiRequestError(
+    message,
+    nested?.code ?? body.code ?? `HTTP_${response.status}`,
+    nested?.fieldErrors ?? body.fieldErrors ?? {},
+    nested?.scanStatus,
+    nested?.scanReason,
+    response.status,
+    nested?.correlationId ?? response.headers.get('x-correlation-id') ?? undefined,
+    nested?.retryAfterSeconds,
+  );
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const currentBase = activeBaseUrl;
+  const token = getAuthToken();
   const activeUser = getActiveUser();
-  const localActorHeaders: Record<string, string> = getAuthToken()
+  const localActorHeaders: Record<string, string> = token
     ? {}
     : {
         'x-actor-id': activeUser.actorId || 'demo-user',
@@ -218,41 +303,45 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
         'x-actor-name': activeUser.name,
       };
 
-  const response = await fetch(`${currentBase}${path}`, {
+  const method = (init?.method ?? 'GET').toUpperCase();
+  const isMutating =
+    method === 'POST' || method === 'PATCH' || method === 'PUT' || method === 'DELETE';
+  const mergedHeaders: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...localActorHeaders,
+    ...((init?.headers as Record<string, string> | undefined) ?? {}),
+  };
+
+  if (isMutating && !path.startsWith('/auth/') && !mergedHeaders['Idempotency-Key']) {
+    mergedHeaders['Idempotency-Key'] = generateIdempotencyKey();
+  }
+
+  const response = await fetch(`${activeBaseUrl}${path}`, {
     ...init,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(getAuthToken() ? { Authorization: `Bearer ${getAuthToken()}` } : {}),
-      ...localActorHeaders,
-      ...(init?.headers ?? {}),
-    },
+    headers: mergedHeaders,
   });
 
-  const payload = (await response.json()) as T & {
-    error?: {
-      code?: string;
-      message?: string;
-      fieldErrors?: Record<string, string[]>;
-      scanStatus?: string;
-      scanReason?: string | null;
-    };
-  };
   if (!response.ok) {
-    throw new ApiRequestError(
-      payload.error?.message ?? 'The request could not be completed.',
-      payload.error?.code,
-      payload.error?.fieldErrors,
-      payload.error?.scanStatus,
-      payload.error?.scanReason,
-    );
+    return parseErrorAndThrow(response, path, Boolean(token));
   }
-  return payload;
+
+  if (response.status === 204) {
+    return undefined as T;
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+  if (!contentType.includes('application/json')) {
+    return (await response.text()) as unknown as T;
+  }
+  return (await response.json()) as T;
 }
 
 function commandHeaders(
   actorIdOrOptions?: string | RequestOptions,
   idempotencyKey?: string,
 ): Record<string, string> {
+  const token = getAuthToken();
   const activeUser = getActiveUser();
   let actorId = activeUser.actorId || 'hr-partner';
   let finalKey = idempotencyKey;
@@ -270,16 +359,18 @@ function commandHeaders(
     }
   }
 
-  const headers: Record<string, string> = {
-    'x-actor-id': actorId,
-    'x-actor-role': activeUser.role,
-    'x-actor-name': activeUser.name,
-  };
-  if (finalKey) {
-    headers['Idempotency-Key'] = finalKey;
-  }
+  const headers: Record<string, string> = token
+    ? {}
+    : {
+        'x-actor-id': actorId,
+        'x-actor-role': activeUser.role,
+        'x-actor-name': activeUser.name,
+      };
+  headers['Idempotency-Key'] = finalKey?.trim() || generateIdempotencyKey();
   return headers;
 }
+
+const enc = (value: string) => encodeURIComponent(value);
 
 export const api = {
   authenticate: (email: string, password: string) =>
@@ -287,18 +378,19 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     }),
+  healthReady: () => request<HealthReadyStatus>('/health/ready'),
   accessAccounts: () => request<AccessAccount[]>('/access/accounts'),
   assessorAccounts: () => request<AssessorAccountOption[]>('/access/accounts/assessor-options'),
   createAccessAccount: (
     input: Omit<AccessAccount, 'id' | 'active'> & { active?: boolean; password: string },
   ) => request<AccessAccount>('/access/accounts', { method: 'POST', body: JSON.stringify(input) }),
   updateAccessAccount: (id: string, input: Partial<AccessAccount> & { password?: string }) =>
-    request<AccessAccount>(`/access/accounts/${encodeURIComponent(id)}`, {
+    request<AccessAccount>(`/access/accounts/${enc(id)}`, {
       method: 'PATCH',
       body: JSON.stringify(input),
     }),
   removeAccessAccount: (id: string) =>
-    request<{ id: string; removed: boolean }>(`/access/accounts/${encodeURIComponent(id)}`, {
+    request<{ id: string; removed: boolean }>(`/access/accounts/${enc(id)}`, {
       method: 'DELETE',
     }),
   adminAccessAccounts: () => request<AccessAccount[]>('/admin/accounts'),
@@ -308,20 +400,26 @@ export const api = {
       body: JSON.stringify(input),
     }),
   adminUpdateAccessAccount: (id: string, input: Partial<AccessAccount>) =>
-    request<AccessAccount>(`/admin/accounts/${encodeURIComponent(id)}`, {
+    request<AccessAccount>(`/admin/accounts/${enc(id)}`, {
       method: 'PATCH',
       body: JSON.stringify(input),
     }),
   adminDeactivateAccessAccount: (id: string) =>
-    request<AccessAccount>(`/admin/accounts/${encodeURIComponent(id)}/deactivate`, {
+    request<AccessAccount>(`/admin/accounts/${enc(id)}/deactivate`, {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+  adminReactivateAccessAccount: (id: string) =>
+    request<AdminAccessCreateResult>(`/admin/accounts/${enc(id)}/reactivate`, {
       method: 'POST',
       body: JSON.stringify({}),
     }),
   adminResetAccessPassword: (id: string) =>
-    request<AdminPasswordResetResult>(`/admin/accounts/${encodeURIComponent(id)}/reset-password`, {
+    request<AdminPasswordResetResult>(`/admin/accounts/${enc(id)}/reset-password`, {
       method: 'POST',
       body: JSON.stringify({}),
     }),
+  adminRolesMatrix: () => request<RolePermissionMatrixEntry[]>('/admin/roles-matrix'),
   adminPolicy: () => request<AdministrationPolicy>('/admin/policy'),
   enforceAdminPolicy: (input: { policy: AdministrationPolicy; reason?: string }) =>
     request<AdministrationPolicy>('/admin/policy/enforce', {
@@ -342,23 +440,28 @@ export const api = {
     Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined && value !== '') query.set(key, String(value));
     });
-    return request<AdminAuditPage>(`/admin/audit?${query.toString()}`);
+    const qs = query.toString();
+    return request<AdminAuditPage>(`/admin/audit${qs ? `?${qs}` : ''}`);
   },
-  changeTemporaryPassword: (
+  changeTemporaryPassword: async (
     currentPassword: string,
     newPassword: string,
     confirmPassword: string,
-  ) =>
-    request<{ changed: true }>('/auth/change-password', {
+  ) => {
+    const res = await request<{ changed: true; token?: string }>('/auth/change-password', {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword, confirmPassword }),
-    }),
+    });
+    markTemporaryPasswordChanged(res.token);
+    return res;
+  },
   overview: () => request<OverviewResponse>('/overview'),
+  developmentPlans: () => request<DevelopmentPlanWithCaseDto[]>('/development-plans'),
   assessorAssignments: () => request<AssessorAssignment[]>('/assessor/assignments'),
   myResults: () => request<MyResult[]>('/me/results'),
   setFeedbackVisibility: (caseId: string, visible: boolean) =>
     request<{ caseId: string; visible: boolean; feedbackReleasedAt: string | null }>(
-      `/cases/${encodeURIComponent(caseId)}/feedback-visibility`,
+      `/cases/${enc(caseId)}/feedback-visibility`,
       { method: 'POST', body: JSON.stringify({ visible }) },
     ),
   tasks: () => request<OverviewResponse['tasks']>('/tasks'),
@@ -366,38 +469,38 @@ export const api = {
     request<AssessmentCaseSummary[]>(
       `/cases${search ? `?search=${encodeURIComponent(search)}` : ''}`,
     ),
-  caseDetail: (id: string) => request<AssessmentCaseDetail>(`/cases/${id}`),
+  caseDetail: (id: string) => request<AssessmentCaseDetail>(`/cases/${enc(id)}`),
   reopenCompletedStage: (id: string, input: AdminReopenStageInput) =>
-    request<AssessmentCaseDetail>(`/cases/${id}/stages/reopen`, {
+    request<AssessmentCaseDetail>(`/cases/${enc(id)}/stages/reopen`, {
       method: 'POST',
       headers: commandHeaders(),
       body: JSON.stringify(input),
     }),
   updateEmployeeName: (caseId: string, input: UpdateEmployeeNameInput) =>
-    request<AssessmentCaseDetail>(`/cases/${caseId}/employee-name`, {
+    request<AssessmentCaseDetail>(`/cases/${enc(caseId)}/employee-name`, {
       method: 'PATCH',
       headers: commandHeaders(),
       body: JSON.stringify(input),
     }),
   updateReopenedRequest: (id: string, input: AdminEditRequestInput) =>
-    request<AssessmentCaseDetail>(`/cases/${id}/request`, {
+    request<AssessmentCaseDetail>(`/cases/${enc(id)}/request`, {
       method: 'PATCH',
       headers: commandHeaders(),
       body: JSON.stringify(input),
     }),
-  scorecard: <T = unknown>(caseId: string) => request<T>(`/cases/${caseId}/scorecard`),
+  scorecard: <T = unknown>(caseId: string) => request<T>(`/cases/${enc(caseId)}/scorecard`),
   updateScorecardConfig: (caseId: string, config: ScorecardConfig) =>
     request<{ config: ScorecardConfig; canEditWeights: boolean }>(
-      `/cases/${caseId}/scorecard/config`,
+      `/cases/${enc(caseId)}/scorecard/config`,
       { method: 'PATCH', body: JSON.stringify(config) },
     ),
   saveScorecard: (caseId: string, ratings: ScorecardRatings, submit: boolean) =>
-    request<{ saved: boolean; submitted: boolean }>(`/cases/${caseId}/scorecard`, {
+    request<{ saved: boolean; submitted: boolean }>(`/cases/${enc(caseId)}/scorecard`, {
       method: 'POST',
       body: JSON.stringify({ ratings, submit }),
     }),
   reviseScorecard: (caseId: string, reason: string) =>
-    request<{ reopened: boolean }>(`/cases/${caseId}/scorecard/revise`, {
+    request<{ reopened: boolean }>(`/cases/${enc(caseId)}/scorecard/revise`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
     }),
@@ -417,7 +520,7 @@ export const api = {
     actorId: string | RequestOptions = 'demo-user',
     idempotencyKey?: string,
   ) =>
-    request<AssessmentCaseDetail>(`/cases/${id}/submit`, {
+    request<AssessmentCaseDetail>(`/cases/${enc(id)}/submit`, {
       method: 'POST',
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify({ expectedVersion }),
@@ -428,7 +531,7 @@ export const api = {
     actorId: string | RequestOptions = 'demo-user',
     idempotencyKey?: string,
   ) =>
-    request<AssessmentCaseDetail>(`/cases/${id}/eligibility/decision`, {
+    request<AssessmentCaseDetail>(`/cases/${enc(id)}/eligibility/decision`, {
       method: 'POST',
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify(input),
@@ -439,7 +542,7 @@ export const api = {
     actorId: string | RequestOptions = 'demo-user',
     idempotencyKey?: string,
   ) =>
-    request<AssessmentCaseDetail>(`/cases/${id}/eligibility/override-request`, {
+    request<AssessmentCaseDetail>(`/cases/${enc(id)}/eligibility/override-request`, {
       method: 'POST',
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify({ reason }),
@@ -450,31 +553,31 @@ export const api = {
     actorId: string | RequestOptions = 'demo-user',
     idempotencyKey?: string,
   ) =>
-    request<AssessmentCaseDetail>(`/cases/${caseId}/plan/finalize`, {
+    request<AssessmentCaseDetail>(`/cases/${enc(caseId)}/plan/finalize`, {
       method: 'POST',
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify(input),
     }),
-  getPlan: <T = unknown>(caseId: string) => request<T>(`/cases/${caseId}/plan`),
+  getPlan: <T = unknown>(caseId: string) => request<T>(`/cases/${enc(caseId)}/plan`),
   scheduleEvent: (
     caseId: string,
     input: ScheduleEventInput,
     actorId: string | RequestOptions = 'demo-user',
     idempotencyKey?: string,
   ) =>
-    request<EventScheduleResult>(`/cases/${caseId}/events`, {
+    request<EventScheduleResult>(`/cases/${enc(caseId)}/events`, {
       method: 'POST',
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify(input),
     }),
-  listEvents: <T = unknown>(caseId: string) => request<T[]>(`/cases/${caseId}/events`),
+  listEvents: <T = unknown>(caseId: string) => request<T[]>(`/cases/${enc(caseId)}/events`),
   saveEvidenceDraft: (
     eventId: string,
     input: SaveEvidenceInput,
     actorId: string | RequestOptions = 'demo-user',
     idempotencyKey?: string,
   ) =>
-    request<EvidenceSaveResult>(`/events/${eventId}/evidence`, {
+    request<EvidenceSaveResult>(`/events/${enc(eventId)}/evidence`, {
       method: 'POST',
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify(input),
@@ -485,7 +588,7 @@ export const api = {
     actorId: string | RequestOptions = 'demo-user',
     idempotencyKey?: string,
   ) =>
-    request<EvidenceSaveResult>(`/events/${eventId}/evidence/submit`, {
+    request<EvidenceSaveResult>(`/events/${enc(eventId)}/evidence/submit`, {
       method: 'POST',
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify(input),
@@ -496,7 +599,7 @@ export const api = {
     actorId: string | RequestOptions = 'demo-user',
     idempotencyKey?: string,
   ) =>
-    request<AssessmentCaseDetail>(`/cases/${caseId}/result/finalize`, {
+    request<AssessmentCaseDetail>(`/cases/${enc(caseId)}/result/finalize`, {
       method: 'POST',
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify(input),
@@ -507,7 +610,7 @@ export const api = {
     actorId: string | RequestOptions = 'demo-user',
     idempotencyKey?: string,
   ) =>
-    request<AssessmentCaseDetail>(`/cases/${caseId}/result/reopen`, {
+    request<AssessmentCaseDetail>(`/cases/${enc(caseId)}/result/reopen`, {
       method: 'POST',
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify(input),
@@ -516,55 +619,56 @@ export const api = {
     caseId: string,
     input: { code: string; reason: string; expectedVersion: number },
   ) =>
-    request<{ code: string }>(`/cases/${caseId}/result/assessor-recommendation`, {
+    request<{ code: string }>(`/cases/${enc(caseId)}/result/assessor-recommendation`, {
       method: 'PATCH',
       body: JSON.stringify(input),
     }),
-  getResult: <T = unknown>(caseId: string) => request<T>(`/cases/${caseId}/result`),
+  getResult: <T = unknown>(caseId: string) => request<T>(`/cases/${enc(caseId)}/result`),
   submitRecommendation: (
     caseId: string,
     input: SubmitRecommendationInput,
     actorId: string | RequestOptions = 'demo-user',
     idempotencyKey?: string,
   ) =>
-    request<AssessmentCaseDetail>(`/cases/${caseId}/recommendation`, {
+    request<AssessmentCaseDetail>(`/cases/${enc(caseId)}/recommendation`, {
       method: 'POST',
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify(input),
     }),
-  getRecommendation: <T = unknown>(caseId: string) => request<T>(`/cases/${caseId}/recommendation`),
+  getRecommendation: <T = unknown>(caseId: string) =>
+    request<T>(`/cases/${enc(caseId)}/recommendation`),
   decideApprovalStep: (
     stepId: string,
     input: DecideApprovalInput,
     actorId: string | RequestOptions = 'demo-user',
     idempotencyKey?: string,
   ) =>
-    request<ApprovalStepDecisionResult>(`/approval-steps/${stepId}/decision`, {
+    request<ApprovalStepDecisionResult>(`/approval-steps/${enc(stepId)}/decision`, {
       method: 'POST',
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify(input),
     }),
   listApprovalSteps: <T = unknown>(caseId: string) =>
-    request<T[]>(`/cases/${caseId}/approval-steps`),
+    request<T[]>(`/cases/${enc(caseId)}/approval-steps`),
   updateDevelopment: (
     caseId: string,
     input: UpdateDevelopmentInput,
     actorId: string | RequestOptions = 'demo-user',
     idempotencyKey?: string,
   ) =>
-    request<AssessmentCaseDetail>(`/cases/${caseId}/development`, {
+    request<AssessmentCaseDetail>(`/cases/${enc(caseId)}/development`, {
       method: 'POST',
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify(input),
     }),
-  getDevelopment: <T = unknown>(caseId: string) => request<T>(`/cases/${caseId}/development`),
+  getDevelopment: <T = unknown>(caseId: string) => request<T>(`/cases/${enc(caseId)}/development`),
   scheduleReassessment: (
     caseId: string,
     input: ScheduleReassessmentInput,
     actorId: string | RequestOptions = 'demo-user',
     idempotencyKey?: string,
   ) =>
-    request<ReassessmentScheduleResult>(`/cases/${caseId}/reassessment`, {
+    request<ReassessmentScheduleResult>(`/cases/${enc(caseId)}/reassessment`, {
       method: 'POST',
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify(input),
@@ -575,7 +679,7 @@ export const api = {
     actorId: string | RequestOptions = 'demo-user',
     idempotencyKey?: string,
   ) =>
-    request<AssessmentCaseDetail>(`/cases/${caseId}/close`, {
+    request<AssessmentCaseDetail>(`/cases/${enc(caseId)}/close`, {
       method: 'POST',
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify(input),
@@ -590,40 +694,65 @@ export const api = {
       headers: commandHeaders(actorId, idempotencyKey),
       body: JSON.stringify(input),
     }),
+  caseAttachments: (caseId: string) =>
+    request<AttachmentSummary[]>(`/cases/${enc(caseId)}/attachments`),
   getAttachment: (attachmentId: string) =>
-    request<AttachmentSummary>(`/attachments/${attachmentId}`),
-  previewAttachment: async (attachmentId: string) => {
-    try {
-      return await request<{
-        id: string;
-        fileName: string;
-        contentType: string;
-        scanStatus: AttachmentScanStatus;
-        previewUrl: string;
-      }>(`/attachments/${attachmentId}/preview`);
-    } catch (err) {
-      if (err instanceof ApiRequestError && err.code === 'SCAN_NOT_CLEAN') {
-        throw err;
-      }
-      throw err;
+    request<AttachmentSummary>(`/attachments/${enc(attachmentId)}`),
+  previewAttachment: (attachmentId: string) =>
+    request<{
+      id: string;
+      fileName: string;
+      contentType: string;
+      scanStatus: AttachmentScanStatus;
+      previewUrl: string;
+    }>(`/attachments/${enc(attachmentId)}/preview`),
+  downloadAttachment: (attachmentId: string) =>
+    request<{
+      id: string;
+      fileName: string;
+      contentType: string;
+      scanStatus: AttachmentScanStatus;
+      downloadUrl: string;
+    }>(`/attachments/${enc(attachmentId)}/download`),
+  fetchCleanAttachmentBlob: async (
+    attachmentId: string,
+    mode: 'preview' | 'download' = 'preview',
+  ): Promise<Blob> => {
+    const token = getAuthToken();
+    const activeUser = getActiveUser();
+    const response = await fetch(
+      `${activeBaseUrl}/attachments/clean/${enc(attachmentId)}?mode=${mode}`,
+      {
+        headers: token
+          ? { Authorization: `Bearer ${token}` }
+          : {
+              'x-actor-id': activeUser.actorId || 'demo-user',
+              'x-actor-role': activeUser.role,
+              'x-actor-name': activeUser.name,
+            },
+      },
+    );
+    if (!response.ok) {
+      return parseErrorAndThrow(response, `/attachments/clean/${attachmentId}`, Boolean(token));
     }
+    return response.blob();
   },
   getCalibrationMatrix: (department?: string) =>
     request<CalibrationMatrixResponse>(
       `/calibration/matrix${department ? `?department=${encodeURIComponent(department)}` : ''}`,
     ),
   copilotSynthesize: (caseId: string, input: CopilotSynthesizeInput = {}) =>
-    request<CopilotSynthesizeResponse>(`/cases/${caseId}/copilot/synthesize`, {
+    request<CopilotSynthesizeResponse>(`/cases/${enc(caseId)}/copilot/synthesize`, {
       method: 'POST',
       body: JSON.stringify(input),
     }),
   copilotBiasCheck: (caseId: string, input: CopilotBiasCheckInput) =>
-    request<CopilotBiasCheckResponse>(`/cases/${caseId}/copilot/bias-check`, {
+    request<CopilotBiasCheckResponse>(`/cases/${enc(caseId)}/copilot/bias-check`, {
       method: 'POST',
       body: JSON.stringify(input),
     }),
   copilotSuggestActions: (caseId: string, input: CopilotSuggestActionsInput = {}) =>
-    request<CopilotSuggestActionsResponse>(`/cases/${caseId}/copilot/suggest-actions`, {
+    request<CopilotSuggestActionsResponse>(`/cases/${enc(caseId)}/copilot/suggest-actions`, {
       method: 'POST',
       body: JSON.stringify(input),
     }),

@@ -6,6 +6,10 @@ interface AppTokenClaims extends AuthActor {
   iat: number;
 }
 
+export interface VerifiedAppActor extends AuthActor {
+  tokenIssuedAt?: number;
+}
+
 function signingSecret(): string {
   const configured = process.env.AUTH_JWT_SECRET?.trim();
   if (configured) return configured;
@@ -28,7 +32,7 @@ export function createAppToken(actor: AuthActor): string {
   return `${content}.${sign(content)}`;
 }
 
-export function verifyAppToken(token: string): AuthActor {
+export function verifyAppToken(token: string): VerifiedAppActor {
   const [headerPart, payloadPart, signature, extra] = token.split('.');
   if (!headerPart || !payloadPart || !signature || extra) throw new Error('Invalid session token.');
   const header = JSON.parse(Buffer.from(headerPart, 'base64url').toString('utf8')) as {
@@ -54,5 +58,6 @@ export function verifyAppToken(token: string): AuthActor {
     roles: claims.roles,
     scopeType: claims.scopeType,
     scopeValues: claims.scopeValues,
+    tokenIssuedAt: typeof claims.iat === 'number' ? claims.iat : undefined,
   };
 }

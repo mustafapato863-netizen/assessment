@@ -1,26 +1,23 @@
 import { describe, it, expect } from 'vitest';
-import { NINE_BOX_DEFINITIONS } from './lib/calibration-constants';
+import { BOXES, BOX_GRID, boxOf } from './routes/calibration-view/calibrationLogic';
 
 describe('Talent Calibration 9-Box Grid Specs', () => {
-  it('defines exactly 9 cells with target percentages totaling 100%', () => {
-    expect(NINE_BOX_DEFINITIONS).toHaveLength(9);
-    const totalTarget = NINE_BOX_DEFINITIONS.reduce((acc, def) => acc + def.targetPercentage, 0);
-    expect(totalTarget).toBe(100);
+  it('defines all 9 named boxes in a 3x3 potential x performance matrix', () => {
+    const flatBoxes = BOX_GRID.flat();
+    expect(flatBoxes).toHaveLength(9);
+    expect([...flatBoxes].sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    for (const idx of flatBoxes) {
+      expect(BOXES[idx]?.name).toBeTruthy();
+    }
   });
 
-  it('correctly maps Star box as index 9 with High Performance and High Potential', () => {
-    const starBox = NINE_BOX_DEFINITIONS.find((b) => b.boxIndex === 9);
-    expect(starBox).toBeDefined();
-    expect(starBox?.perf).toBe('HIGH');
-    expect(starBox?.pot).toBe('HIGH');
-    expect(starBox?.label).toContain('Star');
+  it('maps High Performance + High Potential to Box 9 (Star / Future Leader)', () => {
+    expect(boxOf({ performance: 'high', potential: 'high' })).toBe(9);
+    expect(BOXES[9]?.name).toContain('Star');
   });
 
-  it('correctly maps Underperformer box as index 1 with Low Performance and Low Potential', () => {
-    const underperformerBox = NINE_BOX_DEFINITIONS.find((b) => b.boxIndex === 1);
-    expect(underperformerBox).toBeDefined();
-    expect(underperformerBox?.perf).toBe('LOW');
-    expect(underperformerBox?.pot).toBe('LOW');
-    expect(underperformerBox?.label).toContain('Underperformer');
+  it('maps Low Performance + Low Potential to Box 1 (Underperformer)', () => {
+    expect(boxOf({ performance: 'low', potential: 'low' })).toBe(1);
+    expect(BOXES[1]?.name).toContain('Underperformer');
   });
 });

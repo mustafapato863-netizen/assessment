@@ -78,7 +78,11 @@ export class ObservabilityService {
     return this.config;
   }
 
-  public startSpan(name: string, correlationId?: string, attributes: Record<string, unknown> = {}): TelemetrySpan {
+  public startSpan(
+    name: string,
+    correlationId?: string,
+    attributes: Record<string, unknown> = {},
+  ): TelemetrySpan {
     const startTime = Date.now();
     const spanId = `span-${Math.random().toString(36).substring(2, 11)}`;
 

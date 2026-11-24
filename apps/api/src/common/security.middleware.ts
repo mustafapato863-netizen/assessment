@@ -2,21 +2,15 @@ import type { Request, Response, NextFunction } from 'express';
 import { randomUUID } from 'node:crypto';
 import { runWithCorrelationId } from './correlation.context';
 
+const SAFE_CORRELATION_ID = /^[a-zA-Z0-9._-]{1,64}$/;
+const MUTATING_METHODS = new Set(['POST', 'PATCH', 'PUT', 'DELETE']);
+const HEAVY_GET_PREFIXES = [
+  '/api/v1/assessflow/admin/audit',
+  '/api/v1/assessflow/calibration/matrix',
+];
+
 /**
  * Global Security Headers & Request Correlation Middleware.
- *
- * Sets hardened HTTP response headers on every response:
- * - X-Content-Type-Options: nosniff
- * - X-Frame-Options: DENY
- * - Referrer-Policy: no-referrer
- * - Permissions-Policy: camera=(),microphone=(),geolocation=()
- * - Cross-Origin-Opener-Policy: same-origin
- * - Strict-Transport-Security: max-age=31536000 (production only)
- *
- * Propagates request correlation ID:
- * - Reads incoming x-correlation-id header or generates `corr-<randomUUID>`
- * - Sets x-correlation-id response header
- * - Stashes correlationId on req.headers and req.correlationId for downstream access
  */
 export function securityHeadersMiddleware(req: Request, res: Response, next: NextFunction): void {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -29,12 +23,15 @@ export function securityHeadersMiddleware(req: Request, res: Response, next: Nex
     res.setHeader('Strict-Transport-Security', 'max-age=31536000');
   }
 
+  const rawPath = req.path || req.originalUrl?.split('?')[0] || req.url?.split('?')[0] || '';
+  if (rawPath.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'no-store, private');
+  }
+
   const rawHeader = req.headers['x-correlation-id'] ?? req.headers['X-Correlation-ID'];
   const candidate = Array.isArray(rawHeader) ? rawHeader[0] : rawHeader;
-  const correlationId =
-    typeof candidate === 'string' && candidate.trim().length > 0
-      ? candidate.trim()
-      : `corr-${randomUUID()}`;
+  const trimmed = typeof candidate === 'string' ? candidate.trim() : '';
+  const correlationId = SAFE_CORRELATION_ID.test(trimmed) ? trimmed : `corr-${randomUUID()}`;
 
   res.setHeader('x-correlation-id', correlationId);
   req.headers['x-correlation-id'] = correlationId;
@@ -66,21 +63,11 @@ export interface RateLimiterHandler {
 
 /**
  * Lightweight in-memory fixed-window rate limiter middleware.
- *
- * Applied ONLY to POST command routes under /api/v1/assessflow (skips GET/health).
- * Defaults to 120 requests per minute per client IP.
- * Responds with HTTP 429 and structured error shape:
- * { error: { code: 'RATE_LIMITED', message, correlationId } }
- *
- * NOTE (Production Follow-up):
- * For multi-instance, horizontally-scaled production environments, replace this
- * in-memory Map store with a distributed rate limiter backed by Redis (e.g. using
- * Redis INCR with EXPIRE, a sliding-window Lua script, or @nestjs-throttler with
- * a Redis storage provider) so that rate limits are shared across all cluster nodes.
+ * Covers all mutating methods under /api/v1/assessflow and heavy read queries.
  */
 export function createRateLimiterMiddleware(options?: RateLimiterOptions): RateLimiterHandler {
-  const windowMs = options?.windowMs ?? 60_000; // 1 minute window
-  const maxRequests = options?.maxRequests ?? 120; // 120 requests per window
+  const windowMs = options?.windowMs ?? 60_000;
+  const maxRequests = options?.maxRequests ?? 120;
   const sweepIntervalMs = options?.sweepIntervalMs ?? 60_000;
 
   const store = new Map<string, RateLimitEntry>();
@@ -102,11 +89,6 @@ export function createRateLimiterMiddleware(options?: RateLimiterOptions): RateL
   }
 
   const handler = ((req: Request, res: Response, next: NextFunction): void => {
-    // Applied ONLY to POST command routes under /api/v1/assessflow (skip GET, health, etc.)
-    if (req.method !== 'POST') {
-      return next();
-    }
-
     const rawPath = req.path || req.originalUrl?.split('?')[0] || req.url?.split('?')[0] || '';
     const normalizedPath = rawPath.replace(/\/+/g, '/');
 
@@ -114,12 +96,16 @@ export function createRateLimiterMiddleware(options?: RateLimiterOptions): RateL
       return next();
     }
 
-    // Resolve client IP
-    // Use Express's req.ip, which honors X-Forwarded-For only from proxies
-    // trusted via the 'trust proxy' setting (see main.ts / TRUST_PROXY). Reading
-    // the header directly let any client pick its own IP and bypass the limit.
-    const clientIp = req.ip || req.socket?.remoteAddress || '127.0.0.1';
+    const isMutating = MUTATING_METHODS.has(req.method);
+    const isHeavyGet =
+      req.method === 'GET' &&
+      HEAVY_GET_PREFIXES.some((prefix) => normalizedPath.startsWith(prefix));
 
+    if (!isMutating && !isHeavyGet) {
+      return next();
+    }
+
+    const clientIp = req.ip || req.socket?.remoteAddress || '127.0.0.1';
     const now = Date.now();
     let record = store.get(clientIp);
 

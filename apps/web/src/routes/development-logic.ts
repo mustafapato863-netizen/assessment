@@ -6,7 +6,12 @@ import {
   formatDate,
 } from '../shared/definitions';
 
-export { ACTION_DUE_SOON_DAYS, REASSESSMENT_DAYS, daysUntil, formatDate } from '../shared/definitions';
+export {
+  ACTION_DUE_SOON_DAYS,
+  REASSESSMENT_DAYS,
+  daysUntil,
+  formatDate,
+} from '../shared/definitions';
 
 export type DevelopmentActionStatus = 'not_started' | 'in_progress' | 'completed';
 

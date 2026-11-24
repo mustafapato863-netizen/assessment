@@ -6,6 +6,7 @@ import type {
   RetentionRepository,
   RetentionReviewFlag,
 } from './retention.interface';
+import { calculateCutoffDate } from './retention-math';
 
 export class InMemoryRetentionRepository implements RetentionRepository {
   private policies: Map<string, RetentionPolicyItem> = new Map();
@@ -42,13 +43,35 @@ export class InMemoryRetentionRepository implements RetentionRepository {
     return this.policies.get(category) ?? null;
   }
 
-  async findCandidates(category: RetentionCategory, limit = 100): Promise<RetentionCandidateRow[]> {
-    const rows = this.candidateRows.get(category) ?? [];
+  async findCandidates(
+    category: RetentionCategory,
+    limit = 100,
+    cutoffDate?: Date,
+  ): Promise<RetentionCandidateRow[]> {
+    const flaggedIds = new Set(
+      this.flaggedReviews.filter((f) => f.category === category).map((f) => f.rowId),
+    );
+    const rows = (this.candidateRows.get(category) ?? []).filter((row) => {
+      if (flaggedIds.has(row.id)) return false;
+      if (cutoffDate) {
+        const ref = row.referenceDate ?? row.createdAt;
+        return ref.getTime() < cutoffDate.getTime();
+      }
+      return true;
+    });
     return rows.slice(0, limit);
   }
 
   async softFlagForReview(flag: RetentionReviewFlag): Promise<void> {
-    this.flaggedReviews.push(flag);
+    if (!this.flaggedReviews.some((f) => f.category === flag.category && f.rowId === flag.rowId)) {
+      this.flaggedReviews.push(flag);
+    }
+  }
+
+  async softFlagBatchForReview(flags: RetentionReviewFlag[]): Promise<void> {
+    for (const flag of flags) {
+      await this.softFlagForReview(flag);
+    }
   }
 
   async getFlaggedReviews(): Promise<RetentionReviewFlag[]> {
@@ -90,9 +113,31 @@ export class PrismaRetentionRepository implements RetentionRepository {
     };
   }
 
-  async findCandidates(category: RetentionCategory, limit = 100): Promise<RetentionCandidateRow[]> {
+  async findCandidates(
+    category: RetentionCategory,
+    limit = 100,
+    cutoffDate?: Date,
+  ): Promise<RetentionCandidateRow[]> {
+    const flaggedEvents = await this.prisma.auditEvent.findMany({
+      where: { action: 'RETENTION_FLAGGED_FOR_REVIEW', entityType: category },
+      select: { entityId: true },
+    });
+    const flaggedIds = flaggedEvents.map((e) => e.entityId);
+    const notFlagged = flaggedIds.length ? { id: { notIn: flaggedIds } } : {};
+
     if (category === 'CASE_RECORD') {
       const cases = await this.prisma.assessmentCase.findMany({
+        where: {
+          ...notFlagged,
+          ...(cutoffDate
+            ? {
+                OR: [
+                  { closedAt: { lt: cutoffDate } },
+                  { closedAt: null, createdAt: { lt: cutoffDate } },
+                ],
+              }
+            : {}),
+        },
         take: limit,
         orderBy: { createdAt: 'asc' },
         select: { id: true, createdAt: true, closedAt: true },
@@ -108,6 +153,17 @@ export class PrismaRetentionRepository implements RetentionRepository {
 
     if (category === 'ASSESSOR_EVIDENCE') {
       const evidence = await this.prisma.evidenceSubmission.findMany({
+        where: {
+          ...notFlagged,
+          ...(cutoffDate
+            ? {
+                OR: [
+                  { submittedAt: { lt: cutoffDate } },
+                  { submittedAt: null, createdAt: { lt: cutoffDate } },
+                ],
+              }
+            : {}),
+        },
         take: limit,
         orderBy: { createdAt: 'asc' },
         select: { id: true, caseId: true, createdAt: true, submittedAt: true },
@@ -123,6 +179,10 @@ export class PrismaRetentionRepository implements RetentionRepository {
 
     if (category === 'ACCESS_LOG') {
       const logs = await this.prisma.accessLog.findMany({
+        where: {
+          ...notFlagged,
+          ...(cutoffDate ? { createdAt: { lt: cutoffDate } } : {}),
+        },
         take: limit,
         orderBy: { createdAt: 'asc' },
         select: { id: true, caseId: true, createdAt: true },
@@ -137,6 +197,11 @@ export class PrismaRetentionRepository implements RetentionRepository {
 
     if (category === 'AUDIT_EVENT') {
       const audits = await this.prisma.auditEvent.findMany({
+        where: {
+          action: { not: 'RETENTION_FLAGGED_FOR_REVIEW' },
+          ...notFlagged,
+          ...(cutoffDate ? { createdAt: { lt: cutoffDate } } : {}),
+        },
         take: limit,
         orderBy: { createdAt: 'asc' },
         select: { id: true, caseId: true, createdAt: true },
@@ -149,42 +214,70 @@ export class PrismaRetentionRepository implements RetentionRepository {
       }));
     }
 
+    if (category === 'EXPORT') {
+      const deliveries = await this.prisma.notificationDelivery.findMany({
+        where: {
+          channel: 'EXPORT',
+          ...notFlagged,
+          ...(cutoffDate ? { createdAt: { lt: cutoffDate } } : {}),
+        },
+        take: limit,
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, createdAt: true },
+      });
+      return deliveries.map((d) => ({
+        id: d.id,
+        category: 'EXPORT',
+        caseId: null,
+        createdAt: d.createdAt,
+      }));
+    }
+
+    void calculateCutoffDate;
     return [];
   }
 
   async softFlagForReview(flag: RetentionReviewFlag): Promise<void> {
-    await this.prisma.auditEvent.create({
-      data: {
-        actorId: 'system-retention-worker',
-        actorName: 'Retention Enforcement Worker',
-        action: 'RETENTION_FLAGGED_FOR_REVIEW',
-        entityType: flag.category,
-        entityId: flag.rowId,
-        caseId: flag.caseId ?? undefined,
-        reason: flag.reason,
-        correlationId: `corr-retention-${flag.rowId}`,
-        newData: {
-          flagId: flag.id,
-          ageDays: flag.ageDays,
-          retentionDays: flag.retentionDays,
-          cutoffDate: flag.cutoffDate.toISOString(),
-          flaggedAt: flag.flaggedAt.toISOString(),
-          pilotRule: 'NO_HARD_DELETES_HOLD_FIRST',
-        },
-      },
-    });
+    await this.softFlagBatchForReview([flag]);
+  }
 
-    if (flag.caseId) {
-      await this.prisma.task.create({
-        data: {
-          caseId: flag.caseId,
+  async softFlagBatchForReview(flags: RetentionReviewFlag[]): Promise<void> {
+    if (!flags.length) return;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.auditEvent.createMany({
+        data: flags.map((flag) => ({
+          actorId: 'system-retention-worker',
+          actorName: 'Retention Enforcement Worker',
+          action: 'RETENTION_FLAGGED_FOR_REVIEW',
+          entityType: flag.category,
+          entityId: flag.rowId,
+          caseId: flag.caseId ?? undefined,
+          reason: flag.reason,
+          correlationId: `corr-retention-${flag.rowId}`,
+          newData: {
+            flagId: flag.id,
+            ageDays: flag.ageDays,
+            retentionDays: flag.retentionDays,
+            cutoffDate: flag.cutoffDate.toISOString(),
+            flaggedAt: flag.flaggedAt.toISOString(),
+            pilotRule: 'NO_HARD_DELETES_HOLD_FIRST',
+          },
+        })),
+      });
+
+      const caseTasks = flags
+        .filter((flag) => Boolean(flag.caseId))
+        .map((flag) => ({
+          caseId: flag.caseId as string,
           assigneeId: 'hr-legal-governance',
           assigneeName: 'HR Governance Reviewer',
           taskType: 'RETENTION_REVIEW',
           dueAt: new Date(Date.now() + 14 * 86_400_000),
-        },
-      });
-    }
+        }));
+      if (caseTasks.length) {
+        await tx.task.createMany({ data: caseTasks });
+      }
+    });
   }
 
   async getFlaggedReviews(): Promise<RetentionReviewFlag[]> {

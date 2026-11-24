@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { LoaderCircle, Send, X } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { LoaderCircle, Send, UserSearch, X } from 'lucide-react';
 import {
   createCaseSchema,
   type AssessmentCaseDetail,
@@ -9,6 +9,8 @@ import {
 } from '@assessflow/contracts';
 import { api } from '../lib/api';
 import { copy, type Copy } from '../lib/labels';
+import { queryKeys } from '../lib/query-keys';
+import { useFocusTrap } from '../hooks/use-focus-trap';
 import { useToast } from '../hooks/use-toast';
 import { Field, InlineError, PageHeading } from '../components/ui';
 
@@ -29,13 +31,10 @@ const levelOptions = [
   'Director',
   'Senior Director',
 ];
-const currentLevelOptions = levelOptions;
-const targetLevelOptions = levelOptions;
 
 function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestFormProps) {
   const [form, setForm] = useState<CreateCaseInput>({
     candidateType: 'INTERNAL_EMPLOYEE',
-    // Left blank, the API creates a separate employee record for this request.
     employeeId: '',
     employeeName: '',
     department: '',
@@ -49,12 +48,53 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
     priority: 'NORMAL',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [directoryLookup, setDirectoryLookup] = useState('');
+
+  const { data: existingCases = [] } = useQuery({
+    queryKey: queryKeys.cases(),
+    queryFn: () => api.cases(),
+    staleTime: 60_000,
+  });
+
+  const knownEmployees = useMemo(() => {
+    const map = new Map<
+      string,
+      { employeeId: string; employeeName: string; department: string; currentRole: string }
+    >();
+    for (const c of existingCases) {
+      if (c.candidateType !== 'NEW_CANDIDATE' && c.employeeId && !map.has(c.employeeId)) {
+        map.set(c.employeeId, {
+          employeeId: c.employeeId,
+          employeeName: c.employeeName,
+          department: c.department,
+          currentRole: c.currentRole,
+        });
+      }
+    }
+    return Array.from(map.values()).slice(0, 50);
+  }, [existingCases]);
+
+  const filteredDirectory = useMemo(() => {
+    const q = directoryLookup.trim().toLowerCase();
+    if (!q) return [];
+    return knownEmployees
+      .filter(
+        (emp) =>
+          emp.employeeName.toLowerCase().includes(q) ||
+          emp.employeeId.toLowerCase().includes(q) ||
+          emp.department.toLowerCase().includes(q),
+      )
+      .slice(0, 6);
+  }, [directoryLookup, knownEmployees]);
+
   const mutation = useMutation({
     mutationFn: () => api.createCase({ ...form, employeeId: form.employeeId?.trim() || 'emp-new' }),
     onSuccess: onCreated,
   });
+
   const update = (key: keyof CreateCaseInput, value: string) =>
     setForm((current) => ({ ...current, [key]: value }) as CreateCaseInput);
+
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     if (form.candidateType === 'INTERNAL_EMPLOYEE' && !form.currentLevel) {
@@ -125,6 +165,65 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
             ? 'For an external applicant who is not yet an employee.'
             : 'For a person who is already employed by the organization.'}
         </p>
+
+        {form.candidateType === 'INTERNAL_EMPLOYEE' && knownEmployees.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <label className="field">
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <UserSearch size={14} />
+                Quick-fill from organization directory
+              </span>
+              <input
+                value={directoryLookup}
+                onChange={(e) => setDirectoryLookup(e.target.value)}
+                placeholder="Type employee name, staff number, or department…"
+              />
+            </label>
+            {filteredDirectory.length > 0 && (
+              <div
+                style={{
+                  marginTop: 6,
+                  display: 'grid',
+                  gap: 4,
+                  padding: 8,
+                  borderRadius: 10,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface-subtle)',
+                }}
+              >
+                {filteredDirectory.map((emp) => (
+                  <button
+                    key={emp.employeeId}
+                    type="button"
+                    className="secondary-button"
+                    style={{
+                      justifyContent: 'space-between',
+                      minHeight: 36,
+                      padding: '6px 10px',
+                      fontSize: 12.5,
+                    }}
+                    onClick={() => {
+                      setForm((prev) => ({
+                        ...prev,
+                        employeeId: emp.employeeId,
+                        employeeName: emp.employeeName,
+                        department: emp.department,
+                        currentRole: emp.currentRole,
+                      }));
+                      setDirectoryLookup('');
+                    }}
+                  >
+                    <strong>{emp.employeeName}</strong>
+                    <span style={{ color: 'var(--muted)' }}>
+                      {emp.employeeId} · {emp.department}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <span className="form-section-title">
           {form.candidateType === 'NEW_CANDIDATE' ? 'Candidate details' : 'Employee context'}
         </span>
@@ -135,7 +234,9 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
             value={form.employeeName}
             onChange={(value) => update('employeeName', value)}
             error={errors.employeeName}
-            placeholder={form.candidateType === 'NEW_CANDIDATE' ? 'Full name' : 'Search employee'}
+            placeholder={
+              form.candidateType === 'NEW_CANDIDATE' ? 'Full name' : 'Employee full name'
+            }
           />
           {form.candidateType === 'NEW_CANDIDATE' && (
             <Field
@@ -153,7 +254,7 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
             value={form.department}
             onChange={(value) => update('department', value)}
             error={errors.department}
-            placeholder="e.g. Product"
+            placeholder="e.g. Clinical Operations"
           />
           {form.candidateType === 'INTERNAL_EMPLOYEE' && (
             <Field
@@ -186,7 +287,7 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
                 aria-invalid={Boolean(errors.currentLevel)}
               >
                 <option value="">Choose current level</option>
-                {currentLevelOptions.map((level) => (
+                {levelOptions.map((level) => (
                   <option key={level} value={level}>
                     {level}
                   </option>
@@ -197,6 +298,7 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
           )}
         </div>
       </div>
+
       <div className="form-section">
         <span className="form-section-title">Assessment request</span>
         <div className="form-grid">
@@ -240,7 +342,7 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
                 aria-invalid={Boolean(errors.targetLevel)}
               >
                 <option value="">Choose target level</option>
-                {targetLevelOptions.map((level) => (
+                {levelOptions.map((level) => (
                   <option key={level} value={level}>
                     {level}
                   </option>
@@ -248,12 +350,20 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
               </select>
               {errors.targetLevel && <small className="field-error">{errors.targetLevel}</small>}
             </label>
-            <div style={{ marginTop: '7px', color: 'var(--secondary)', fontSize: '11px' }}>
-              Select the level required for the target role.
-            </div>
           </div>
+          <label className="field">
+            <span>Priority</span>
+            <select
+              value={form.priority ?? 'NORMAL'}
+              onChange={(event) => update('priority', event.target.value)}
+            >
+              <option value="LOW">Low</option>
+              <option value="NORMAL">Normal</option>
+              <option value="HIGH">High</option>
+            </select>
+          </label>
         </div>
-        <label className="field">
+        <label className="field" style={{ marginTop: 12 }}>
           <span>
             Business justification <b>*</b>
           </span>
@@ -266,6 +376,7 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
           {errors.justification && <small className="field-error">{errors.justification}</small>}
         </label>
       </div>
+
       {mutation.isError && <InlineError error={mutation.error} />}
       <div
         className="drawer-footer"
@@ -307,13 +418,16 @@ export function NewRequestDrawer({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const drawerRef = useRef<HTMLElement | null>(null);
 
   const onClose = propOnClose ?? (() => navigate(-1));
+  useFocusTrap(true, drawerRef, onClose);
+
   const onCreated =
     propOnCreated ??
     ((created: AssessmentCaseDetail) => {
-      queryClient.invalidateQueries({ queryKey: ['cases'] });
-      showToast('Assessment request created as a draft.');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cases() });
+      showToast('Assessment request created as a draft.', 'success');
       navigate(`/cases/${created.id}`);
     });
 
@@ -323,6 +437,7 @@ export function NewRequestDrawer({
       onMouseDown={(event) => event.target === event.currentTarget && onClose()}
     >
       <aside
+        ref={drawerRef}
         className="request-drawer"
         role="dialog"
         aria-modal="true"
@@ -334,7 +449,7 @@ export function NewRequestDrawer({
             <h2 id="new-request-title">{t.newRequest}</h2>
             <p>Capture the business need before the eligibility gate.</p>
           </div>
-          <button className="icon-button" onClick={onClose} aria-label="Close">
+          <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
             <X size={19} />
           </button>
         </div>
@@ -350,10 +465,10 @@ export function NewRequestPage({ t: propT }: { t?: Copy } = {}) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
-  const handleClose = () => navigate('/cases');
+  const handleClose = () => navigate('/assessments');
   const handleCreated = (created: AssessmentCaseDetail) => {
-    queryClient.invalidateQueries({ queryKey: ['cases'] });
-    showToast('Assessment request created as a draft.');
+    void queryClient.invalidateQueries({ queryKey: queryKeys.cases() });
+    showToast('Assessment request created as a draft.', 'success');
     navigate(`/cases/${created.id}`);
   };
 
@@ -364,10 +479,10 @@ export function NewRequestPage({ t: propT }: { t?: Copy } = {}) {
         title={t.newRequest}
         subtitle="Choose an existing employee or a new candidate, then enter the target role and business justification to create an eligibility request."
       />
-      <section className="panel" style={{ maxWidth: '640px' }}>
+      <section className="panel" style={{ maxWidth: '680px' }}>
         <div
           className="drawer-header"
-          style={{ padding: '24px 0 16px', borderBottom: '1px solid var(--border)' }}
+          style={{ padding: '16px 0', borderBottom: '1px solid var(--border)' }}
         >
           <div>
             <h2 id="new-request-title">{t.newRequest}</h2>

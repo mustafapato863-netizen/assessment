@@ -1,10 +1,14 @@
 import { randomUUID } from 'node:crypto';
+import { basename } from 'node:path';
 import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
+import { currentCorrelationId } from '../common/correlation.context';
+import { assertUuid } from '../common/uuid.util';
+import { storeAttachmentBytes } from './attachment-storage.util';
 import {
   caseStatuses,
   adminEditRequestSchema,
@@ -82,7 +86,12 @@ const caseInclude = {
   auditEvents: { orderBy: { createdAt: 'desc' }, take: 20 },
 } as const;
 
+const caseSummaryInclude = {
+  employee: { select: { externalId: true, displayName: true } },
+} as const;
+
 type CaseWithRelations = Prisma.AssessmentCaseGetPayload<{ include: typeof caseInclude }>;
+type CaseSummaryRow = Prisma.AssessmentCaseGetPayload<{ include: typeof caseSummaryInclude }>;
 
 const defaultCriteria = [
   {
@@ -132,13 +141,32 @@ const candidateEligibilityCriteria = [
 ];
 
 export class PrismaCasesRepository {
+  private cachedOrganization?: { id: string; code: string; name: string };
+
   constructor(private readonly prisma: PrismaService) {}
+
+  private assertRealUuid(
+    id: string,
+    code = 'CASE_NOT_FOUND',
+    message = 'This assessment case could not be found.',
+  ): void {
+    if (this.prisma?.enabled) {
+      assertUuid(id, code, message);
+    }
+  }
+
+  private safeJson(value: unknown): Prisma.InputJsonValue {
+    return JSON.parse(
+      JSON.stringify(value ?? null, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)),
+    ) as Prisma.InputJsonValue;
+  }
 
   async reopenCompletedStage(
     caseId: string,
     input: AdminReopenStageInput,
     actor: AuthActor,
   ): Promise<AssessmentCaseDetail> {
+    this.assertRealUuid(caseId);
     const parsed = this.parsed(
       adminReopenStageSchema,
       input,
@@ -204,6 +232,10 @@ export class PrismaCasesRepository {
           this.error('CASE_NOT_FOUND', 'This assessment case could not be found.'),
         );
       this.assertVersion(record.version, parsed.expectedVersion);
+      if (record.status === 'CANCELLED')
+        throw new BadRequestException(
+          this.error('CASE_CANCELLED', 'Cancelled cases cannot have completed stages reopened.'),
+        );
       if (record.adminEditStage)
         throw new BadRequestException(
           this.error(
@@ -272,6 +304,10 @@ export class PrismaCasesRepository {
         await tx.eligibilityReview.update({
           where: { caseId },
           data: { decision: null, decisionReason: null, decidedBy: null, decidedAt: null },
+        });
+        await tx.eligibilityCriterionResult.updateMany({
+          where: { reviewId: record.eligibility.id },
+          data: { result: 'NOT_CHECKED' },
         });
       }
       if (targetOrder < 3) {
@@ -345,6 +381,7 @@ export class PrismaCasesRepository {
           ownerName: target.ownerName,
           adminEditStage: parsed.stage === 'RECOMMENDATION' ? 'RECOMMENDATION' : parsed.stage,
           adminEditReason: parsed.reason,
+          feedbackReleasedAt: null,
           closedAt: null,
           version: { increment: 1 },
         },
@@ -390,22 +427,20 @@ export class PrismaCasesRepository {
       }[parsed.stage];
       if (reopenedTask) await tx.task.create({ data: { caseId, ...reopenedTask, status: 'OPEN' } });
 
-      const previousData = JSON.parse(
-        JSON.stringify({
-          status: record.status,
-          stage: record.stage,
-          eligibility: record.eligibility,
-          plan: record.plan,
-          events: record.events,
-          scorecards: record.scorecards,
-          attachments: record.attachments,
-          tasks: record.tasks,
-          resultRevisions: record.resultRevisions,
-          recommendationRevisions: record.recommendationRevisions,
-          approvalSteps: record.approvalSteps,
-          developmentPlan: record.developmentPlan,
-        }),
-      ) as Prisma.InputJsonValue;
+      const previousData = this.safeJson({
+        status: record.status,
+        stage: record.stage,
+        eligibility: record.eligibility,
+        plan: record.plan,
+        events: record.events,
+        scorecards: record.scorecards,
+        attachments: record.attachments,
+        tasks: record.tasks,
+        resultRevisions: record.resultRevisions,
+        recommendationRevisions: record.recommendationRevisions,
+        approvalSteps: record.approvalSteps,
+        developmentPlan: record.developmentPlan,
+      });
       await tx.auditEvent.create({
         data: {
           caseId,
@@ -417,7 +452,7 @@ export class PrismaCasesRepository {
           reason: parsed.reason,
           previousData,
           newData: { stage: parsed.stage, status: target.status },
-          correlationId: `corr-${randomUUID()}`,
+          correlationId: currentCorrelationId(),
         },
       });
     });
@@ -482,6 +517,7 @@ export class PrismaCasesRepository {
     input: AdminEditRequestInput,
     actor: AuthActor,
   ): Promise<AssessmentCaseDetail> {
+    this.assertRealUuid(caseId);
     if (!actor.roles.includes('Admin'))
       throw new ForbiddenException(
         this.error('ADMIN_REQUIRED', 'Only an Admin can edit a reopened request.'),
@@ -535,7 +571,7 @@ export class PrismaCasesRepository {
             targetLevel: parsed.targetLevel,
             justification: parsed.justification,
           },
-          correlationId: `corr-${randomUUID()}`,
+          correlationId: currentCorrelationId(),
         },
       });
     });
@@ -543,11 +579,44 @@ export class PrismaCasesRepository {
   }
 
   async getOverview(): Promise<OverviewResponse> {
-    const cases = await this.list({});
-    const tasks = await this.getTasks();
-    const storedPolicy = await this.prisma.governancePolicy.findUnique({
-      where: { id: 'default' },
-    });
+    const organization = await this.organization();
+    const actor = getActorContext();
+    const scopeWhere = {
+      organizationId: organization.id,
+      ...(caseScopeWhere(actor) as Prisma.AssessmentCaseWhereInput),
+    };
+
+    const [groupedCounts, tasks, storedPolicy, distinctEmployees] = await Promise.all([
+      this.prisma.assessmentCase.groupBy({
+        by: ['status', 'stage'],
+        where: scopeWhere,
+        _count: { _all: true },
+      }),
+      this.getTasks(),
+      this.prisma.governancePolicy.findUnique({ where: { id: 'default' } }),
+      this.prisma.assessmentCase.groupBy({
+        by: ['employeeId'],
+        where: { ...scopeWhere, candidateType: { not: 'NEW_CANDIDATE' } },
+      }),
+    ]);
+
+    const countByStatus = (target: CaseStatus) =>
+      groupedCounts.reduce((sum, g) => (g.status === target ? sum + g._count._all : sum), 0);
+    const countByStages = (targets: CaseStage[]) =>
+      groupedCounts.reduce(
+        (sum, g) => (targets.includes(g.stage as CaseStage) ? sum + g._count._all : sum),
+        0,
+      );
+
+    const activeCases = groupedCounts.reduce(
+      (sum, g) => (g.status !== 'CLOSED' && g.status !== 'CANCELLED' ? sum + g._count._all : sum),
+      0,
+    );
+    const pendingElig = countByStatus('PENDING_ELIGIBILITY');
+    const pendingApproval = countByStatus('PENDING_APPROVAL');
+    const overdueFollowUp = countByStatus('REASSESSMENT_DUE');
+    const activeDevelopment = countByStatus('DEVELOPMENT_IN_PROGRESS');
+
     const storedSettings = storedPolicy?.settings as
       { slaWindows?: Partial<OverviewResponse['slaWindows']> } | undefined;
     const configuredSla = storedSettings?.slaWindows;
@@ -565,81 +634,56 @@ export class PrismaCasesRepository {
         DEFAULT_SLA_WINDOWS.committeeHours,
       ),
     };
+
     return {
       metrics: [
         {
           label: 'Active assessments',
-          value: cases.filter((item) => item.status !== 'CLOSED').length,
+          value: activeCases,
           context: 'Across your scope',
-          trend: '+12% vs last cycle',
-          tone: 'positive',
+          trend: activeCases > 0 ? `${activeCases} in pipeline` : 'No active assessments',
+          tone: activeCases > 0 ? 'positive' : 'neutral',
         },
         {
           label: 'Pending eligibility',
-          value: cases.filter((item) => item.status === 'PENDING_ELIGIBILITY').length,
+          value: pendingElig,
           context: 'Needs HR review',
-          trend: '2 due today',
-          tone: 'warning',
+          trend: pendingElig > 0 ? `${pendingElig} awaiting gate` : 'Queue clear',
+          tone: pendingElig > 0 ? 'warning' : 'positive',
         },
         {
           label: 'Pending approvals',
-          value: cases.filter((item) => item.status === 'PENDING_APPROVAL').length,
+          value: pendingApproval,
           context: 'Decision queue',
-          trend: '1 high priority',
-          tone: 'warning',
+          trend: pendingApproval > 0 ? `${pendingApproval} awaiting sign-off` : 'Queue clear',
+          tone: pendingApproval > 0 ? 'warning' : 'positive',
         },
         {
           label: 'Overdue follow-up',
-          value: cases.filter((item) => item.status === 'REASSESSMENT_DUE').length,
+          value: overdueFollowUp,
           context: 'Development actions',
-          trend: '-4% vs last cycle',
-          tone: 'danger',
+          trend: overdueFollowUp > 0 ? `${overdueFollowUp} reassessment due` : 'On track',
+          tone: overdueFollowUp > 0 ? 'danger' : 'positive',
         },
       ],
       tasks,
       pipeline: [
-        {
-          label: 'Request',
-          value: cases.filter((item) => item.stage === 'REQUEST').length,
-          tone: 'indigo',
-        },
-        {
-          label: 'Eligibility',
-          value: cases.filter((item) => item.stage === 'ELIGIBILITY').length,
-          tone: 'warning',
-        },
-        {
-          label: 'Planning',
-          value: cases.filter((item) => item.stage === 'PLANNING').length,
-          tone: 'warning',
-        },
-        {
-          label: 'Assessment',
-          value: cases.filter((item) => item.stage === 'ASSESSMENT').length,
-          tone: 'teal',
-        },
-        {
-          label: 'Result',
-          value: cases.filter((item) => item.stage === 'RESULT').length,
-          tone: 'teal',
-        },
-        {
-          label: 'Decision',
-          value: cases.filter((item) => ['RECOMMENDATION', 'APPROVAL'].includes(item.stage)).length,
-          tone: 'violet',
-        },
-        {
-          label: 'Follow-up',
-          value: cases.filter((item) => item.stage === 'FOLLOW_UP').length,
-          tone: 'warning',
-        },
-        {
-          label: 'Closed',
-          value: cases.filter((item) => item.stage === 'CLOSED').length,
-          tone: 'indigo',
-        },
+        { label: 'Request', value: countByStages(['REQUEST']), tone: 'indigo' },
+        { label: 'Eligibility', value: countByStages(['ELIGIBILITY']), tone: 'warning' },
+        { label: 'Planning', value: countByStages(['PLANNING']), tone: 'warning' },
+        { label: 'Assessment', value: countByStages(['ASSESSMENT']), tone: 'teal' },
+        { label: 'Result', value: countByStages(['RESULT']), tone: 'teal' },
+        { label: 'Decision', value: countByStages(['RECOMMENDATION', 'APPROVAL']), tone: 'violet' },
+        { label: 'Follow-up', value: countByStages(['FOLLOW_UP']), tone: 'warning' },
+        { label: 'Closed', value: countByStages(['CLOSED']), tone: 'indigo' },
       ],
       slaWindows,
+      navCounts: {
+        activeCases,
+        openTasks: tasks.length,
+        employees: distinctEmployees.length,
+        activeDevelopment,
+      },
     };
   }
 
@@ -676,7 +720,80 @@ export class PrismaCasesRepository {
     }));
   }
 
-  async list(filters: { status?: string; search?: string }): Promise<AssessmentCaseSummary[]> {
+  async listDevelopmentPlans(actor: AuthActor) {
+    const organization = await this.organization();
+    const isRestricted =
+      actor.roles.some((r) => ['Employee', 'EmployeeManager', 'Requester'].includes(r)) &&
+      !actor.roles.some((r) => ['Assessor', 'Admin', 'HR', 'BusinessApprover'].includes(r));
+
+    const plans = await this.prisma.developmentPlan.findMany({
+      where: {
+        case: {
+          organizationId: organization.id,
+          ...(caseScopeWhere(actor) as Prisma.AssessmentCaseWhereInput),
+          ...(isRestricted
+            ? { feedbackReleasedAt: { not: null }, status: { in: [...RESULT_RELEASE_STATUSES] } }
+            : {}),
+        },
+      },
+      include: {
+        actions: { orderBy: { createdAt: 'asc' } },
+        case: {
+          select: {
+            id: true,
+            caseCode: true,
+            departmentSnapshot: true,
+            targetRoleSnapshot: true,
+            status: true,
+            candidateType: true,
+            hiringOutcome: true,
+            hiringOutcomeReason: true,
+            employee: { select: { externalId: true, displayName: true } },
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    return plans.map((plan) => ({
+      id: plan.id,
+      caseId: plan.caseId,
+      ownerName: plan.ownerName,
+      actionPlan: plan.actionPlan,
+      learningManagementSystem: plan.learningManagementSystem,
+      targetDate: plan.targetDate?.toISOString() ?? null,
+      status: plan.status,
+      actions: plan.actions.map((action) => ({
+        id: action.id,
+        title: action.title,
+        ownerName: action.ownerName,
+        dueDate: action.dueDate?.toISOString() ?? null,
+        status: action.status as 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED',
+        evidenceNote: action.evidenceNote,
+        completedAt: action.completedAt?.toISOString() ?? null,
+      })),
+      caseSummary: {
+        caseCode: plan.case.caseCode,
+        employeeId: plan.case.employee.externalId,
+        employeeName: plan.case.employee.displayName,
+        department: plan.case.departmentSnapshot,
+        targetRole: plan.case.targetRoleSnapshot,
+        status: plan.case.status as CaseStatus,
+        candidateType: (plan.case.candidateType ?? 'INTERNAL_EMPLOYEE') as
+          'INTERNAL_EMPLOYEE' | 'NEW_CANDIDATE',
+        hiringOutcome: (plan.case.hiringOutcome ?? 'PENDING') as
+          'PENDING' | 'JOINED' | 'NOT_JOINED',
+        hiringOutcomeReason: plan.case.hiringOutcomeReason as
+          'ASSESSMENT' | 'OFFER_DECLINED' | 'ROLE_CANCELLED' | 'OTHER' | null,
+      },
+    }));
+  }
+
+  async list(filters: {
+    status?: string;
+    search?: string;
+    limit?: number;
+  }): Promise<AssessmentCaseSummary[]> {
     const organization = await this.organization();
     const actor = getActorContext();
     const andFilters: Prisma.AssessmentCaseWhereInput[] = [
@@ -686,10 +803,15 @@ export class PrismaCasesRepository {
       organizationId: organization.id,
       AND: andFilters,
     };
-    if (filters.status && caseStatuses.includes(filters.status as CaseStatus)) {
+    if (filters.status) {
+      if (!caseStatuses.includes(filters.status as CaseStatus)) {
+        throw new BadRequestException(
+          this.error('INVALID_STATUS_FILTER', `Unknown case status '${filters.status}'.`),
+        );
+      }
       where.status = filters.status as PrismaCaseStatus;
     }
-    const search = filters.search?.trim();
+    const search = filters.search?.trim().slice(0, 120);
     if (search) {
       andFilters.push({
         OR: [
@@ -703,13 +825,16 @@ export class PrismaCasesRepository {
     }
     const records = await this.prisma.assessmentCase.findMany({
       where,
-      include: caseInclude,
+      include: caseSummaryInclude,
       orderBy: { requestedAt: 'desc' },
+      ...(filters.limit ? { take: Math.min(500, Math.max(1, filters.limit)) } : {}),
     });
-    return records.map((record) => this.toSummary(this.toDetail(record)));
+    const actorRoles = actor.roles;
+    return records.map((record) => this.mapSummaryRow(record, actorRoles));
   }
 
   async get(caseId: string): Promise<AssessmentCaseDetail> {
+    this.assertRealUuid(caseId);
     const actor = getActorContext();
     const record = await this.prisma.assessmentCase.findFirst({
       where: { id: caseId, ...caseScopeWhere(actor) },
@@ -918,6 +1043,7 @@ export class PrismaCasesRepository {
     input: EligibilityDecisionInput,
     actor?: { id: string; name: string },
   ): Promise<AssessmentCaseDetail> {
+    this.assertRealUuid(caseId);
     const currentActor = actor ?? getActorContext();
     const parsed = eligibilityDecisionSchema.safeParse(input);
     if (!parsed.success)
@@ -963,6 +1089,25 @@ export class PrismaCasesRepository {
           ),
         );
       const eligible = parsed.data.decision === 'ELIGIBLE';
+      if (eligible) {
+        const mergedResults = new Map(
+          record.eligibility.criteria.map((c) => [c.criterionCode, c.result]),
+        );
+        for (const item of parsed.data.criteria ?? []) {
+          mergedResults.set(item.code, item.result);
+        }
+        const failedBlocker = record.eligibility.criteria.find(
+          (c) => c.blocking && mergedResults.get(c.criterionCode) === 'NOT_MET',
+        );
+        if (failedBlocker) {
+          throw new BadRequestException(
+            this.error(
+              'BLOCKING_CRITERION_FAILED',
+              `Blocking criterion "${failedBlocker.label}" is marked Not Met.`,
+            ),
+          );
+        }
+      }
       const changed = await tx.assessmentCase.updateMany({
         where: {
           id: caseId,
@@ -994,15 +1139,24 @@ export class PrismaCasesRepository {
           decidedAt: new Date(),
         },
       });
-      for (const criterion of parsed.data.criteria ?? []) {
-        await tx.eligibilityCriterionResult.updateMany({
-          where: {
-            reviewId: record.eligibility.id,
-            criterionCode: criterion.code,
-          },
-          data: { result: criterion.result },
-        });
+      if (parsed.data.criteria?.length && record.eligibility) {
+        const reviewId = record.eligibility.id;
+        await Promise.all(
+          parsed.data.criteria.map((criterion) =>
+            tx.eligibilityCriterionResult.updateMany({
+              where: {
+                reviewId,
+                criterionCode: criterion.code,
+              },
+              data: { result: criterion.result },
+            }),
+          ),
+        );
       }
+      await tx.task.updateMany({
+        where: { caseId, taskType: 'ELIGIBILITY_REVIEW', status: 'OPEN' },
+        data: { status: 'COMPLETED', completedAt: new Date() },
+      });
       if (eligible)
         await tx.task.create({
           data: {
@@ -1043,6 +1197,7 @@ export class PrismaCasesRepository {
     reason: string,
     actor?: { id: string; name: string },
   ): Promise<AssessmentCaseDetail> {
+    this.assertRealUuid(caseId);
     const currentActor = actor ?? getActorContext();
     if (!reason?.trim())
       throw new BadRequestException(
@@ -1112,6 +1267,7 @@ export class PrismaCasesRepository {
   }
 
   private async organization() {
+    if (this.cachedOrganization) return this.cachedOrganization;
     let organization = await this.prisma.organization.findFirst({
       orderBy: { createdAt: 'asc' },
     });
@@ -1125,6 +1281,7 @@ export class PrismaCasesRepository {
         },
       });
     }
+    this.cachedOrganization = organization;
     return organization;
   }
 
@@ -1143,6 +1300,7 @@ export class PrismaCasesRepository {
   };
 
   async finalizePlan(caseId: string, input: FinalizePlanInput): Promise<AssessmentCaseDetail> {
+    this.assertRealUuid(caseId);
     const parsed = this.parsed(
       finalizePlanSchema,
       input,
@@ -1248,6 +1406,7 @@ export class PrismaCasesRepository {
     caseId: string,
     input: ScheduleEventInput,
   ): Promise<AssessmentCaseDetail & { eventId: string }> {
+    this.assertRealUuid(caseId);
     const parsed = this.parsed(
       scheduleEventSchema,
       input,
@@ -1282,6 +1441,8 @@ export class PrismaCasesRepository {
           status: 'SCHEDULED',
           stage: 'ASSESSMENT',
           ownerName: 'Assessment Coordinator',
+          adminEditStage: null,
+          adminEditReason: null,
           version: { increment: 1 },
         },
       });
@@ -1310,6 +1471,10 @@ export class PrismaCasesRepository {
           skipDuplicates: true,
         });
       }
+      await tx.task.updateMany({
+        where: { caseId, taskType: 'EVENT_SCHEDULING', status: 'OPEN' },
+        data: { status: 'COMPLETED', completedAt: new Date() },
+      });
       await tx.auditEvent.create({
         data: this.auditData(
           caseId,
@@ -1338,12 +1503,14 @@ export class PrismaCasesRepository {
     input: SaveEvidenceInput,
     submit: boolean,
   ): Promise<AssessmentCaseDetail & { evidenceId: string; submitted: boolean }> {
+    this.assertRealUuid(eventId, 'EVENT_NOT_FOUND', 'This assessment event could not be found.');
     const parsed = this.parsed(
       saveEvidenceSchema,
       input,
       'Evidence needs a summary of at least 20 characters.',
     );
     let evidenceId = '';
+    let resolvedCaseId = '';
     let submitted = false;
     await this.prisma.$transaction(async (tx) => {
       const event = await tx.assessmentEvent.findUnique({
@@ -1354,6 +1521,10 @@ export class PrismaCasesRepository {
         throw new NotFoundException(
           this.error('EVENT_NOT_FOUND', 'This assessment event could not be found.'),
         );
+      resolvedCaseId = event.caseId;
+      if (parsed.expectedVersion !== undefined) {
+        this.assertVersion(event.case.version, parsed.expectedVersion);
+      }
       if (
         assessor.roles?.some((role) => ['Assessor', 'PanelLead'].includes(role)) &&
         !event.assessors.some(
@@ -1416,6 +1587,8 @@ export class PrismaCasesRepository {
             status: 'IN_PROGRESS',
             stage: 'ASSESSMENT',
             ownerName: 'Assessor Panel',
+            adminEditStage: null,
+            adminEditReason: null,
             version: { increment: 1 },
           },
         });
@@ -1443,9 +1616,7 @@ export class PrismaCasesRepository {
         });
       }
     });
-    const detail = await this.get(
-      (await this.prisma.assessmentEvent.findUniqueOrThrow({ where: { id: eventId } })).caseId,
-    );
+    const detail = await this.get(resolvedCaseId);
     return { ...detail, evidenceId, submitted };
   }
 
@@ -1454,6 +1625,7 @@ export class PrismaCasesRepository {
     input: FinalizeResultInput,
     actor?: { id: string; name: string },
   ): Promise<AssessmentCaseDetail> {
+    this.assertRealUuid(caseId);
     const currentActor = actor ?? getActorContext();
     const parsed = this.parsed(
       finalizeResultSchema,
@@ -1529,6 +1701,14 @@ export class PrismaCasesRepository {
           finalizedBy: currentActor.name ?? 'demo-user',
         },
       });
+      await tx.task.updateMany({
+        where: {
+          caseId,
+          taskType: { in: ['ASSESSMENT_REVIEW', 'RESULT_FINALIZATION'] },
+          status: 'OPEN',
+        },
+        data: { status: 'COMPLETED', completedAt: new Date() },
+      });
       await tx.task.create({
         data: {
           caseId,
@@ -1566,6 +1746,7 @@ export class PrismaCasesRepository {
     input: ReopenResultInput,
     actor?: { id: string; name: string },
   ): Promise<AssessmentCaseDetail> {
+    this.assertRealUuid(caseId);
     const currentActor = actor ?? getActorContext();
     const parsed = this.parsed(
       reopenResultSchema,
@@ -1604,6 +1785,10 @@ export class PrismaCasesRepository {
           data: { reopenedAt: new Date(), reopenReason: parsed.reason },
         });
       }
+      await tx.task.updateMany({
+        where: { caseId, taskType: 'RECOMMENDATION_DRAFT', status: 'OPEN' },
+        data: { status: 'CANCELLED', completedAt: new Date() },
+      });
       await tx.auditEvent.create({
         data: this.auditData(
           caseId,
@@ -1632,6 +1817,7 @@ export class PrismaCasesRepository {
     input: UpdateAssessorRecommendationInput,
     actor: AuthActor,
   ) {
+    this.assertRealUuid(caseId);
     const parsed = this.parsed(
       updateAssessorRecommendationSchema,
       input,
@@ -1703,6 +1889,7 @@ export class PrismaCasesRepository {
     input: SubmitRecommendationInput,
     actor?: { id: string; name: string },
   ): Promise<AssessmentCaseDetail> {
+    this.assertRealUuid(caseId);
     const currentActor = actor ?? getActorContext();
     const parsed = this.parsed(
       submitRecommendationSchema,
@@ -1801,9 +1988,19 @@ export class PrismaCasesRepository {
   async decideApproval(
     stepId: string,
     input: DecideApprovalInput,
-    actor?: { id: string; name: string },
+    actor?: AuthActor | { id: string; name: string; roles?: string[] },
   ): Promise<AssessmentCaseDetail & { stepId: string }> {
-    const currentActor = actor ?? getActorContext();
+    this.assertRealUuid(stepId, 'STEP_NOT_FOUND', 'This approval step could not be found.');
+    const ctxActor = getActorContext();
+    const currentActor: AuthActor = actor
+      ? {
+          id: actor.id,
+          name: actor.name,
+          roles: ('roles' in actor && actor.roles
+            ? actor.roles
+            : ctxActor.roles) as AuthActor['roles'],
+        }
+      : ctxActor;
     const parsed = this.parsed(
       decideApprovalSchema,
       input,
@@ -1824,6 +2021,9 @@ export class PrismaCasesRepository {
         throw new BadRequestException(
           this.error('INVALID_TRANSITION', 'This approval step has already been decided.'),
         );
+      if (parsed.expectedVersion !== undefined) {
+        this.assertVersion(step.case.version, parsed.expectedVersion);
+      }
       if (step.case.status !== 'PENDING_APPROVAL')
         throw new BadRequestException(
           this.error('INVALID_TRANSITION', 'This case is not waiting for approval.'),
@@ -1838,33 +2038,42 @@ export class PrismaCasesRepository {
             'Earlier approval steps must be approved before this step can be decided.',
           ),
         );
-      const [submittedScorecards, conflictingActions, otherDecisions] = await Promise.all([
-        tx.assessmentScorecard.findMany({
-          where: { caseId: step.caseId, submittedAt: { not: null } },
-          select: { assessorId: true },
-        }),
-        tx.auditEvent.findMany({
-          where: {
-            caseId: step.caseId,
-            action: { in: ['RESULT_FINALIZED', 'RECOMMENDATION_SUBMITTED'] },
-          },
-          select: { actorId: true, action: true },
-        }),
-        tx.approvalStep.findMany({
-          where: { caseId: step.caseId, id: { not: stepId }, decision: { not: 'PENDING' } },
-          select: { approverId: true },
-        }),
-      ]);
+      const [submittedScorecards, submittedEvidence, conflictingActions, otherDecisions] =
+        await Promise.all([
+          tx.assessmentScorecard.findMany({
+            where: { caseId: step.caseId, submittedAt: { not: null } },
+            select: { assessorId: true },
+          }),
+          tx.evidenceSubmission.findMany({
+            where: { caseId: step.caseId, submittedAt: { not: null } },
+            select: { assessorId: true },
+          }),
+          tx.auditEvent.findMany({
+            where: {
+              caseId: step.caseId,
+              action: { in: ['RESULT_FINALIZED', 'RECOMMENDATION_SUBMITTED'] },
+            },
+            select: { actorId: true, action: true },
+          }),
+          tx.approvalStep.findMany({
+            where: { caseId: step.caseId, id: { not: stepId }, decision: { not: 'PENDING' } },
+            select: { approverId: true },
+          }),
+        ]);
       const { adminSelfApproval } = ApprovalsDomain.assertSegregationOfDuties({
-        actor: getActorContext(),
+        actor: currentActor,
         stepRole: step.role,
-        correlationId: `corr-${randomUUID()}`,
+        correlationId: currentCorrelationId(),
         allowAdminSelfApproval:
           process.env.ALLOW_ADMIN_SELF_APPROVAL?.trim().toLowerCase() === 'true',
         conflicts: [
           ...submittedScorecards.map((item) => ({
             actorId: item.assessorId,
             reason: 'scored the candidate',
+          })),
+          ...submittedEvidence.map((item) => ({
+            actorId: item.assessorId,
+            reason: 'submitted assessor evidence',
           })),
           ...conflictingActions.map((item) => ({
             actorId: item.actorId,
@@ -1895,8 +2104,8 @@ export class PrismaCasesRepository {
           ),
         });
       }
-      await tx.approvalStep.update({
-        where: { id: stepId },
+      const updatedStep = await tx.approvalStep.updateMany({
+        where: { id: stepId, decision: 'PENDING' },
         data: {
           decision: parsed.decision,
           comment: parsed.comment,
@@ -1905,6 +2114,7 @@ export class PrismaCasesRepository {
           approverName: currentActor.name ?? 'Demo user',
         },
       });
+      if (updatedStep.count !== 1) throw this.concurrencyError();
       const steps = await tx.approvalStep.findMany({
         where: { caseId: step.caseId },
         orderBy: { sequence: 'asc' },
@@ -1923,6 +2133,10 @@ export class PrismaCasesRepository {
         await tx.recommendationRevision.updateMany({
           where: { caseId: step.caseId, status: 'PENDING_APPROVAL' },
           data: { status: rejected ? 'REJECTED' : 'CHANGES_REQUESTED' },
+        });
+        await tx.task.updateMany({
+          where: { caseId: step.caseId, taskType: { startsWith: 'APPROVAL_STEP' }, status: 'OPEN' },
+          data: { status: 'CANCELLED', completedAt: new Date() },
         });
         await tx.auditEvent.create({
           data: this.auditData(
@@ -1994,6 +2208,14 @@ export class PrismaCasesRepository {
           },
         });
       } else {
+        await tx.task.updateMany({
+          where: {
+            caseId: step.caseId,
+            taskType: `APPROVAL_STEP_${step.sequence}`,
+            status: 'OPEN',
+          },
+          data: { status: 'COMPLETED', completedAt: new Date() },
+        });
         const next = steps.find((s) => s.decision === 'PENDING' && s.id !== stepId);
         if (next) {
           await tx.task.create({
@@ -2032,6 +2254,7 @@ export class PrismaCasesRepository {
     caseId: string,
     input: UpdateDevelopmentInput,
   ): Promise<AssessmentCaseDetail> {
+    this.assertRealUuid(caseId);
     const parsed = this.parsed(
       updateDevelopmentSchema,
       input,
@@ -2058,6 +2281,20 @@ export class PrismaCasesRepository {
         throw new BadRequestException(
           this.error('INVALID_TRANSITION', 'A development plan requires an approved case.'),
         );
+      if (record.candidateType !== 'NEW_CANDIDATE' && parsed.hiringOutcome === 'NOT_JOINED') {
+        throw new BadRequestException(
+          this.error(
+            'INVALID_HIRING_OUTCOME',
+            'Hiring outcome applies to external candidates only.',
+          ),
+        );
+      }
+      const nextHiringOutcomeReason =
+        parsed.hiringOutcome === undefined
+          ? undefined
+          : parsed.hiringOutcome === 'NOT_JOINED'
+            ? (parsed.hiringOutcomeReason ?? null)
+            : null;
       const changed = await tx.assessmentCase.updateMany({
         where: {
           id: caseId,
@@ -2067,14 +2304,22 @@ export class PrismaCasesRepository {
         data: {
           ...(isHiringOutcomeOnly
             ? {}
-            : { status: 'DEVELOPMENT_IN_PROGRESS', stage: 'FOLLOW_UP', ownerName: 'Manager' }),
+            : {
+                status: 'DEVELOPMENT_IN_PROGRESS',
+                stage: 'FOLLOW_UP',
+                ownerName: 'Manager',
+                adminEditStage: null,
+                adminEditReason: null,
+              }),
           hiringOutcome: parsed.hiringOutcome,
-          hiringOutcomeReason: parsed.hiringOutcomeReason,
+          ...(nextHiringOutcomeReason !== undefined
+            ? { hiringOutcomeReason: nextHiringOutcomeReason }
+            : {}),
           version: { increment: 1 },
         },
       });
       if (changed.count !== 1) throw this.concurrencyError();
-      if (parsed.hiringOutcome) {
+      if (parsed.hiringOutcome && record.candidateType === 'NEW_CANDIDATE') {
         await tx.employeeReference.update({
           where: { id: record.employeeId },
           data: {
@@ -2134,6 +2379,7 @@ export class PrismaCasesRepository {
                 dueDate: action.dueDate ? new Date(action.dueDate) : undefined,
                 status: action.status,
                 evidenceNote: action.evidenceNote,
+                completedAt: action.status === 'COMPLETED' ? new Date() : undefined,
               })),
             });
           }
@@ -2167,6 +2413,7 @@ export class PrismaCasesRepository {
     sourceCaseId: string,
     input: ScheduleReassessmentInput,
   ): Promise<AssessmentCaseDetail & { linkId: string; sourceCaseId: string }> {
+    this.assertRealUuid(sourceCaseId);
     const parsed = this.parsed(
       scheduleReassessmentSchema,
       input,
@@ -2192,11 +2439,18 @@ export class PrismaCasesRepository {
             'Reassessment requires an approved, in-development, reassessment-due, or closed case. Prior cases stay immutable.',
           ),
         );
+      const lockedSource = await tx.assessmentCase.updateMany({
+        where: { id: sourceCaseId, version: parsed.expectedVersion },
+        data: { version: { increment: 1 } },
+      });
+      if (lockedSource.count !== 1) throw this.concurrencyError();
       const created = await tx.assessmentCase.create({
         data: {
           caseCode: `AF-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`,
           organizationId: source.organizationId,
           employeeId: source.employeeId,
+          candidateType: source.candidateType,
+          candidateEmail: source.candidateEmail,
           assessmentReason: source.assessmentReason,
           stage: 'REQUEST',
           status: 'DRAFT',
@@ -2252,6 +2506,7 @@ export class PrismaCasesRepository {
   }
 
   async closeCase(caseId: string, input: CloseCaseInput): Promise<AssessmentCaseDetail> {
+    this.assertRealUuid(caseId);
     const parsed = this.parsed(closeCaseSchema, input, 'A version is required to close the case.');
     await this.prisma.$transaction(async (tx) => {
       const record = await tx.assessmentCase.findUnique({ where: { id: caseId } });
@@ -2308,6 +2563,7 @@ export class PrismaCasesRepository {
   }
 
   async getPlan(caseId: string) {
+    this.assertRealUuid(caseId);
     const plan = await this.prisma.assessmentPlan.findUnique({
       where: { caseId },
       include: {
@@ -2326,6 +2582,7 @@ export class PrismaCasesRepository {
   }
 
   async getScorecard(caseId: string, actor: AuthActor) {
+    this.assertRealUuid(caseId);
     const record = await this.prisma.assessmentCase.findUnique({
       where: { id: caseId },
       include: { plan: true, events: { include: { assessors: true } }, scorecards: true },
@@ -2349,10 +2606,7 @@ export class PrismaCasesRepository {
       })),
     );
     const mySubmission = record.scorecards.find((submission) => submission.assessorId === actor.id);
-    const priorSubmission = await this.prisma.auditEvent.findFirst({
-      where: { caseId, action: 'SCORECARD_SUBMITTED' },
-      select: { id: true },
-    });
+    const priorSubmission = record.scorecards.some((submission) => Boolean(submission.submittedAt));
     const assignedAssessorCount = new Set(
       record.events.flatMap((event) => event.assessors.map((assessor) => assessor.userId)),
     ).size;
@@ -2383,44 +2637,46 @@ export class PrismaCasesRepository {
   }
 
   async updateScorecardConfig(caseId: string, configInput: ScorecardConfig, actor: AuthActor) {
+    this.assertRealUuid(caseId);
     const config = scorecardConfigSchema.parse(configInput);
     const weightProblems = scorecardWeightProblems(config);
     if (weightProblems.length)
       throw new BadRequestException(
         this.error('SCORECARD_WEIGHTS_INVALID', weightProblems.join(' ')),
       );
-    const record = await this.prisma.assessmentCase.findUnique({
-      where: { id: caseId },
-      include: { plan: true, scorecards: { where: { submittedAt: { not: null } }, take: 1 } },
+    return this.prisma.$transaction(async (tx) => {
+      const record = await tx.assessmentCase.findUnique({
+        where: { id: caseId },
+        include: { plan: true, scorecards: { where: { submittedAt: { not: null } }, take: 1 } },
+      });
+      if (!record?.plan)
+        throw new NotFoundException(
+          this.error('PLAN_NOT_FOUND', 'Finalize the assessment plan first.'),
+        );
+      if (!['PLANNING', 'SCHEDULED', 'IN_PROGRESS'].includes(record.status))
+        throw new BadRequestException('Scorecard settings can only be changed during assessment.');
+      if (record.scorecards.length > 0) {
+        throw new ConflictException(
+          'Scorecard weights are locked after the first assessor submits.',
+        );
+      }
+      const updated = await tx.assessmentPlan.update({
+        where: { id: record.plan.id },
+        data: { scorecardConfig: config as never, version: { increment: 1 } },
+      });
+      await tx.auditEvent.create({
+        data: this.auditData(
+          caseId,
+          'SCORECARD_CONFIG_UPDATED',
+          'AssessmentPlan',
+          updated.id,
+          'Scorecard settings updated',
+          record.adminEditReason ? `Admin edit reason: ${record.adminEditReason}` : undefined,
+          actor,
+        ),
+      });
+      return { config, canEditWeights: true };
     });
-    if (!record?.plan)
-      throw new NotFoundException(
-        this.error('PLAN_NOT_FOUND', 'Finalize the assessment plan first.'),
-      );
-    if (!['PLANNING', 'SCHEDULED', 'IN_PROGRESS'].includes(record.status))
-      throw new BadRequestException('Scorecard settings can only be changed during assessment.');
-    const priorSubmission = await this.prisma.auditEvent.findFirst({
-      where: { caseId, action: 'SCORECARD_SUBMITTED' },
-      select: { id: true },
-    });
-    if (priorSubmission)
-      throw new ConflictException('Scorecard weights are locked after the first assessor submits.');
-    const updated = await this.prisma.assessmentPlan.update({
-      where: { id: record.plan.id },
-      data: { scorecardConfig: config as never, version: { increment: 1 } },
-    });
-    await this.prisma.auditEvent.create({
-      data: this.auditData(
-        caseId,
-        'SCORECARD_CONFIG_UPDATED',
-        'AssessmentPlan',
-        updated.id,
-        'Scorecard settings updated',
-        record.adminEditReason ? `Admin edit reason: ${record.adminEditReason}` : undefined,
-        actor,
-      ),
-    });
-    return { config, canEditWeights: true };
   }
 
   async saveScorecard(
@@ -2429,6 +2685,7 @@ export class PrismaCasesRepository {
     submit: boolean,
     actor: AuthActor,
   ) {
+    this.assertRealUuid(caseId);
     const ratings = scorecardRatingsSchema.parse(ratingsInput);
     return this.prisma.$transaction(async (tx) => {
       const record = await tx.assessmentCase.findUnique({
@@ -2552,6 +2809,7 @@ export class PrismaCasesRepository {
   }
 
   async reviseScorecard(caseId: string, reason: string, actor: AuthActor) {
+    this.assertRealUuid(caseId);
     return this.prisma.$transaction(async (tx) => {
       const record = await tx.assessmentCase.findUnique({
         where: { id: caseId },
@@ -2663,10 +2921,10 @@ export class PrismaCasesRepository {
   }
 
   async setFeedbackVisibility(caseId: string, visible: boolean, actor: AuthActor) {
+    this.assertRealUuid(caseId);
     const record = await this.prisma.assessmentCase.findFirst({
       where: { id: caseId, ...caseScopeWhere(actor) },
       include: {
-        events: { include: { assessors: true } },
         resultRevisions: { orderBy: { revision: 'desc' }, take: 1 },
       },
     });
@@ -2761,6 +3019,7 @@ export class PrismaCasesRepository {
   }
 
   async getResult(caseId: string, actor: AuthActor = getActorContext()) {
+    this.assertRealUuid(caseId);
     const scopedCase = await this.prisma.assessmentCase.findFirst({
       where: {
         id: caseId,
@@ -2787,10 +3046,15 @@ export class PrismaCasesRepository {
         caseId: true,
         revision: true,
         resultCode: true,
+        evidenceSummary: true,
+        strengths: true,
+        gaps: true,
         scorecardSummary: true,
         developmentFocus: true,
         finalizedAt: true,
         finalizedBy: true,
+        reopenedAt: true,
+        reopenReason: true,
         createdAt: true,
       },
     });
@@ -2798,10 +3062,46 @@ export class PrismaCasesRepository {
       throw new NotFoundException(
         this.error('RESULT_NOT_FOUND', 'No result has been finalized for this case yet.'),
       );
+    await this.prisma.accessLog
+      .create({
+        data: {
+          caseId,
+          actorId: actor.id,
+          action: 'READ_RESULT',
+          resourceType: 'ResultRevision',
+          resourceId: result.id,
+          outcome: 'ALLOWED',
+          correlationId: currentCorrelationId(),
+        },
+      })
+      .catch(() => {});
     return result;
   }
 
-  async getRecommendation(caseId: string) {
+  private async assertScopedAndReleasedForViewer(caseId: string, actor: AuthActor) {
+    const isRestricted =
+      actor.roles.some((r) => ['Employee', 'EmployeeManager', 'Requester'].includes(r)) &&
+      !actor.roles.some((r) => ['Assessor', 'Admin', 'HR', 'BusinessApprover'].includes(r));
+    const found = await this.prisma.assessmentCase.findFirst({
+      where: {
+        id: caseId,
+        ...caseScopeWhere(actor),
+        ...(isRestricted
+          ? { feedbackReleasedAt: { not: null }, status: { in: [...RESULT_RELEASE_STATUSES] } }
+          : {}),
+      },
+      select: { id: true },
+    });
+    if (!found) {
+      throw new NotFoundException(
+        this.error('CASE_NOT_FOUND', 'This assessment case could not be found.'),
+      );
+    }
+  }
+
+  async getRecommendation(caseId: string, actor: AuthActor = getActorContext()) {
+    this.assertRealUuid(caseId);
+    await this.assertScopedAndReleasedForViewer(caseId, actor);
     const recommendation = await this.prisma.recommendationRevision.findFirst({
       where: { caseId },
       orderBy: { revision: 'desc' },
@@ -2813,15 +3113,18 @@ export class PrismaCasesRepository {
     return recommendation;
   }
 
-  async listApprovalSteps(caseId: string) {
-    await this.requireCase(caseId);
+  async listApprovalSteps(caseId: string, actor: AuthActor = getActorContext()) {
+    this.assertRealUuid(caseId);
+    await this.assertScopedAndReleasedForViewer(caseId, actor);
     return this.prisma.approvalStep.findMany({ where: { caseId }, orderBy: { sequence: 'asc' } });
   }
 
-  async getDevelopment(caseId: string) {
+  async getDevelopment(caseId: string, actor: AuthActor = getActorContext()) {
+    this.assertRealUuid(caseId);
+    await this.assertScopedAndReleasedForViewer(caseId, actor);
     const plan = await this.prisma.developmentPlan.findUnique({
       where: { caseId },
-      include: { actions: true },
+      include: { actions: { orderBy: { createdAt: 'asc' } } },
     });
     if (!plan)
       throw new NotFoundException(
@@ -2831,6 +3134,7 @@ export class PrismaCasesRepository {
   }
 
   private async requireCase(caseId: string) {
+    this.assertRealUuid(caseId);
     const record = await this.prisma.assessmentCase.findUnique({ where: { id: caseId } });
     if (!record)
       throw new NotFoundException(
@@ -2905,7 +3209,7 @@ export class PrismaCasesRepository {
       ageLabel: this.ageLabel(record.requestedAt),
       version: record.version,
       adminEditStage: record.adminEditStage as CaseStage | null,
-      scoringEnabled: false,
+      scoringEnabled: true,
       availableActions: actionsForActor(record.status as CaseStatus, getActorContext().roles),
       justification: record.justification,
       feedbackReleasedAt: record.feedbackReleasedAt?.toISOString() ?? null,
@@ -2925,14 +3229,38 @@ export class PrismaCasesRepository {
     };
   }
 
-  private toSummary(detail: AssessmentCaseDetail): AssessmentCaseSummary {
-    const {
-      justification: _justification,
-      eligibility: _eligibility,
-      activity: _activity,
-      ...summary
-    } = detail;
-    return summary;
+  private mapSummaryRow(
+    record: CaseSummaryRow,
+    actorRoles: AuthActor['roles'],
+  ): AssessmentCaseSummary {
+    return {
+      id: record.id,
+      caseCode: record.caseCode,
+      employeeId: record.employee.externalId,
+      employeeName: record.employee.displayName,
+      candidateType: (record.candidateType ?? 'INTERNAL_EMPLOYEE') as
+        'INTERNAL_EMPLOYEE' | 'NEW_CANDIDATE',
+      candidateEmail: record.candidateEmail,
+      hiringOutcome: (record.hiringOutcome ?? 'PENDING') as 'PENDING' | 'JOINED' | 'NOT_JOINED',
+      hiringOutcomeReason: record.hiringOutcomeReason as
+        'ASSESSMENT' | 'OFFER_DECLINED' | 'ROLE_CANCELLED' | 'OTHER' | null,
+      department: record.departmentSnapshot,
+      currentRole: record.currentRoleSnapshot,
+      assessmentReason: record.assessmentReason as AssessmentReason,
+      targetRole: record.targetRoleSnapshot,
+      targetLevel: record.targetLevelSnapshot ?? '',
+      stage: record.stage as CaseStage,
+      status: record.status as CaseStatus,
+      owner: record.ownerName,
+      priority: record.priority as 'LOW' | 'NORMAL' | 'HIGH',
+      requestedAt: record.requestedAt.toISOString(),
+      stageEnteredAt: record.stageEnteredAt.toISOString(),
+      ageLabel: this.ageLabel(record.requestedAt),
+      version: record.version,
+      adminEditStage: record.adminEditStage as CaseStage | null,
+      scoringEnabled: true,
+      availableActions: actionsForActor(record.status as CaseStatus, actorRoles),
+    };
   }
 
   private taskTitle(taskType: string, employeeName?: string) {
@@ -2994,12 +3322,12 @@ export class PrismaCasesRepository {
       entityType,
       entityId,
       reason: detail ?? reason,
-      correlationId: `corr-${randomUUID()}`,
+      correlationId: currentCorrelationId(),
     };
   }
 
   private error(code: string, message: string, fieldErrors?: Record<string, string[]>) {
-    return { error: { code, message, fieldErrors, correlationId: `corr-${randomUUID()}` } };
+    return { error: { code, message, fieldErrors, correlationId: currentCorrelationId() } };
   }
 
   async createAttachment(
@@ -3012,7 +3340,9 @@ export class PrismaCasesRepository {
       'A valid attachment payload is required.',
     );
     const id = randomUUID();
-    const storageKey = data.storageKey ?? `quarantine/${data.caseId}/${id}-${data.fileName}`;
+    const safeName = basename(data.fileName).replace(/[\/]/g, '_');
+    const storageKey = `quarantine/${data.caseId}/${id}-${safeName}`;
+    await storeAttachmentBytes(storageKey, data.contentBase64);
 
     await this.requireCase(data.caseId);
     if (data.evidenceId) {
@@ -3053,6 +3383,11 @@ export class PrismaCasesRepository {
   }
 
   async getAttachment(attachmentId: string): Promise<AttachmentSummary> {
+    this.assertRealUuid(
+      attachmentId,
+      'ATTACHMENT_NOT_FOUND',
+      `Attachment '${attachmentId}' not found.`,
+    );
     const found = await this.prisma.attachment.findUnique({
       where: { id: attachmentId },
     });
@@ -3065,6 +3400,7 @@ export class PrismaCasesRepository {
   }
 
   async listAttachments(caseId: string): Promise<AttachmentSummary[]> {
+    this.assertRealUuid(caseId);
     const list = await this.prisma.attachment.findMany({
       where: { caseId },
       orderBy: { createdAt: 'desc' },
@@ -3078,6 +3414,11 @@ export class PrismaCasesRepository {
     scanReason?: string | null,
     scannedAt: Date = new Date(),
   ): Promise<AttachmentSummary> {
+    this.assertRealUuid(
+      attachmentId,
+      'ATTACHMENT_NOT_FOUND',
+      `Attachment '${attachmentId}' not found.`,
+    );
     const updated = await this.prisma.attachment.update({
       where: { id: attachmentId },
       data: {
@@ -3134,12 +3475,28 @@ export class PrismaCasesRepository {
         : null,
       downloadUrl:
         item.scanStatus === 'CLEAN'
-          ? `https://storage.local/clean/${item.storageKey}?action=download`
+          ? `/api/v1/assessflow/attachments/clean/${item.id}?mode=download`
           : null,
       previewUrl:
         item.scanStatus === 'CLEAN'
-          ? `https://storage.local/clean/${item.storageKey}?action=preview`
+          ? `/api/v1/assessflow/attachments/clean/${item.id}?mode=preview`
           : null,
     };
+  }
+
+  async logAttachmentAccess(caseId: string, attachmentId: string, actorId: string) {
+    await this.prisma.accessLog
+      .create({
+        data: {
+          caseId,
+          actorId,
+          action: 'DOWNLOAD_ATTACHMENT',
+          resourceType: 'Attachment',
+          resourceId: attachmentId,
+          outcome: 'ALLOWED',
+          correlationId: currentCorrelationId(),
+        },
+      })
+      .catch(() => {});
   }
 }

@@ -8,39 +8,41 @@ import {
   Patch,
   Post,
   Query,
+  Res,
 } from '@nestjs/common';
-import type {
+import type { Response } from 'express';
+import {
   CloseCaseInput,
   CopilotBiasCheckInput,
   CopilotSuggestActionsInput,
   CopilotSynthesizeInput,
   CreateAttachmentInput,
   CreateCaseInput,
-  AdminEditRequestInput,
-  AdminReopenStageInput,
   DecideApprovalInput,
   EligibilityDecisionInput,
+  feedbackVisibilitySchema,
   FinalizePlanInput,
   FinalizeResultInput,
+  overrideRequestSchema,
   ReopenResultInput,
+  reviseScorecardSchema,
   SaveEvidenceInput,
   ScheduleEventInput,
   ScheduleReassessmentInput,
-  SubmitRecommendationInput,
-  UpdateDevelopmentInput,
-  UpdateAssessorRecommendationInput,
-  UpdateEmployeeNameInput,
-} from '@assessflow/contracts';
-import {
   scorecardConfigSchema,
   scorecardSubmissionSchema,
+  SubmitRecommendationInput,
+  UpdateDevelopmentInput,
   updateAssessorRecommendationSchema,
+  type AdminEditRequestInput,
+  type AdminReopenStageInput,
+  type UpdateEmployeeNameInput,
 } from '@assessflow/contracts';
 import { CasesService } from './cases.service';
 import { CalibrationService } from './calibration.service';
 import { CopilotService } from './copilot.service';
 import { IdempotencyService } from '../common/idempotency.service';
-import { Actor, AuthActor, Roles, ROUTE_PERMISSIONS, getActorContext } from '../auth';
+import { Actor, AuthActor, getActorContext, Roles, ROUTE_PERMISSIONS } from '../auth';
 
 @Controller('api/v1/assessflow')
 export class CasesController {
@@ -50,6 +52,15 @@ export class CasesController {
     private readonly copilotService: CopilotService,
     private readonly idempotency: IdempotencyService,
   ) {}
+
+  private resolveActor(actor?: AuthActor, fallbackActorId?: string): AuthActor {
+    if (actor) return actor;
+    const ctx = getActorContext();
+    if (fallbackActorId && fallbackActorId !== 'demo-user' && ctx.id === 'demo-user') {
+      return { ...ctx, id: fallbackActorId, name: fallbackActorId };
+    }
+    return ctx;
+  }
 
   @Get('overview')
   @Roles(...ROUTE_PERMISSIONS.OVERVIEW)
@@ -61,6 +72,12 @@ export class CasesController {
   @Roles(...ROUTE_PERMISSIONS.TASKS)
   getTasks() {
     return this.casesService.getTasks();
+  }
+
+  @Get('development-plans')
+  @Roles(...ROUTE_PERMISSIONS.DEVELOPMENT_GET)
+  listDevelopmentPlans(@Actor() actor?: AuthActor) {
+    return this.casesService.listDevelopmentPlans(this.resolveActor(actor));
   }
 
   @Get('assessor/assignments')
@@ -77,26 +94,60 @@ export class CasesController {
 
   @Get('cases')
   @Roles(...ROUTE_PERMISSIONS.CASE_LIST)
-  listCases(@Query('status') status?: string, @Query('search') search?: string) {
-    return this.casesService.list({ status, search });
+  listCases(
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
+    return this.casesService.list({
+      status,
+      search,
+      limit: Number.isFinite(parsedLimit) && (parsedLimit ?? 0) > 0 ? parsedLimit : undefined,
+    });
   }
 
   @Post('cases')
   @Roles(...ROUTE_PERMISSIONS.CASE_CREATE)
   createCase(@Body() input: CreateCaseInput, @Actor() actor?: AuthActor) {
-    const activeActor = actor ?? getActorContext();
-    return this.casesService.create(input, activeActor);
+    return this.casesService.create(input, this.resolveActor(actor));
   }
 
   @Post('attachments')
   @Roles(...ROUTE_PERMISSIONS.ATTACHMENT_UPLOAD)
   createAttachment(
     @Body() input: CreateAttachmentInput,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
+    const activeActor = this.resolveActor(actor, fallbackActorId);
     return this.casesService.createAttachment(input, activeActor);
+  }
+
+  @Get('cases/:caseId/attachments')
+  @Roles(...ROUTE_PERMISSIONS.ATTACHMENT_READ)
+  listCaseAttachments(@Param('caseId') caseId: string) {
+    return this.casesService.listAttachments(caseId);
+  }
+
+  @Get('attachments/clean/:attachmentId')
+  @Roles(...ROUTE_PERMISSIONS.ATTACHMENT_READ)
+  async streamCleanAttachment(
+    @Param('attachmentId') attachmentId: string,
+    @Query('mode') mode: string | undefined,
+    @Res() res: Response,
+    @Actor() actor?: AuthActor,
+  ) {
+    const file = await this.casesService.readCleanAttachmentFile(
+      attachmentId,
+      this.resolveActor(actor),
+    );
+    const disposition = mode === 'preview' ? 'inline' : 'attachment';
+    const safeName = file.fileName.replace(/["\\\r\n]/g, '_');
+    res.setHeader('Content-Type', file.contentType);
+    res.setHeader('Content-Disposition', `${disposition}; filename="${safeName}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(file.buffer);
   }
 
   @Get('attachments/:attachmentId')
@@ -169,12 +220,16 @@ export class CasesController {
     @Param('caseId') caseId: string,
     @Body('expectedVersion') expectedVersion: number,
     @Headers('idempotency-key') idempotencyKey?: string,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
-    return this.idempotency.execute(idempotencyKey, activeActor.id, `submit:${caseId}`, () =>
-      this.casesService.submit(caseId, Number(expectedVersion)),
+    const activeActor = this.resolveActor(actor, fallbackActorId);
+    return this.idempotency.execute(
+      idempotencyKey,
+      activeActor.id,
+      `submit:${caseId}`,
+      () => this.casesService.submit(caseId, Number(expectedVersion)),
+      { expectedVersion: Number(expectedVersion) },
     );
   }
 
@@ -184,15 +239,16 @@ export class CasesController {
     @Param('caseId') caseId: string,
     @Body() input: EligibilityDecisionInput,
     @Headers('idempotency-key') idempotencyKey?: string,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
+    const activeActor = this.resolveActor(actor, fallbackActorId);
     return this.idempotency.execute(
       idempotencyKey,
       activeActor.id,
       `eligibility-decision:${caseId}`,
       () => this.casesService.decideEligibility(caseId, input, activeActor),
+      input,
     );
   }
 
@@ -200,25 +256,26 @@ export class CasesController {
   @Roles(...ROUTE_PERMISSIONS.ELIGIBILITY_OVERRIDE)
   requestOverride(
     @Param('caseId') caseId: string,
-    @Body('reason') reason: string,
+    @Body() body: unknown,
     @Headers('idempotency-key') idempotencyKey?: string,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
+    const parsed = overrideRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException(
+        parsed.error.issues[0]?.message ??
+          'An override reason of at least 5 characters is required.',
+      );
+    }
+    const activeActor = this.resolveActor(actor, fallbackActorId);
     return this.idempotency.execute(
       idempotencyKey,
       activeActor.id,
       `eligibility-override:${caseId}`,
-      () => this.casesService.requestOverride(caseId, reason, activeActor),
+      () => this.casesService.requestOverride(caseId, parsed.data.reason, activeActor),
+      parsed.data,
     );
-  }
-
-  private actor(actorId?: string, actor?: AuthActor) {
-    const ctx = actor ?? getActorContext();
-    const id = actorId && actorId !== 'demo-user' ? actorId : ctx.id;
-    const name = ctx.id === id ? ctx.name : (actorId ?? ctx.name);
-    return { id, name };
   }
 
   @Post('cases/:caseId/plan/finalize')
@@ -227,12 +284,16 @@ export class CasesController {
     @Param('caseId') caseId: string,
     @Body() input: FinalizePlanInput,
     @Headers('idempotency-key') idempotencyKey?: string,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
-    return this.idempotency.execute(idempotencyKey, activeActor.id, `plan-finalize:${caseId}`, () =>
-      this.casesService.finalizePlan(caseId, input),
+    const activeActor = this.resolveActor(actor, fallbackActorId);
+    return this.idempotency.execute(
+      idempotencyKey,
+      activeActor.id,
+      `plan-finalize:${caseId}`,
+      () => this.casesService.finalizePlan(caseId, input),
+      input,
     );
   }
 
@@ -261,7 +322,6 @@ export class CasesController {
   }
 
   @Post('cases/:caseId/scorecard')
-  // Panel leads must be assigned to a session on the case (checked in the repository).
   @Roles('Assessor', 'PanelLead', 'Admin')
   saveScorecard(
     @Param('caseId') caseId: string,
@@ -281,13 +341,11 @@ export class CasesController {
     @Body() input: unknown,
     @Actor() actor: AuthActor,
   ) {
-    const reason =
-      input && typeof input === 'object' && 'reason' in input && typeof input.reason === 'string'
-        ? input.reason.trim()
-        : '';
-    if (reason.length < 3 || reason.length > 500)
+    const parsed = reviseScorecardSchema.safeParse(input);
+    if (!parsed.success) {
       throw new BadRequestException('Enter a reason for editing the submitted scores.');
-    return this.casesService.reviseScorecard(caseId, reason, actor);
+    }
+    return this.casesService.reviseScorecard(caseId, parsed.data.reason, actor);
   }
 
   @Post('cases/:caseId/events')
@@ -296,15 +354,16 @@ export class CasesController {
     @Param('caseId') caseId: string,
     @Body() input: ScheduleEventInput,
     @Headers('idempotency-key') idempotencyKey?: string,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
+    const activeActor = this.resolveActor(actor, fallbackActorId);
     return this.idempotency.execute(
       idempotencyKey,
       activeActor.id,
       `event-schedule:${caseId}`,
       () => this.casesService.scheduleEvent(caseId, input),
+      input,
     );
   }
 
@@ -319,10 +378,10 @@ export class CasesController {
   saveEvidence(
     @Param('eventId') eventId: string,
     @Body() input: SaveEvidenceInput,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
+    const activeActor = this.resolveActor(actor, fallbackActorId);
     return this.casesService.saveEvidence(eventId, activeActor, input, false);
   }
 
@@ -332,15 +391,16 @@ export class CasesController {
     @Param('eventId') eventId: string,
     @Body() input: SaveEvidenceInput,
     @Headers('idempotency-key') idempotencyKey?: string,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
+    const activeActor = this.resolveActor(actor, fallbackActorId);
     return this.idempotency.execute(
       idempotencyKey,
       activeActor.id,
       `evidence-submit:${eventId}`,
       () => this.casesService.saveEvidence(eventId, activeActor, input, true),
+      input,
     );
   }
 
@@ -350,15 +410,16 @@ export class CasesController {
     @Param('caseId') caseId: string,
     @Body() input: FinalizeResultInput,
     @Headers('idempotency-key') idempotencyKey?: string,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
+    const activeActor = this.resolveActor(actor, fallbackActorId);
     return this.idempotency.execute(
       idempotencyKey,
       activeActor.id,
       `result-finalize:${caseId}`,
       () => this.casesService.finalizeResult(caseId, input, activeActor),
+      input,
     );
   }
 
@@ -368,12 +429,16 @@ export class CasesController {
     @Param('caseId') caseId: string,
     @Body() input: ReopenResultInput,
     @Headers('idempotency-key') idempotencyKey?: string,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
-    return this.idempotency.execute(idempotencyKey, activeActor.id, `result-reopen:${caseId}`, () =>
-      this.casesService.reopenResult(caseId, input, activeActor),
+    const activeActor = this.resolveActor(actor, fallbackActorId);
+    return this.idempotency.execute(
+      idempotencyKey,
+      activeActor.id,
+      `result-reopen:${caseId}`,
+      () => this.casesService.reopenResult(caseId, input, activeActor),
+      input,
     );
   }
 
@@ -400,10 +465,14 @@ export class CasesController {
   @Roles('Assessor', 'Admin')
   setFeedbackVisibility(
     @Param('caseId') caseId: string,
-    @Body('visible') visible: boolean,
+    @Body() body: unknown,
     @Actor() actor: AuthActor,
   ) {
-    return this.casesService.setFeedbackVisibility(caseId, visible, actor);
+    const parsed = feedbackVisibilitySchema.safeParse(body);
+    if (!parsed.success) {
+      throw new BadRequestException('Specify visible: true or false.');
+    }
+    return this.casesService.setFeedbackVisibility(caseId, parsed.data.visible, actor);
   }
 
   @Post('cases/:caseId/recommendation')
@@ -412,22 +481,23 @@ export class CasesController {
     @Param('caseId') caseId: string,
     @Body() input: SubmitRecommendationInput,
     @Headers('idempotency-key') idempotencyKey?: string,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
+    const activeActor = this.resolveActor(actor, fallbackActorId);
     return this.idempotency.execute(
       idempotencyKey,
       activeActor.id,
       `recommendation:${caseId}`,
       () => this.casesService.submitRecommendation(caseId, input, activeActor),
+      input,
     );
   }
 
   @Get('cases/:caseId/recommendation')
   @Roles(...ROUTE_PERMISSIONS.RECOMMENDATION_GET)
-  getRecommendation(@Param('caseId') caseId: string) {
-    return this.casesService.getRecommendation(caseId);
+  getRecommendation(@Param('caseId') caseId: string, @Actor() actor?: AuthActor) {
+    return this.casesService.getRecommendation(caseId, this.resolveActor(actor));
   }
 
   @Post('approval-steps/:stepId/decision')
@@ -436,19 +506,23 @@ export class CasesController {
     @Param('stepId') stepId: string,
     @Body() input: DecideApprovalInput,
     @Headers('idempotency-key') idempotencyKey?: string,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
-    return this.idempotency.execute(idempotencyKey, activeActor.id, `approval:${stepId}`, () =>
-      this.casesService.decideApproval(stepId, input, activeActor),
+    const activeActor = this.resolveActor(actor, fallbackActorId);
+    return this.idempotency.execute(
+      idempotencyKey,
+      activeActor.id,
+      `approval:${stepId}`,
+      () => this.casesService.decideApproval(stepId, input, activeActor),
+      input,
     );
   }
 
   @Get('cases/:caseId/approval-steps')
   @Roles(...ROUTE_PERMISSIONS.APPROVAL_LIST)
-  listApprovalSteps(@Param('caseId') caseId: string) {
-    return this.casesService.listApprovalSteps(caseId);
+  listApprovalSteps(@Param('caseId') caseId: string, @Actor() actor?: AuthActor) {
+    return this.casesService.listApprovalSteps(caseId, this.resolveActor(actor));
   }
 
   @Post('cases/:caseId/development')
@@ -457,19 +531,23 @@ export class CasesController {
     @Param('caseId') caseId: string,
     @Body() input: UpdateDevelopmentInput,
     @Headers('idempotency-key') idempotencyKey?: string,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
-    return this.idempotency.execute(idempotencyKey, activeActor.id, `development:${caseId}`, () =>
-      this.casesService.updateDevelopment(caseId, input),
+    const activeActor = this.resolveActor(actor, fallbackActorId);
+    return this.idempotency.execute(
+      idempotencyKey,
+      activeActor.id,
+      `development:${caseId}`,
+      () => this.casesService.updateDevelopment(caseId, input),
+      input,
     );
   }
 
   @Get('cases/:caseId/development')
   @Roles(...ROUTE_PERMISSIONS.DEVELOPMENT_GET)
-  getDevelopment(@Param('caseId') caseId: string) {
-    return this.casesService.getDevelopment(caseId);
+  getDevelopment(@Param('caseId') caseId: string, @Actor() actor?: AuthActor) {
+    return this.casesService.getDevelopment(caseId, this.resolveActor(actor));
   }
 
   @Post('cases/:caseId/reassessment')
@@ -478,12 +556,16 @@ export class CasesController {
     @Param('caseId') caseId: string,
     @Body() input: ScheduleReassessmentInput,
     @Headers('idempotency-key') idempotencyKey?: string,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
-    return this.idempotency.execute(idempotencyKey, activeActor.id, `reassessment:${caseId}`, () =>
-      this.casesService.scheduleReassessment(caseId, input),
+    const activeActor = this.resolveActor(actor, fallbackActorId);
+    return this.idempotency.execute(
+      idempotencyKey,
+      activeActor.id,
+      `reassessment:${caseId}`,
+      () => this.casesService.scheduleReassessment(caseId, input),
+      input,
     );
   }
 
@@ -493,17 +575,20 @@ export class CasesController {
     @Param('caseId') caseId: string,
     @Body() input: CloseCaseInput,
     @Headers('idempotency-key') idempotencyKey?: string,
-    @Headers('x-actor-id') actorId = 'demo-user',
+    @Headers('x-actor-id') fallbackActorId?: string,
     @Actor() actor?: AuthActor,
   ) {
-    const activeActor = this.actor(actorId, actor);
-    return this.idempotency.execute(idempotencyKey, activeActor.id, `close:${caseId}`, () =>
-      this.casesService.closeCase(caseId, input),
+    const activeActor = this.resolveActor(actor, fallbackActorId);
+    return this.idempotency.execute(
+      idempotencyKey,
+      activeActor.id,
+      `close:${caseId}`,
+      () => this.casesService.closeCase(caseId, input),
+      input,
     );
   }
 
   @Get('calibration/matrix')
-  // Calibration committee only; results are further limited to the viewer's case scope.
   @Roles('HR', 'Admin', 'Assessor', 'PanelLead', 'Manager', 'Auditor')
   getCalibrationMatrix(@Query('department') department?: string) {
     return this.calibrationService.getMatrix(department);

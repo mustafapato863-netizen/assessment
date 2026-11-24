@@ -286,58 +286,46 @@ export const defaultScorecardConfig: ScorecardConfig = {
   ],
 };
 
-export const scorecardConfigSchema = z.object({
-  technicalLabel: z.string().min(1).max(80).optional(),
-  behavioralLabel: z.string().min(1).max(80).optional(),
-  technicalWeight: z.number().min(0).max(1000),
-  behavioralWeight: z.number().min(0).max(1000),
-  technical: z
-    .array(
-      z.object({
-        code: z.string().min(1).max(20),
-        name: z.string().min(1).max(160),
-        weight: z.number().min(0).max(1000),
-        criteria: z
-          .array(
-            z.object({
-              code: z.string().min(1).max(20),
-              ratingKey: z.string().min(1).max(60).optional(),
-              name: z.string().min(1).max(160),
-              standard: z.string().min(1).max(2000),
-              weight: z.number().min(0).max(1000),
-              knockout: z.boolean().optional(),
-            }),
-          )
-          .min(1)
-          .max(40),
-      }),
-    )
-    .min(1)
-    .max(12),
-  behavioral: z
-    .array(
-      z.object({
-        code: z.string().min(1).max(20),
-        name: z.string().min(1).max(160),
-        weight: z.number().min(0).max(1000),
-        criteria: z
-          .array(
-            z.object({
-              code: z.string().min(1).max(20),
-              ratingKey: z.string().min(1).max(60).optional(),
-              name: z.string().min(1).max(160),
-              standard: z.string().min(1).max(2000),
-              weight: z.number().min(0).max(1000),
-              knockout: z.boolean().optional(),
-            }),
-          )
-          .min(1)
-          .max(40),
-      }),
-    )
-    .min(1)
-    .max(12),
+const scorecardCriterionSchema = z.object({
+  code: z.string().min(1).max(20),
+  ratingKey: z.string().min(1).max(60).optional(),
+  name: z.string().min(1).max(160),
+  standard: z.string().max(2000),
+  weight: z.number().positive('Question weight must be greater than 0').max(1000),
+  knockout: z.boolean().optional(),
 });
+
+const scorecardDimensionSchema = z.object({
+  code: z.string().min(1).max(20),
+  name: z.string().min(1).max(160),
+  weight: z.number().min(0).max(1000),
+  criteria: z.array(scorecardCriterionSchema).min(1).max(40),
+});
+
+export const scorecardConfigSchema = z
+  .object({
+    technicalLabel: z.string().min(1).max(80).optional(),
+    behavioralLabel: z.string().min(1).max(80).optional(),
+    technicalWeight: z.number().min(0).max(1000),
+    behavioralWeight: z.number().min(0).max(1000),
+    technical: z.array(scorecardDimensionSchema).min(1).max(12),
+    behavioral: z.array(scorecardDimensionSchema).min(1).max(12),
+  })
+  .superRefine((config, ctx) => {
+    const seenKeys = new Set<string>();
+    for (const group of [...config.technical, ...config.behavioral]) {
+      for (const criterion of group.criteria) {
+        const key = criterion.ratingKey ?? `${group.code}:${criterion.code}`;
+        if (seenKeys.has(key)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Duplicate scorecard criterion key '${key}'`,
+          });
+        }
+        seenKeys.add(key);
+      }
+    }
+  });
 
 export const scorecardRatingsSchema = z.record(
   z.string().min(1).max(60),

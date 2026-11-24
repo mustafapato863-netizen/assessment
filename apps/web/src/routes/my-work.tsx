@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
+import { initials } from '../lib/format';
+import { queryKeys } from '../lib/query-keys';
 import { ErrorBanner, LoadingRows } from '../components/ui';
 import { mapWorkItems } from './my-work-data';
 import {
@@ -13,16 +16,6 @@ import {
   type WorkItem,
 } from './workQueue';
 import './my-work.css';
-
-function initials(name: string) {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join('')
-    .toUpperCase();
-}
 
 function KpiCard({
   label,
@@ -111,9 +104,9 @@ function MyWork({ items = [], now = new Date() }: { items?: WorkItem[]; now?: Da
               : ' Nothing is overdue.'}
           </p>
         </div>
-        <a className="mw-btn mw-btn--primary" href="#/cases/new">
+        <Link className="mw-btn mw-btn--primary" to="/cases/new">
           New assessment
-        </a>
+        </Link>
       </header>
 
       <section className="mw-kpis" aria-label="Summary">
@@ -190,13 +183,13 @@ function MyWork({ items = [], now = new Date() }: { items?: WorkItem[]; now?: Da
                     </span>
                   </div>
                   <span className={`mw-chip mw-chip--${chip.tone}`}>{chip.text}</span>
-                  <a
+                  <Link
                     className="mw-btn mw-btn--ghost"
-                    href={item.action.href}
+                    to={item.action.href}
                     aria-label={`${item.action.label} for ${item.name}`}
                   >
                     {item.action.label} →
-                  </a>
+                  </Link>
                 </li>
               );
             })}
@@ -212,9 +205,9 @@ function MyWork({ items = [], now = new Date() }: { items?: WorkItem[]; now?: Da
                 {first.stage} stage
                 {firstLate !== null && firstLate > 0 ? ` · overdue by ${firstLate} days` : ''}
               </span>
-              <a className="mw-btn mw-btn--light" href={first.action.href}>
+              <Link className="mw-btn mw-btn--light" to={first.action.href}>
                 {first.action.label} →
-              </a>
+              </Link>
             </div>
           )}
 
@@ -236,8 +229,8 @@ function MyWork({ items = [], now = new Date() }: { items?: WorkItem[]; now?: Da
 }
 
 export default function MyWorkPage() {
-  const overview = useQuery({ queryKey: ['overview'], queryFn: api.overview });
-  const cases = useQuery({ queryKey: ['cases'], queryFn: () => api.cases() });
+  const overview = useQuery({ queryKey: queryKeys.overview(), queryFn: api.overview });
+  const cases = useQuery({ queryKey: queryKeys.cases(), queryFn: () => api.cases() });
   const items = useMemo(
     () => mapWorkItems(overview.data?.tasks ?? [], cases.data ?? []),
     [overview.data?.tasks, cases.data],

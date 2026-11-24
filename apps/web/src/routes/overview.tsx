@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery, useQueries } from '@tanstack/react-query';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -14,8 +14,10 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { api } from '../lib/api';
-import { getSession, subscribeToAuth, type AppUser } from '../lib/auth';
-import { copy, statusLabels, type Copy } from '../lib/labels';
+import { canAccessRoute, getSession, subscribeToAuth, type AppUser } from '../lib/auth';
+import { copy, getGreeting, statusLabels, type Copy } from '../lib/labels';
+import { queryKeys } from '../lib/query-keys';
+import { initials } from '../lib/format';
 import { getRemainingTime, sortPriorityActionCases } from './overview-utils';
 import { ACTION_DUE_SOON_DAYS, daysUntil } from './development-logic';
 import { DEFAULT_ADMINISTRATION_POLICY, exceedsSlaWindow } from './administration-logic';
@@ -144,13 +146,13 @@ export function OverviewPage({
     isLoading: overviewLoading,
     isError: overviewError,
     refetch: refetchOverview,
-  } = useQuery({ queryKey: ['overview'], queryFn: api.overview });
+  } = useQuery({ queryKey: queryKeys.overview(), queryFn: api.overview });
   const {
     data: cases,
     isLoading: casesLoading,
     isError: casesError,
     refetch: refetchCases,
-  } = useQuery({ queryKey: ['cases'], queryFn: () => api.cases() });
+  } = useQuery({ queryKey: queryKeys.cases(), queryFn: () => api.cases() });
 
   const handleRetry = () => {
     refetchOverview();
@@ -218,12 +220,11 @@ export function OverviewPage({
     return (cases ?? []).filter((c) => c.status === 'DEVELOPMENT_IN_PROGRESS');
   }, [cases]);
 
-  const devPlanQueries = useQueries({
-    queries: devInProgressCases.map((c) => ({
-      queryKey: ['development', c.id],
-      queryFn: () => api.getDevelopment<DevelopmentPlanData>(c.id).catch(() => null),
-      staleTime: 30_000,
-    })),
+  const { data: developmentPlans = [] } = useQuery({
+    queryKey: queryKeys.developmentPlans(),
+    queryFn: api.developmentPlans,
+    enabled: devInProgressCases.length > 0,
+    staleTime: 60_000,
   });
 
   const followUpActions = useMemo(() => {
@@ -240,9 +241,8 @@ export function OverviewPage({
 
     const now = new Date();
 
-    devInProgressCases.forEach((c, index) => {
-      const plan = devPlanQueries[index]?.data;
-      if (!plan?.actions) return;
+    for (const plan of developmentPlans) {
+      if (plan.caseSummary?.status !== 'DEVELOPMENT_IN_PROGRESS' || !plan.actions) continue;
 
       for (const act of plan.actions) {
         if (act.status === 'COMPLETED') continue;
@@ -252,9 +252,9 @@ export function OverviewPage({
         const diffDays = daysUntil(effectiveDueDate, now);
         if (diffDays !== null && diffDays <= ACTION_DUE_SOON_DAYS) {
           items.push({
-            caseId: c.id,
-            caseCode: c.caseCode,
-            employeeName: c.employeeName,
+            caseId: plan.caseId,
+            caseCode: plan.caseSummary.caseCode,
+            employeeName: plan.caseSummary.employeeName,
             actionTitle: act.title,
             ownerName: act.ownerName,
             dueDate: effectiveDueDate,
@@ -263,10 +263,10 @@ export function OverviewPage({
           });
         }
       }
-    });
+    }
 
     return items.sort((a, b) => a.diffDays - b.diffDays);
-  }, [devInProgressCases, devPlanQueries]);
+  }, [developmentPlans]);
 
   const priorityActionCases = useMemo(() => {
     const orderedCases = pendingActionCases.map((c) => {
@@ -426,15 +426,13 @@ export function OverviewPage({
         return t.subtitle;
     }
   }, [activeUser?.role, t.subtitle]);
-  const canCreateRequest = ['SYS_ADMIN', 'HR_ADMIN', 'DEV_LEAD', 'ASSESSOR'].includes(
-    activeUser?.role ?? '',
-  );
+  const canCreateRequest = canAccessRoute(activeUser, 'new-case');
 
   return (
     <div className="overview-page">
       <PageHeading
         eyebrow="ASSESSMENT WORKSPACE"
-        title={`Welcome, ${getGreetingName(activeUser?.name ?? 'User')}`}
+        title={getGreeting(activeUser?.name)}
         subtitle={`${pendingActionCases.length} cases need action · Bottleneck: ${bottleneck ? `${bottleneck.stage} (${bottleneck.count} open)` : 'None'} · ${dynamicSubtitle}`}
         action={
           canCreateRequest ? (
@@ -524,8 +522,8 @@ export function OverviewPage({
         </div>
         <div className="pipeline-list">
           {data?.pipeline.map((item) => (
-            <a
-              href={`#/assessments?stage=${encodeURIComponent(pipelineStageFilterMap[item.label] ?? item.label)}`}
+            <Link
+              to={`/assessments?stage=${encodeURIComponent(pipelineStageFilterMap[item.label] ?? item.label)}`}
               className={`pipeline-row pipeline-row-button ${item.label === bottleneck?.stage ? 'bottleneck' : ''}`}
               key={item.label}
               aria-label={`${item.label}: ${item.value} cases`}
@@ -545,7 +543,7 @@ export function OverviewPage({
                   }}
                 />
               </div>
-            </a>
+            </Link>
           ))}
         </div>
       </section>
@@ -877,13 +875,19 @@ export function OverviewPage({
           icon={<History size={17} />}
           title={t.recent}
           action={
-            <button className="link-button" onClick={() => onOpenCase(cases?.[0]?.id ?? '')}>
+            <button type="button" className="link-button" onClick={() => navigate('/assessments')}>
               {t.viewAll}
               <ArrowUpRight size={14} />
             </button>
           }
         />
-        <CaseTable cases={cases ?? []} onOpen={onOpenCase} />
+        <CaseTable
+          cases={cases ?? []}
+          onOpen={onOpenCase}
+          onSelectEmployee={(employeeId) =>
+            navigate(`/employees/${encodeURIComponent(employeeId)}`)
+          }
+        />
       </section>
     </div>
   );

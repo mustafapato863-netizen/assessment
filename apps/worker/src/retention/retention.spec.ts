@@ -8,10 +8,7 @@ import {
 } from './retention-math';
 import { InMemoryRetentionRepository } from './retention.repository';
 import { RetentionJobProcessor } from './retention.job';
-import type {
-  RetentionCandidateRow,
-  RetentionPolicyItem,
-} from './retention.interface';
+import type { RetentionCandidateRow, RetentionPolicyItem } from './retention.interface';
 
 describe('Retention Policy Math & Hold-First Enforcement', () => {
   // Fixed evaluation timestamp for deterministic mathematical assertions
@@ -354,10 +351,10 @@ describe('Retention Policy Math & Hold-First Enforcement', () => {
       expect(caseSummary.status).toBe('SKIPPED_LEGAL_HOLD');
       expect(caseSummary.flaggedCount).toBe(0);
 
-      // ASSESSOR_EVIDENCE: 1 fresh, 1 expired -> 1 flagged
+      // ASSESSOR_EVIDENCE: cutoff pre-filtered -> 1 expired candidate checked & flagged
       const evSummary = batchResult.policies.find((p) => p.category === 'ASSESSOR_EVIDENCE')!;
       expect(evSummary.status).toBe('EVALUATED');
-      expect(evSummary.totalChecked).toBe(2);
+      expect(evSummary.totalChecked).toBe(1);
       expect(evSummary.flaggedCount).toBe(1);
       expect(evSummary.flaggedItems[0]!.rowId).toBe('ev-expired');
 
@@ -376,6 +373,11 @@ describe('Retention Policy Math & Hold-First Enforcement', () => {
       expect(storedFlags).toHaveLength(2);
       expect(storedFlags.map((f) => f.rowId)).toEqual(['ev-expired', 'log-expired']);
       expect(storedFlags.every((f) => f.reviewStatus === 'PENDING_REVIEW')).toBe(true);
+
+      // Re-running must be idempotent and never duplicate flags for already-flagged rows
+      const secondRun = await processor.processRetentionEnforcement({ now: FIXED_NOW });
+      expect(secondRun.totalFlaggedForReview).toBe(0);
+      expect(await repo.getFlaggedReviews()).toHaveLength(2);
     });
   });
 });

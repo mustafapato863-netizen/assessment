@@ -46,4 +46,9 @@ COPY --from=builder /app/packages/database/generated ./packages/database/generat
 COPY --from=builder /app/packages/database/prisma ./packages/database/prisma
 COPY --from=builder /app/apps/worker/dist ./apps/worker/dist
 
+RUN chown -R node:node /app
+USER node
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD pgrep -f "apps/worker/dist/main.js" > /dev/null || exit 1
+
 CMD ["node", "apps/worker/dist/main.js"]

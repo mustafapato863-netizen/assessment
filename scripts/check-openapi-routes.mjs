@@ -156,26 +156,43 @@ async function main() {
     }
   }
 
+  const documentedSet = new Set(
+    matchedEndpoints.map((ep) => `${ep.method} ${ep.normalizedPath}`),
+  );
+  const undocumentedRoutes = nestRoutes.filter(
+    (nr) => nr.path.startsWith('/api/v1/assessflow') && !documentedSet.has(`${nr.method} ${nr.path}`),
+  );
+
   console.log('\n--- Route Parity Verification Results ---');
   console.log(`Verified matches: ${matchedEndpoints.length} / ${openApiEndpoints.length}`);
 
-  if (missingEndpoints.length > 0) {
-    console.error('\n[OpenAPI Gate] BREAKING CHANGE DETECTED!');
-    console.error(
-      `The following ${missingEndpoints.length} endpoint(s) documented in OpenAPI v1.1 are missing from NestJS:`,
-    );
-    for (const missing of missingEndpoints) {
+  if (missingEndpoints.length > 0 || undocumentedRoutes.length > 0) {
+    console.error('\n[OpenAPI Gate] CONTRACT DRIFT DETECTED!');
+    if (missingEndpoints.length > 0) {
       console.error(
-        `  - [${missing.method}] ${missing.openApiPath} -> expected route ${missing.expectedNestPath}`,
+        `The following ${missingEndpoints.length} endpoint(s) documented in OpenAPI are missing from NestJS:`,
       );
+      for (const missing of missingEndpoints) {
+        console.error(
+          `  - [${missing.method}] ${missing.openApiPath} -> expected route ${missing.expectedNestPath}`,
+        );
+      }
+    }
+    if (undocumentedRoutes.length > 0) {
+      console.error(
+        `The following ${undocumentedRoutes.length} NestJS route(s) are undocumented in OpenAPI:`,
+      );
+      for (const extra of undocumentedRoutes) {
+        console.error(`  - [${extra.method}] ${extra.path}`);
+      }
     }
     process.exit(1);
   }
 
   console.log(
-    'All 25 OpenAPI v1.1 documented endpoints are fully implemented and verified in NestJS.',
+    `All ${openApiEndpoints.length} OpenAPI documented endpoints and all NestJS /api/v1/assessflow routes match two-way.`,
   );
-  console.log('[OpenAPI Gate] PASS: No breaking missing endpoints detected.\n');
+  console.log('[OpenAPI Gate] PASS: Full two-way route parity verified.\n');
 }
 
 main().catch((error) => {

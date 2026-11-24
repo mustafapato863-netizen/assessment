@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import { Prisma } from '@assessflow/database';
-import { randomUUID } from 'node:crypto';
+import { adminPolicyEnforceSchema } from '@assessflow/contracts';
 import type { AuthActor } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
+import { currentCorrelationId } from '../common/correlation.context';
 import {
   AccessAccountsService,
   type AdminAccessAccountInput,
@@ -48,6 +49,10 @@ export class AdministrationService {
     return this.accounts.list({ id: 'admin', name: 'Admin', roles: ['Admin'] });
   }
 
+  rolesMatrix() {
+    return this.accounts.getRolesMatrix();
+  }
+
   createAccount(input: AdminAccessAccountInput, actor: AuthActor) {
     return this.accounts.adminCreate(input, actor);
   }
@@ -58,6 +63,10 @@ export class AdministrationService {
 
   deactivateAccount(id: string, actor: AuthActor) {
     return this.accounts.adminDeactivate(id, actor);
+  }
+
+  reactivateAccount(id: string, actor: AuthActor) {
+    return this.accounts.adminReactivate(id, actor);
   }
 
   resetAccountPassword(id: string, actor: AuthActor) {
@@ -76,23 +85,49 @@ export class AdministrationService {
     };
   }
 
-  async enforcePolicy(
-    input: { policy?: AdministrationPolicy; reason?: string },
-    actor: AuthActor,
-  ): Promise<AdministrationPolicy> {
-    if (!this.prisma.enabled)
+  async enforcePolicy(input: unknown, actor: AuthActor): Promise<AdministrationPolicy> {
+    if (!this.prisma.enabled) {
       throw new ServiceUnavailableException('Policy storage is not available.');
-    const next = input?.policy;
-    this.validatePolicy(next);
-    const reason = input.reason?.trim() || null;
-    if (reason && reason.length > 2000)
-      throw new BadRequestException('Change note cannot exceed 2,000 characters.');
-    const previous = await this.getPolicy();
-    const version = this.nextVersion(previous.version);
-    const { version: _version, updatedAt: _updatedAt, ...settings } = next;
+    }
+    const parsed = adminPolicyEnforceSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new BadRequestException(
+        parsed.error.issues[0]?.message ?? 'A valid governance policy is required.',
+      );
+    }
+
+    const { policy, reason: rawReason } = parsed.data;
+    const reason = rawReason?.trim() || null;
+    const settings = {
+      cbiWeight: policy.cbiWeight,
+      caseStudyWeight: policy.caseStudyWeight,
+      simulationWeight: policy.simulationWeight,
+      passingScore: policy.passingScore,
+      blindGrading: policy.blindGrading,
+      autoEscalate: policy.autoEscalate,
+      slaWindows: {
+        eligibilityHours: policy.slaWindows.eligibilityHours,
+        assessorHours: policy.slaWindows.assessorHours,
+        committeeHours: policy.slaWindows.committeeHours,
+      },
+    };
     const settingsJson = JSON.parse(JSON.stringify(settings)) as Prisma.InputJsonValue;
     const savedAt = new Date();
-    await this.prisma.$transaction(async (tx) => {
+
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.governancePolicy.findUnique({ where: { id: 'default' } });
+      const previous: AdministrationPolicy = existing
+        ? {
+            ...(existing.settings as unknown as Omit<
+              AdministrationPolicy,
+              'version' | 'updatedAt'
+            >),
+            version: existing.version,
+            updatedAt: existing.updatedAt.toISOString(),
+          }
+        : { ...DEFAULT_POLICY, slaWindows: { ...DEFAULT_POLICY.slaWindows } };
+
+      const version = this.nextVersion(previous.version);
       await tx.governancePolicy.upsert({
         where: { id: 'default' },
         create: { id: 'default', version, settings: settingsJson, updatedBy: actor.id },
@@ -108,11 +143,11 @@ export class AdministrationService {
           reason,
           previousData: JSON.parse(JSON.stringify(previous)) as Prisma.InputJsonValue,
           newData: JSON.parse(JSON.stringify({ ...settings, version })) as Prisma.InputJsonValue,
-          correlationId: `corr-${randomUUID()}`,
+          correlationId: currentCorrelationId(),
         },
       });
+      return { ...settings, version, updatedAt: savedAt.toISOString() };
     });
-    return { ...settings, version, updatedAt: savedAt.toISOString() };
   }
 
   async listAudit(input: {
@@ -131,30 +166,32 @@ export class AdministrationService {
     if (input.from) {
       const from = new Date(input.from);
       if (Number.isNaN(from.getTime())) throw new BadRequestException('Invalid audit start date.');
+      from.setUTCHours(0, 0, 0, 0);
       createdAt.gte = from;
     }
     if (input.to) {
       const to = new Date(input.to);
       if (Number.isNaN(to.getTime())) throw new BadRequestException('Invalid audit end date.');
-      to.setHours(23, 59, 59, 999);
+      to.setUTCHours(23, 59, 59, 999);
       createdAt.lte = to;
     }
+    const trimmedSearch = input.search?.trim().slice(0, 120);
     const where: Prisma.AuditEventWhereInput = {
       ...(input.action ? { action: input.action } : {}),
       ...(Object.keys(createdAt).length ? { createdAt } : {}),
-      ...(input.search?.trim()
+      ...(trimmedSearch
         ? {
             OR: [
-              { actorName: { contains: input.search.trim(), mode: 'insensitive' } },
-              { action: { contains: input.search.trim(), mode: 'insensitive' } },
-              { entityType: { contains: input.search.trim(), mode: 'insensitive' } },
-              { entityId: { contains: input.search.trim(), mode: 'insensitive' } },
-              { reason: { contains: input.search.trim(), mode: 'insensitive' } },
+              { actorName: { contains: trimmedSearch, mode: 'insensitive' } },
+              { action: { contains: trimmedSearch, mode: 'insensitive' } },
+              { entityType: { contains: trimmedSearch, mode: 'insensitive' } },
+              { entityId: { contains: trimmedSearch, mode: 'insensitive' } },
+              { reason: { contains: trimmedSearch, mode: 'insensitive' } },
             ],
           }
         : {}),
     };
-    const [total, records] = await this.prisma.$transaction([
+    const [total, records, distinctActions] = await this.prisma.$transaction([
       this.prisma.auditEvent.count({ where }),
       this.prisma.auditEvent.findMany({
         where,
@@ -169,7 +206,14 @@ export class AdministrationService {
           entityType: true,
           entityId: true,
           reason: true,
+          correlationId: true,
         },
+      }),
+      this.prisma.auditEvent.findMany({
+        distinct: ['action'],
+        select: { action: true },
+        orderBy: { action: 'asc' },
+        take: 100,
       }),
     ]);
     return {
@@ -180,41 +224,14 @@ export class AdministrationService {
         action: event.action,
         target: `${event.entityType} · ${event.entityId}`,
         reason: event.reason,
-        hash: null,
-        integrity: 'Not verified' as const,
+        hash: event.correlationId,
+        integrity: 'Tracked' as const,
       })),
+      availableActions: distinctActions.map((row) => row.action),
       total,
       page,
       pageSize,
     };
-  }
-
-  private validatePolicy(policy?: AdministrationPolicy): asserts policy is AdministrationPolicy {
-    if (!policy || !policy.slaWindows)
-      throw new BadRequestException('A complete policy is required.');
-    const weights = [policy.cbiWeight, policy.caseStudyWeight, policy.simulationWeight];
-    if (
-      weights.some((value) => !Number.isFinite(value) || value < 0 || value > 100) ||
-      weights.reduce((sum, value) => sum + value, 0) !== 100
-    ) {
-      throw new BadRequestException(
-        'Scoring weights must be between 0% and 100% and total exactly 100%.',
-      );
-    }
-    if (
-      !Number.isFinite(policy.passingScore) ||
-      policy.passingScore < 0 ||
-      policy.passingScore > 100
-    ) {
-      throw new BadRequestException('Minimum passing score must be between 0% and 100%.');
-    }
-    const windows = Object.values(policy.slaWindows);
-    if (windows.length !== 3 || windows.some((value) => !Number.isFinite(value) || value < 1)) {
-      throw new BadRequestException('Every SLA window must be at least 1 hour.');
-    }
-    if (typeof policy.blindGrading !== 'boolean' || typeof policy.autoEscalate !== 'boolean') {
-      throw new BadRequestException('Safeguard values must be true or false.');
-    }
   }
 
   private nextVersion(current: string): string {

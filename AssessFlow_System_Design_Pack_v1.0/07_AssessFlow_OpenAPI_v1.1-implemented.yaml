@@ -3,36 +3,156 @@ info:
   title: AssessFlow API (implemented contract)
   version: 1.1.0
   description: >
-    Implemented REST contract for the AssessFlow MVP workflow
-    (request → eligibility → plan → evidence → result → recommendation →
-    approval → development/reassessment → closure), reconciled with the
-    NestJS implementation, Prisma schema, and Gate 1 approvals.
-    Numeric scoring is disabled (scoringEnabled=false).
-    Deltas vs v1.0 design baseline: PATCH case-edit and per-criterion PUT are
-    not implemented (covered by finalize flows); recommendation binds the
-    latest finalized result revision implicitly. All commands are version-checked
-    (optimistic concurrency, 409 on stale version) and accept Idempotency-Key.
+    Implemented REST contract for the AssessFlow workflow
+    (request → eligibility → plan → evidence → scorecard → result →
+    recommendation → approval → development/reassessment → closure),
+    plus Auth, Access/Administration, Roles Matrix, Calibration, AI Copilot,
+    and Attachment scanning/streaming. All mutating commands use optimistic
+    concurrency (expectedVersion, 409 on stale version) and Idempotency-Key.
 servers:
 - url: /api/v1/assessflow
 security:
 - bearerAuth: []
 tags:
+- name: System
+- name: Auth
+- name: Access
+- name: Administration
 - name: Cases
 - name: Eligibility
 - name: Planning
+- name: Scorecard
 - name: Events
 - name: Evidence
+- name: Attachments
 - name: Results
 - name: Recommendations
 - name: Approvals
 - name: Development
 - name: Reassessment
-- name: System
+- name: Calibration
+- name: Copilot
 paths:
+  /health:
+    get:
+      tags: [System]
+      summary: Service liveness check
+      security: []
+      responses:
+        '200': { description: Service alive }
+  /health/ready:
+    get:
+      tags: [System]
+      summary: Service and database readiness check
+      security: []
+      responses:
+        '200': { description: Service and database ready }
+        '503': { description: Database unavailable }
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate with company email and password
+      security: []
+      responses:
+        '200': { description: Authenticated session and bearer token }
+        '401': { description: Invalid credentials }
+  /auth/change-password:
+    post:
+      tags: [Auth]
+      summary: Change current user password (temporary or voluntary)
+      responses:
+        '200': { description: Password updated and fresh token returned }
+  /access/accounts:
+    get:
+      tags: [Access]
+      summary: List access accounts
+      responses:
+        '200': { description: Access accounts list }
+    post:
+      tags: [Access]
+      summary: Create access account
+      responses:
+        '201': { description: Account created }
+  /access/accounts/assessor-options:
+    get:
+      tags: [Access]
+      summary: List active accounts eligible to serve as assessors
+      responses:
+        '200': { description: Assessor options }
+  /access/accounts/{id}:
+    patch:
+      tags: [Access]
+      summary: Update access account role or data scope
+      responses:
+        '200': { description: Account updated }
+    delete:
+      tags: [Access]
+      summary: Remove access account
+      responses:
+        '200': { description: Account deleted }
+  /admin/accounts:
+    get:
+      tags: [Administration]
+      summary: List administration managed accounts
+      responses:
+        '200': { description: Admin account list }
+    post:
+      tags: [Administration]
+      summary: Create managed account with one-time password
+      responses:
+        '201': { description: Account created }
+  /admin/accounts/{id}:
+    patch:
+      tags: [Administration]
+      summary: Update account role, scope, or status
+      responses:
+        '200': { description: Account updated }
+  /admin/accounts/{id}/deactivate:
+    post:
+      tags: [Administration]
+      summary: Deactivate account
+      responses:
+        '200': { description: Account deactivated }
+  /admin/accounts/{id}/reactivate:
+    post:
+      tags: [Administration]
+      summary: Reactivate deactivated account with fresh one-time password
+      responses:
+        '200': { description: Account reactivated }
+  /admin/accounts/{id}/reset-password:
+    post:
+      tags: [Administration]
+      summary: Reset account password and require change at next sign-in
+      responses:
+        '200': { description: Password reset }
+  /admin/roles-matrix:
+    get:
+      tags: [Administration]
+      summary: Get live RBAC role permissions matrix derived from guard rules
+      responses:
+        '200': { description: Role permissions matrix }
+  /admin/policy:
+    get:
+      tags: [Administration]
+      summary: Get governance policy settings
+      responses:
+        '200': { description: Governance policy }
+  /admin/policy/enforce:
+    post:
+      tags: [Administration]
+      summary: Enforce or update governance policy settings
+      responses:
+        '200': { description: Governance policy updated }
+  /admin/audit:
+    get:
+      tags: [Administration]
+      summary: Search organization audit trail events
+      responses:
+        '200': { description: Paginated audit trail events and available actions }
   /overview:
     get:
       tags: [System]
-      summary: Role-aware overview metrics, tasks, and pipeline
+      summary: Role-aware overview metrics, nav counts, tasks, and pipeline
       responses:
         '200': { description: Overview payload }
   /tasks:
@@ -41,6 +161,24 @@ paths:
       summary: Current user task queue (server-scoped)
       responses:
         '200': { description: Task list }
+  /development-plans:
+    get:
+      tags: [Development]
+      summary: Batch-list active development plans across scoped cases
+      responses:
+        '200': { description: Development plan list with case metadata }
+  /assessor/assignments:
+    get:
+      tags: [Events]
+      summary: List events assigned to the current assessor
+      responses:
+        '200': { description: Assessor event assignments }
+  /me/results:
+    get:
+      tags: [Results]
+      summary: List released assessment results for the signed-in employee
+      responses:
+        '200': { description: Released employee results }
   /cases:
     get:
       tags: [Cases]
@@ -77,6 +215,28 @@ paths:
       responses:
         '200': { description: Case detail }
         '404': { $ref: '#/components/responses/NotFound' }
+  /cases/{caseId}/stages/reopen:
+    post:
+      tags: [Cases]
+      summary: Reopen a completed workflow stage back to active editing
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Stage reopened }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /cases/{caseId}/request:
+    patch:
+      tags: [Cases]
+      summary: Admin edit of case intake request metadata
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Case request updated }
+  /cases/{caseId}/employee-name:
+    patch:
+      tags: [Cases]
+      summary: Update candidate employee display name on a case
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Employee name updated }
   /cases/{caseId}/submit:
     post:
       tags: [Cases]
@@ -152,6 +312,32 @@ paths:
       responses:
         '200': { description: Plan }
         '404': { $ref: '#/components/responses/NotFound' }
+  /cases/{caseId}/scorecard:
+    parameters: [{ $ref: '#/components/parameters/CaseId' }]
+    get:
+      tags: [Scorecard]
+      summary: Get competency scorecard configuration and submitted ratings
+      responses:
+        '200': { description: Scorecard state }
+    post:
+      tags: [Scorecard]
+      summary: Save or submit competency scorecard ratings
+      responses:
+        '200': { description: Scorecard saved or submitted }
+  /cases/{caseId}/scorecard/config:
+    patch:
+      tags: [Scorecard]
+      summary: Update competency scorecard configuration before submission
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Scorecard configuration updated }
+  /cases/{caseId}/scorecard/revise:
+    post:
+      tags: [Scorecard]
+      summary: Revise a submitted competency scorecard with justification
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Scorecard revised }
   /cases/{caseId}/events:
     parameters: [{ $ref: '#/components/parameters/CaseId' }]
     get:
@@ -207,6 +393,44 @@ paths:
       responses:
         '200': { description: Submitted (returns case detail plus evidenceId) }
         '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /attachments:
+    post:
+      tags: [Attachments]
+      summary: Upload and queue virus scan for a case attachment
+      responses:
+        '201': { description: Attachment queued for scanning }
+  /cases/{caseId}/attachments:
+    get:
+      tags: [Attachments]
+      summary: List attachments linked to an assessment case
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Attachment summaries }
+  /attachments/clean/{attachmentId}:
+    get:
+      tags: [Attachments]
+      summary: Stream clean attachment bytes for inline preview or download
+      responses:
+        '200': { description: Binary file stream }
+        '404': { description: File not available }
+  /attachments/{attachmentId}:
+    get:
+      tags: [Attachments]
+      summary: Get attachment scan status and metadata
+      responses:
+        '200': { description: Attachment status }
+  /attachments/{attachmentId}/preview:
+    get:
+      tags: [Attachments]
+      summary: Resolve clean attachment preview metadata and stream URL
+      responses:
+        '200': { description: Preview URL and status }
+  /attachments/{attachmentId}/download:
+    get:
+      tags: [Attachments]
+      summary: Resolve clean attachment download metadata and stream URL
+      responses:
+        '200': { description: Download URL and status }
   /cases/{caseId}/result/finalize:
     post:
       tags: [Results]
@@ -244,6 +468,13 @@ paths:
         '200': { description: Result reopened }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /cases/{caseId}/result/assessor-recommendation:
+    patch:
+      tags: [Results]
+      summary: Save or refine assessor recommendation notes before finalization
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Assessor recommendation saved }
   /cases/{caseId}/result:
     get:
       tags: [Results]
@@ -252,6 +483,13 @@ paths:
       responses:
         '200': { description: Latest result revision }
         '404': { $ref: '#/components/responses/NotFound' }
+  /cases/{caseId}/feedback-visibility:
+    post:
+      tags: [Results]
+      summary: Release or withhold candidate feedback visibility
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Feedback visibility updated }
   /cases/{caseId}/recommendation:
     parameters: [{ $ref: '#/components/parameters/CaseId' }]
     get:
@@ -357,6 +595,33 @@ paths:
         '200': { description: Closed }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/BusinessRuleFailed' }
+  /calibration/matrix:
+    get:
+      tags: [Calibration]
+      summary: Get organization calibration matrix across finalized cases
+      responses:
+        '200': { description: Calibration matrix payload }
+  /cases/{caseId}/copilot/synthesize:
+    post:
+      tags: [Copilot]
+      summary: Synthesize assessment evidence into candidate strengths, gaps, and draft narrative
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Copilot synthesis response }
+  /cases/{caseId}/copilot/bias-check:
+    post:
+      tags: [Copilot]
+      summary: Check assessment narrative for biased or ambiguous language
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Copilot bias audit response }
+  /cases/{caseId}/copilot/suggest-actions:
+    post:
+      tags: [Copilot]
+      summary: Suggest SMART development plan actions from assessment gaps
+      parameters: [{ $ref: '#/components/parameters/CaseId' }]
+      responses:
+        '200': { description: Suggested SMART development actions }
 components:
   securitySchemes:
     bearerAuth:
@@ -374,7 +639,7 @@ components:
       name: Idempotency-Key
       required: false
       schema: { type: string }
-      description: Command deduplication key, scoped with x-actor-id. Persisted in PostgreSQL.
+      description: Command deduplication key, scoped with actor identity. Persisted in PostgreSQL.
   schemas:
     AssessmentReason:
       type: string
@@ -391,7 +656,7 @@ components:
         assessmentReason: { $ref: '#/components/schemas/AssessmentReason' }
         stage: { type: string }
         status: { type: string }
-        scoringEnabled: { type: boolean, default: false }
+        scoringEnabled: { type: boolean, default: true }
         version: { type: integer }
         availableActions:
           type: array
