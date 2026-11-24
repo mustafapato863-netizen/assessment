@@ -15,6 +15,10 @@ function normalizeOrigin(raw) {
   return withScheme.replace(/\/+$/, '');
 }
 
+async function fetchWithTimeout(url, init = {}, timeoutMs = 12_000) {
+  return fetch(url, { ...init, signal: AbortSignal.timeout(timeoutMs) });
+}
+
 async function checkTarget(rawTarget) {
   const origin = normalizeOrigin(rawTarget);
   const { hostname } = new URL(origin);
@@ -47,7 +51,7 @@ async function checkTarget(rawTarget) {
   }
 
   try {
-    const res = await fetch(`${origin}/`, { redirect: 'manual' });
+    const res = await fetchWithTimeout(`${origin}/`, { redirect: 'manual' });
     const server = res.headers.get('server') ?? '';
     const location = res.headers.get('location') ?? '';
     const html = await res.text();
@@ -73,7 +77,7 @@ async function checkTarget(rawTarget) {
   }
 
   try {
-    const res = await fetch(`${origin}/api/v1/assessflow/health`);
+    const res = await fetchWithTimeout(`${origin}/api/v1/assessflow/health`);
     const cacheControl = res.headers.get('cache-control') ?? '';
     const text = await res.text();
     let parsed = null;
@@ -91,7 +95,7 @@ async function checkTarget(rawTarget) {
   }
 
   try {
-    const res = await fetch(`${origin}/api/v1/assessflow/health/ready`);
+    const res = await fetchWithTimeout(`${origin}/api/v1/assessflow/health/ready`);
     const text = await res.text();
     let parsed = null;
     try {
@@ -108,7 +112,7 @@ async function checkTarget(rawTarget) {
   }
 
   try {
-    const res = await fetch(`${origin}/api/v1/assessflow/auth/login`, {
+    const res = await fetchWithTimeout(`${origin}/api/v1/assessflow/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
