@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        - VITE_API_URL=${VITE_API_URL:-http://localhost:8080/api/v1/assessflow}
+        - VITE_API_URL=${VITE_API_URL:-/api/v1/assessflow}
     restart: unless-stopped
     ports:
       - "3000:80"
@@ -21,10 +21,14 @@ services:
     ports:
       - "8080:8080"
     environment:
+      - NODE_ENV=${NODE_ENV:-production}
       - PORT=8080
       - DATABASE_URL=${DATABASE_URL:-postgresql://assessflow:123456@postgres:5432/asses_db}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379}
-      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:5174}
+      - AUTH_JWT_SECRET=${AUTH_JWT_SECRET:-replace-with-a-long-random-secret-before-deployment}
+      - ACCESS_ALLOWED_EMAIL_DOMAIN=${ACCESS_ALLOWED_EMAIL_DOMAIN:-saudigerman.com}
+      - TRUST_PROXY=${TRUST_PROXY:-1}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-https://assess.zainx.cloud,https://assessflow.zainx.cloud,https://web-opal-tau-44.vercel.app,https://web-zain-mustafas-projects.vercel.app,http://localhost:3000,http://localhost:5174}
       - DATA_MODE=${DATA_MODE:-database}
       - DEFAULT_LOCALE=en
     depends_on:

@@ -7,13 +7,9 @@ coverage/
 !.env.example
 .turbo/
 .vite/
+.vercel/
 playwright-report/
 test-results/
-*.log
-*.tsbuildinfo
-.env
-.env.*
-!.env.example
-packages/database/generated/
 apps/api/test-report.json
+*.log
 *.tsbuildinfo
