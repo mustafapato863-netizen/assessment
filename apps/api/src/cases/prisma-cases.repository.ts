@@ -827,7 +827,8 @@ export class PrismaCasesRepository {
       where,
       include: caseSummaryInclude,
       orderBy: { requestedAt: 'desc' },
-      ...(filters.limit ? { take: Math.min(500, Math.max(1, filters.limit)) } : {}),
+      // Always cap the list so one request can never load every case.
+      take: Math.min(500, Math.max(1, filters.limit ?? 200)),
     });
     const actorRoles = actor.roles;
     return records.map((record) => this.mapSummaryRow(record, actorRoles));
