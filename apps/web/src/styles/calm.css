@@ -468,3 +468,18 @@ body,
     grid-template-columns: 1fr;
   }
 }
+
+/* Icon rail (681-850px): mobile action buttons render icon-only so text never overflows the 82px rail */
+@media (min-width: 681px) and (max-width: 850px) {
+  .sidebar-mobile-btn {
+    justify-content: center;
+    gap: 0;
+    min-height: 40px;
+    padding: 8px;
+    font-size: 0;
+  }
+  .sidebar-mobile-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+}
