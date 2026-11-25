@@ -38,8 +38,12 @@ const DEFAULT_POLICY: AdministrationPolicy = {
   updatedAt: null,
 };
 
+const AUDIT_ACTIONS_TTL_MS = 5 * 60 * 1000;
+
 @Injectable()
 export class AdministrationService {
+  private auditActionsCache?: { at: number; actions: string[] };
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly accounts: AccessAccountsService,
@@ -191,7 +195,7 @@ export class AdministrationService {
           }
         : {}),
     };
-    const [total, records, distinctActions] = await this.prisma.$transaction([
+    const [total, records] = await this.prisma.$transaction([
       this.prisma.auditEvent.count({ where }),
       this.prisma.auditEvent.findMany({
         where,
@@ -209,13 +213,8 @@ export class AdministrationService {
           correlationId: true,
         },
       }),
-      this.prisma.auditEvent.findMany({
-        distinct: ['action'],
-        select: { action: true },
-        orderBy: { action: 'asc' },
-        take: 100,
-      }),
     ]);
+    const availableActions = await this.distinctAuditActions();
     return {
       items: records.map((event) => ({
         id: event.id,
@@ -227,11 +226,26 @@ export class AdministrationService {
         hash: event.correlationId,
         integrity: 'Tracked' as const,
       })),
-      availableActions: distinctActions.map((row) => row.action),
+      availableActions,
       total,
       page,
       pageSize,
     };
+  }
+
+  /** The filter list changes rarely, so avoid scanning the audit table on every page load. */
+  private async distinctAuditActions(): Promise<string[]> {
+    const cached = this.auditActionsCache;
+    if (cached && Date.now() - cached.at < AUDIT_ACTIONS_TTL_MS) return cached.actions;
+    const rows = await this.prisma.auditEvent.findMany({
+      distinct: ['action'],
+      select: { action: true },
+      orderBy: { action: 'asc' },
+      take: 100,
+    });
+    const actions = rows.map((row) => row.action);
+    this.auditActionsCache = { at: Date.now(), actions };
+    return actions;
   }
 
   private nextVersion(current: string): string {
