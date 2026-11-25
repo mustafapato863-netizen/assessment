@@ -2,9 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { PILOT_FLAGS } from './app';
 
 describe('Pilot Feature Flags (Phase 06 Cutover & Enterprise)', () => {
-  it('evaluates calibration feature flag according to VITE_FEATURE_CALIBRATION environment', () => {
-    const expected = import.meta.env.VITE_FEATURE_CALIBRATION === 'true';
-    expect(PILOT_FLAGS.calibration).toBe(expected);
+  it('keeps the calibration feature flag enabled (hardcoded in lib/flags.ts)', () => {
+    expect(PILOT_FLAGS.calibration).toBe(true);
   });
 
   it('correctly configures calibration route presence based on feature flag state', () => {
