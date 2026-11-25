@@ -3471,6 +3471,17 @@ td span + small {
     gap: 8px;
     white-space: nowrap;
     flex-wrap: nowrap;
+    /* Scroll cue: edge shadows show while more steps are hidden; white covers
+       (attached to the content) hide them once scrolled to that end. */
+    background:
+      linear-gradient(to right, #ffffff 30%, rgba(255, 255, 255, 0)) left center / 32px 100%
+        no-repeat local,
+      linear-gradient(to left, #ffffff 30%, rgba(255, 255, 255, 0)) right center / 32px 100%
+        no-repeat local,
+      linear-gradient(to right, rgba(79, 70, 229, 0.22), rgba(79, 70, 229, 0)) left center / 18px
+        100% no-repeat scroll,
+      linear-gradient(to left, rgba(79, 70, 229, 0.22), rgba(79, 70, 229, 0)) right center / 18px
+        100% no-repeat scroll;
   }
   .step {
     flex: 0 0 auto;
