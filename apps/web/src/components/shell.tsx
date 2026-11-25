@@ -31,6 +31,7 @@ import { copy, type Copy, type View } from '../lib/labels';
 import { PILOT_FLAGS } from '../lib/flags';
 import { useToast, ToastContext, type ToastContextValue } from '../hooks/use-toast';
 import { CommandPalette, ShortcutsHelpDialog, useKeyboardShortcuts } from './command-palette';
+import { BackToTop } from './back-to-top';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 
@@ -737,6 +738,7 @@ export function AppShell({
       <ShortcutsHelpDialog isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
       <ProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
+      <BackToTop />
     </div>
   );
 }
