@@ -483,3 +483,16 @@ body,
     height: 16px;
   }
 }
+
+/* Phones: collapse the topbar search to an icon button (the placeholder truncates to a sliver otherwise) */
+@media (max-width: 640px) {
+  .global-search {
+    flex: 0 0 auto;
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+  .global-search input {
+    display: none;
+  }
+}
