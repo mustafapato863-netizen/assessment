@@ -413,3 +413,20 @@
     gap: 8px;
   }
 }
+
+/* Phones: header should size to its content, charts should not leave empty space or cut labels */
+@media (max-width: 640px) {
+  .in-head > div:first-child {
+    flex: 0 0 auto;
+  }
+  .in-bar__label {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.25;
+  }
+}
+@media (max-width: 1100px) {
+  .in-card {
+    height: auto;
+  }
+}
