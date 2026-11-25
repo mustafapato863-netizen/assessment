@@ -1,6 +1,19 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "web-opal-tau-44.vercel.app"
+        }
+      ],
+      "destination": "https://assess.zainx.cloud/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/v1/assessflow/:path*",
