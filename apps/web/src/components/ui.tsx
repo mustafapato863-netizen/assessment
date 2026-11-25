@@ -300,7 +300,7 @@ export function CaseTable({
         <tbody>
           {cases.map((item) => (
             <tr key={item.id} onClick={() => onOpen(item.id)}>
-              <td>
+              <td className="cell-person">
                 <div className="table-person">
                   <div
                     className="avatar avatar-small"
@@ -344,29 +344,29 @@ export function CaseTable({
                   </div>
                 </div>
               </td>
-              <td>
+              <td data-label="Reason">
                 <span className="reason-label">
                   {reasonLabels[item.assessmentReason] ?? item.assessmentReason}
                 </span>
                 <small>{item.targetRole}</small>
               </td>
-              <td>
+              <td data-label="Status">
                 <div className="table-status">
                   <span>{item.stage}</span>
                   <StatusBadge status={item.status} />
                 </div>
               </td>
               {showResultChips && (
-                <td>
+                <td data-label="Result">
                   <CaseResultChip caseId={item.id} />
                 </td>
               )}
-              <td>{item.owner}</td>
-              <td>
+              <td data-label="Owner">{item.owner}</td>
+              <td data-label="Requested">
                 <span>{formatDate(item.requestedAt, { day: '2-digit', month: 'short' })}</span>
                 <small>{item.ageLabel}</small>
               </td>
-              <td>
+              <td className="cell-action">
                 <button
                   type="button"
                   className="row-action"
