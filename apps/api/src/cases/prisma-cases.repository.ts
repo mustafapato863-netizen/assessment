@@ -80,6 +80,9 @@ import {
 } from '../access/access-accounts.service';
 import { ApprovalsDomain } from './domain/approvals.domain';
 
+/** Overview numbers may be at most this old when nothing was written through the API. */
+const OVERVIEW_CACHE_TTL_MS = 15_000;
+
 const caseInclude = {
   employee: true,
   eligibility: { include: { criteria: true } },
@@ -142,6 +145,13 @@ const candidateEligibilityCriteria = [
 
 export class PrismaCasesRepository {
   private cachedOrganization?: { id: string; code: string; name: string };
+  // Short-lived overview cache, keyed by who is asking (scope changes the counts).
+  // Any audit write bumps the version, so changes made through this API show up at once.
+  private overviewCache = new Map<
+    string,
+    { at: number; version: number; value: OverviewResponse }
+  >();
+  private writeVersion = 0;
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -579,6 +589,25 @@ export class PrismaCasesRepository {
   }
 
   async getOverview(): Promise<OverviewResponse> {
+    const actor = getActorContext();
+    const key = JSON.stringify([
+      actor.id,
+      [...actor.roles].sort(),
+      actor.scopeType,
+      actor.scopeValues,
+    ]);
+    const hit = this.overviewCache.get(key);
+    if (hit && hit.version === this.writeVersion && Date.now() - hit.at < OVERVIEW_CACHE_TTL_MS) {
+      return hit.value;
+    }
+    const version = this.writeVersion;
+    const value = await this.computeOverview();
+    if (this.overviewCache.size > 200) this.overviewCache.clear();
+    this.overviewCache.set(key, { at: Date.now(), version, value });
+    return value;
+  }
+
+  private async computeOverview(): Promise<OverviewResponse> {
     const organization = await this.organization();
     const actor = getActorContext();
     const scopeWhere = {
@@ -3339,6 +3368,7 @@ export class PrismaCasesRepository {
     detail?: string,
     actor?: { id: string; name: string },
   ) {
+    this.writeVersion += 1;
     const currentActor = actor ?? getActorContext();
     return {
       caseId,
