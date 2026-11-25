@@ -802,7 +802,7 @@ export function OverviewPage({
             icon={<Sparkles size={17} />}
             title="Growth follow-ups"
             action={
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div className="panel-header-actions">
                 <span className="soft-count">
                   {followUpActions.length} {followUpActions.length === 1 ? 'action' : 'actions'} due
                   (&le;{ACTION_DUE_SOON_DAYS}d)
