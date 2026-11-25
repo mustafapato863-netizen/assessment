@@ -2,6 +2,17 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "redirects": [
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "web-opal-tau-44.vercel.app"
+        }
+      ],
+      "destination": "https://assess.zainx.cloud/",
+      "permanent": true
+    },
+    {
       "source": "/:path*",
       "has": [
         {
