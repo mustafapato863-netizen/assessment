@@ -1,0 +1,95 @@
+/* Mobile polish: panel headers wrap, badges never break mid-label */
+.panel-header-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.soft-count,
+.soft-chip {
+  white-space: nowrap;
+}
+.panel-header > .panel-title {
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .panel-header {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 10px 12px;
+  }
+  .panel-header > :last-child {
+    margin-inline-start: auto;
+  }
+  .panel-header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .panel-header .link-button {
+    white-space: nowrap;
+  }
+  .task-panel,
+  .pipeline-panel,
+  .recent-panel {
+    padding: 16px;
+  }
+}
+
+/* Case table becomes a stacked card list on phones instead of scrolling sideways */
+@media (max-width: 759px) {
+  .table-wrap {
+    margin-inline: 0;
+    overflow-x: visible;
+  }
+  .table-wrap table,
+  .table-wrap tbody {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+  .table-wrap thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .table-wrap tbody tr {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 12px;
+    padding: 14px 4px;
+    border-top: 1px solid #f1f5f9;
+  }
+  .table-wrap tbody tr:first-child {
+    border-top: 0;
+  }
+  .table-wrap td {
+    display: block;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+  .table-wrap td.cell-person {
+    grid-column: 1 / -1;
+    padding-inline-end: 40px;
+  }
+  .table-wrap td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 3px;
+    color: var(--muted);
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .table-wrap td.cell-action {
+    position: absolute;
+    top: 12px;
+    inset-inline-end: 4px;
+  }
+}
