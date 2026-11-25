@@ -49,12 +49,20 @@ export function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: 
 
   const canBrowseCases = canAccessRoute(user, 'cases');
 
-  const { data: cases } = useQuery({
-    queryKey: queryKeys.cases(),
-    queryFn: () => api.cases(),
+  // Server-side search: only the 10 best matches are fetched, never the whole list.
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const { data: casesPage } = useQuery({
+    queryKey: [...queryKeys.cases(), 'palette', debouncedQuery],
+    queryFn: () => api.casesPage(debouncedQuery, 10, 0),
     enabled: isOpen && canBrowseCases,
-    staleTime: 60_000,
+    staleTime: 30_000,
   });
+  const cases = casesPage?.items;
 
   useEffect(() => {
     if (isOpen) {
@@ -248,6 +256,8 @@ export function CommandPalette({ isOpen, onClose }: { isOpen: boolean; onClose: 
         Boolean(item.subtitle && item.subtitle.toLowerCase().includes(q)),
     );
 
+    // Case results come from the server search for the debounced query; while the
+    // next search loads, keep only rows that still match what is typed.
     const matchedCases = caseItems.filter(
       (item) =>
         item.title.toLowerCase().includes(q) ||

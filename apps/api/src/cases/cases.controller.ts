@@ -94,17 +94,24 @@ export class CasesController {
 
   @Get('cases')
   @Roles(...ROUTE_PERMISSIONS.CASE_LIST)
-  listCases(
+  async listCases(
+    @Res({ passthrough: true }) res: Response,
     @Query('status') status?: string,
     @Query('search') search?: string,
     @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
   ) {
     const parsedLimit = limit ? Number.parseInt(limit, 10) : undefined;
-    return this.casesService.list({
+    const parsedOffset = offset ? Number.parseInt(offset, 10) : undefined;
+    const page = await this.casesService.listPage({
       status,
       search,
       limit: Number.isFinite(parsedLimit) && (parsedLimit ?? 0) > 0 ? parsedLimit : undefined,
+      offset: Number.isFinite(parsedOffset) && (parsedOffset ?? 0) > 0 ? parsedOffset : undefined,
     });
+    // Body stays a plain array (backward compatible); the total is in a header.
+    res.setHeader('X-Total-Count', String(page.total));
+    return page.items;
   }
 
   @Post('cases')

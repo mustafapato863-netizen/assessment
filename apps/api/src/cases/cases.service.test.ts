@@ -11,6 +11,19 @@ describe('CasesService', () => {
     expect(cases.some((item) => item.status === 'PENDING_ELIGIBILITY')).toBe(true);
   });
 
+  it('pages the case list and reports the total', async () => {
+    const service = new CasesService();
+    const first = await service.listPage({ limit: 2, offset: 0 });
+    const second = await service.listPage({ limit: 2, offset: 2 });
+
+    expect(first.total).toBe(3);
+    expect(first.items).toHaveLength(2);
+    expect(second.items).toHaveLength(1);
+    expect(second.total).toBe(3);
+    const ids = new Set([...first.items, ...second.items].map((item) => item.id));
+    expect(ids.size).toBe(3);
+  });
+
   it('rejects a stale submit version', async () => {
     const service = new CasesService();
     const draft = await service.create({

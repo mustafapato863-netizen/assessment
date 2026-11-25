@@ -292,7 +292,11 @@ async function parseErrorAndThrow(
   );
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  onHeaders?: (headers: Headers) => void,
+): Promise<T> {
   const token = getAuthToken();
   const activeUser = getActiveUser();
   const localActorHeaders: Record<string, string> = token
@@ -325,6 +329,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!response.ok) {
     return parseErrorAndThrow(response, path, Boolean(token));
   }
+
+  onHeaders?.(response.headers);
 
   if (response.status === 204) {
     return undefined as T;
@@ -465,10 +471,38 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ visible }) },
     ),
   tasks: () => request<OverviewResponse['tasks']>('/tasks'),
-  cases: (search = '') =>
-    request<AssessmentCaseSummary[]>(
-      `/cases${search ? `?search=${encodeURIComponent(search)}` : ''}`,
-    ),
+  /** One page of cases and the total number of matches (from the X-Total-Count header). */
+  casesPage: async (
+    search = '',
+    limit = 50,
+    offset = 0,
+  ): Promise<{ items: AssessmentCaseSummary[]; total: number }> => {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (search) params.set('search', search);
+    let total: number | null = null;
+    const items = await request<AssessmentCaseSummary[]>(
+      `/cases?${params.toString()}`,
+      undefined,
+      (headers) => {
+        const raw = Number.parseInt(headers.get('X-Total-Count') ?? '', 10);
+        total = Number.isFinite(raw) ? raw : null;
+      },
+    );
+    return { items, total: total ?? offset + items.length };
+  },
+  /** Every matching case, fetched in bounded pages so no single request is unbounded. */
+  cases: async (search = ''): Promise<AssessmentCaseSummary[]> => {
+    const pageSize = 200;
+    const maxPages = 50;
+    const first = await api.casesPage(search, pageSize, 0);
+    const all = [...first.items];
+    for (let page = 1; page < maxPages && all.length < first.total; page += 1) {
+      const next = await api.casesPage(search, pageSize, page * pageSize);
+      if (next.items.length === 0) break;
+      all.push(...next.items);
+    }
+    return all;
+  },
   caseDetail: (id: string) => request<AssessmentCaseDetail>(`/cases/${enc(id)}`),
   reopenCompletedStage: (id: string, input: AdminReopenStageInput) =>
     request<AssessmentCaseDetail>(`/cases/${enc(id)}/stages/reopen`, {
