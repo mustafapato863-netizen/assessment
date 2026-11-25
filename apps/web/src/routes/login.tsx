@@ -13,9 +13,9 @@ type LoginField = 'email' | 'password';
 type LoginFieldErrors = Partial<Record<LoginField, string>>;
 
 const PRODUCT_POINTS = [
-  'Standardize clinical rubrics and competency benchmarks across departments',
-  'Keep multi-rater evaluations, objective scoring, and committee sign-offs aligned',
-  'Automate readiness tracking, credential verification, and compliance audit logs',
+  'Raise an assessment request for an employee',
+  'Check eligibility and agree the assessment plan',
+  'Record results and take the approval decision',
 ];
 
 export function LoginPage() {
@@ -112,14 +112,14 @@ export function LoginPage() {
   return (
     <main className="sgh-auth-root">
       <AtmosphericBackground variant="auth" />
-      <ThinkingDots dotSize={1.4} spacing={32} speed={0.0014} isDark={true} />
+      <ThinkingDots dotSize={1.4} spacing={32} speed={0.0014} isDark={false} />
 
       <div className="sgh-auth-container">
         <BorderGlow
           animated={true}
           borderRadius={20}
-          glowColor="rgba(0, 163, 224, 0.85)"
-          backgroundColor="rgba(15, 23, 42, 0.94)"
+          glowColor="rgba(0, 132, 206, 0.55)"
+          backgroundColor="rgba(255, 255, 255, 0.96)"
         >
           <section className="sgh-auth-grid">
             <div className="sgh-brand-pane">
@@ -143,12 +143,12 @@ export function LoginPage() {
                   </div>
 
                   <h2 className="sgh-hero-heading">
-                    Accelerate clinical competency and talent calibration with confidence.
+                    Staff and candidate assessments, in one place.
                   </h2>
 
                   <p className="sgh-hero-description">
-                    One unified workspace for clinical preceptors, evaluators, department chairs,
-                    and HR leadership to assess candidates and staff objectively.
+                    Each case moves from request to decision in the same workflow, so everyone
+                    involved sees where it stands.
                   </p>
 
                   <div className="sgh-product-points">
@@ -163,9 +163,7 @@ export function LoginPage() {
               </div>
 
               <div className="sgh-brand-footer sgh-layer-z10">
-                <p className="sgh-footer-security-text">
-                  Enterprise Grade · Role-based Clinical Assessment
-                </p>
+                <p className="sgh-footer-security-text">For authorized Saudi German Health staff</p>
 
                 <div className="sgh-clearance-badges" aria-hidden="true">
                   {['CHAIR', 'HR', 'EVAL', 'PRECEPTOR'].map((role) => (
@@ -190,13 +188,11 @@ export function LoginPage() {
               <header className="sgh-form-header">
                 <div className="sgh-workspace-badge">
                   <ShieldCheck size={14} className="sgh-icon-cyan" />
-                  <span>Saudi German Health · Secure Assessment Workspace</span>
+                  <span>Saudi German Health · Assessment Workspace</span>
                 </div>
 
                 <h1 className="sgh-form-title">Welcome back</h1>
-                <p className="sgh-form-desc">
-                  Enter your work credentials to continue to your assessment workspace.
-                </p>
+                <p className="sgh-form-desc">Sign in with your work email.</p>
               </header>
 
               {error && (
@@ -312,7 +308,7 @@ export function LoginPage() {
               </form>
 
               <div className="sgh-form-footer-note">
-                Secure Hospital Gateway · 256-bit Encryption · SGH Digital Health
+                Trouble signing in? Contact your hospital IT administrator.
               </div>
             </div>
           </section>

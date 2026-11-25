@@ -6,6 +6,7 @@ import { App } from './app';
 import './styles/fonts.css';
 import './styles.css';
 import './styles/mobile-polish.css';
+import './styles/calm.css';
 
 // Restore saved density preference synchronously before first paint
 try {
