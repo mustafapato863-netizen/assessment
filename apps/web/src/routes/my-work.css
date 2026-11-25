@@ -452,3 +452,10 @@
     min-width: 0;
   }
 }
+
+/* Phones: header should size to its content instead of reserving 320px of height */
+@media (max-width: 640px) {
+  .mw-head > div:first-child {
+    flex: 0 0 auto;
+  }
+}
