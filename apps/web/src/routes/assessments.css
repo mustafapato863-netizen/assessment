@@ -431,3 +431,20 @@
     grid-row: 1;
   }
 }
+
+/* Phones: filters wrap instead of pushing past the card edge */
+@media (max-width: 640px) {
+  .as-tools {
+    flex-wrap: wrap;
+    padding: 14px 16px;
+  }
+  .as-search {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .as-select {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+}

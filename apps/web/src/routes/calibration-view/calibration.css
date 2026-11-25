@@ -682,7 +682,7 @@
     grid-template-columns: repeat(2, 1fr);
   }
   .cb-split {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .cb-tr--head {
     display: none;
@@ -758,5 +758,16 @@
   .cb-cell {
     min-height: 92px;
     padding: 10px;
+  }
+}
+
+/* Let cards shrink inside grids so the heatmap scrolls inside the card, not the page */
+.cb-card,
+.cb-split > * {
+  min-width: 0;
+}
+@media (max-width: 640px) {
+  .cb-pad {
+    padding: 16px;
   }
 }
