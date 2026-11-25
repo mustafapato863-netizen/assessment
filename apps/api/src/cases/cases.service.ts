@@ -276,10 +276,27 @@ export class CasesService {
       }));
   }
 
+  async listPage(filters: {
+    status?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ items: AssessmentCaseSummary[]; total: number }> {
+    if (this.repository) {
+      const page = await this.repository.listPage(filters, true);
+      return { items: page.items, total: page.total ?? page.items.length };
+    }
+    const all = await this.list({ status: filters.status, search: filters.search });
+    const offset = Math.max(0, filters.offset ?? 0);
+    const limit = Math.min(500, Math.max(1, filters.limit ?? 200));
+    return { items: all.slice(offset, offset + limit), total: all.length };
+  }
+
   list(filters: {
     status?: string;
     search?: string;
     limit?: number;
+    offset?: number;
   }): AssessmentCaseSummary[] | Promise<AssessmentCaseSummary[]> {
     if (this.repository) return this.repository.list(filters);
     const search = filters.search?.trim().toLowerCase();

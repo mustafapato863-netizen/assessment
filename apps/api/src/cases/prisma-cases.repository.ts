@@ -793,7 +793,16 @@ export class PrismaCasesRepository {
     status?: string;
     search?: string;
     limit?: number;
+    offset?: number;
   }): Promise<AssessmentCaseSummary[]> {
+    return (await this.listPage(filters, false)).items;
+  }
+
+  /** One page of cases plus the total match count (count is skipped unless asked for). */
+  async listPage(
+    filters: { status?: string; search?: string; limit?: number; offset?: number },
+    withTotal = true,
+  ): Promise<{ items: AssessmentCaseSummary[]; total: number | null }> {
     const organization = await this.organization();
     const actor = getActorContext();
     const andFilters: Prisma.AssessmentCaseWhereInput[] = [
@@ -823,14 +832,30 @@ export class PrismaCasesRepository {
         ],
       });
     }
-    const records = await this.prisma.assessmentCase.findMany({
+    const page = {
       where,
       include: caseSummaryInclude,
-      orderBy: { requestedAt: 'desc' },
-      ...(filters.limit ? { take: Math.min(500, Math.max(1, filters.limit)) } : {}),
-    });
+      orderBy: [
+        { requestedAt: 'desc' },
+        { id: 'desc' },
+      ] as Prisma.AssessmentCaseOrderByWithRelationInput[],
+      // Always bounded: one request can never load every case.
+      take: Math.min(500, Math.max(1, filters.limit ?? 200)),
+      skip: Math.max(0, filters.offset ?? 0),
+    };
     const actorRoles = actor.roles;
-    return records.map((record) => this.mapSummaryRow(record, actorRoles));
+    if (!withTotal) {
+      const records = await this.prisma.assessmentCase.findMany(page);
+      return {
+        items: records.map((record) => this.mapSummaryRow(record, actorRoles)),
+        total: null,
+      };
+    }
+    const [total, records] = await this.prisma.$transaction([
+      this.prisma.assessmentCase.count({ where }),
+      this.prisma.assessmentCase.findMany(page),
+    ]);
+    return { items: records.map((record) => this.mapSummaryRow(record, actorRoles)), total };
   }
 
   async get(caseId: string): Promise<AssessmentCaseDetail> {
@@ -2998,6 +3023,7 @@ export class PrismaCasesRepository {
         },
       },
       orderBy: { feedbackReleasedAt: 'desc' },
+      take: 500,
     });
     return records.flatMap((record) => {
       const result = record.resultRevisions[0];

@@ -19,7 +19,7 @@ export const CORS_ALLOWED_HEADERS =
     ? BASE_CORS_HEADERS
     : [...BASE_CORS_HEADERS, ...DEV_ONLY_ACTOR_HEADERS];
 
-export const CORS_EXPOSED_HEADERS = ['x-correlation-id', 'Retry-After'];
+export const CORS_EXPOSED_HEADERS = ['x-correlation-id', 'Retry-After', 'X-Total-Count'];
 
 export function parseAllowedOrigins(rawAllowed?: string): string[] {
   return Array.from(
