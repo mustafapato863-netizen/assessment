@@ -600,3 +600,20 @@
 .em-rename__open {
   margin: 8px 0 12px;
 }
+
+/* Phones: filters wrap instead of pushing past the card edge */
+@media (max-width: 640px) {
+  .em-tools {
+    flex-wrap: wrap;
+    padding: 14px 16px;
+  }
+  .em-search {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .em-select {
+    flex: 1 1 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+}
