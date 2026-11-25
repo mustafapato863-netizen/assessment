@@ -430,3 +430,69 @@ body,
     background: rgba(255, 255, 255, 0.95) !important;
   }
 }
+
+/* ===== Narrow-screen type scale (phones, desktop-mode phones, narrow windows) ===== */
+@media (max-width: 760px) {
+  .page-heading h1 {
+    font-size: 24px;
+    letter-spacing: -0.02em;
+  }
+  .mw-head h1,
+  .as-head h1,
+  .in-head h1,
+  .em-head h1,
+  .administration-heading h1,
+  .cb-top h1 {
+    font-size: 24px;
+  }
+  .metric-grid [class*='value'],
+  .metric-grid strong,
+  .pipeline-row strong,
+  .pipeline-row [class*='count'] {
+    font-size: 26px !important;
+  }
+  .drawer-header h2 {
+    font-size: 19px;
+  }
+  .page-heading {
+    padding: 16px 18px;
+  }
+  .drawer-header {
+    padding: 22px 18px 17px;
+  }
+  .drawer-form {
+    padding: 20px 18px 100px;
+  }
+  /* forms read better stacked below tablet width */
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Icon rail (681-850px): mobile action buttons render icon-only so text never overflows the 82px rail */
+@media (min-width: 681px) and (max-width: 850px) {
+  .sidebar-mobile-btn {
+    justify-content: center;
+    gap: 0;
+    min-height: 40px;
+    padding: 8px;
+    font-size: 0;
+  }
+  .sidebar-mobile-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* Phones: collapse the topbar search to an icon button (the placeholder truncates to a sliver otherwise) */
+@media (max-width: 640px) {
+  .global-search {
+    flex: 0 0 auto;
+    width: 40px;
+    padding: 0;
+    justify-content: center;
+  }
+  .global-search input {
+    display: none;
+  }
+}
