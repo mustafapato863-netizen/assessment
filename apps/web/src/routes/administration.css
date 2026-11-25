@@ -992,3 +992,14 @@
   border: 1px solid #cbd5e1;
   color: #1e293b;
 }
+
+/* Phones: header actions stack and fill the width instead of overflowing */
+@media (max-width: 700px) {
+  .administration-heading-actions {
+    flex-shrink: 1;
+    width: 100%;
+  }
+  .administration-heading-actions .admin-button {
+    flex: 1 1 100%;
+  }
+}
