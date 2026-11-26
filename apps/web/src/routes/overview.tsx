@@ -521,6 +521,18 @@ export function OverviewPage({
           <span>Select a stage to filter Assessments</span>
         </div>
         <div className="pipeline-list">
+          {!data &&
+            Object.keys(pipelineDisplayStageOrder).map((label) => (
+              <div className="pipeline-row pipeline-row-button" key={label} aria-hidden="true">
+                <div className="pipeline-label">
+                  <span>{label === 'Follow-up' ? 'Follow\u2011up' : label}</span>
+                  <b>0</b>
+                </div>
+                <div className="pipeline-bar">
+                  <i style={{ width: 0 }} />
+                </div>
+              </div>
+            ))}
           {data?.pipeline.map((item) => (
             <Link
               to={`/assessments?stage=${encodeURIComponent(pipelineStageFilterMap[item.label] ?? item.label)}`}
@@ -548,6 +560,17 @@ export function OverviewPage({
         </div>
       </section>
       <div className="overview-work-grid">
+        {/* Reserve the queue's space while data loads so the grid does not jump */}
+        {isLoading && priorityQueueCases.length === 0 && (
+          <section
+            className="panel action-queue-section action-queue-placeholder"
+            aria-hidden="true"
+          >
+            <div className="skeleton-line" style={{ width: '38%', height: 16 }} />
+            <div className="skeleton-line" style={{ width: '100%', height: 150, marginTop: 16 }} />
+            <div className="skeleton-line" style={{ width: '100%', height: 90, marginTop: 14 }} />
+          </section>
+        )}
         {/* Priority Action Queue */}
         {priorityQueueCases.length > 0 && (
           <section className="panel action-queue-section" aria-label="Priority action queue">

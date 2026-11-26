@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, Outlet } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -25,8 +25,6 @@ import {
 } from 'lucide-react';
 import { canAccessRoute, getSession, logout, subscribeToAuth, type AppUser } from '../lib/auth';
 import { SghHeartSvg } from '../design-system/brand/sgh-heart-svg';
-import { SettingsModal } from './settings-modal';
-import { ProfileModal } from './profile-modal';
 import { copy, type Copy, type View } from '../lib/labels';
 import { PILOT_FLAGS } from '../lib/flags';
 import { useToast, ToastContext, type ToastContextValue } from '../hooks/use-toast';
@@ -34,6 +32,13 @@ import { CommandPalette, ShortcutsHelpDialog, useKeyboardShortcuts } from './com
 import { BackToTop } from './back-to-top';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
+
+const SettingsModal = lazy(() =>
+  import('./settings-modal').then((m) => ({ default: m.SettingsModal })),
+);
+const ProfileModal = lazy(() =>
+  import('./profile-modal').then((m) => ({ default: m.ProfileModal })),
+);
 
 export { useToast, ToastContext, type ToastContextValue };
 
@@ -736,8 +741,16 @@ export function AppShell({
       </div>
       <CommandPalette isOpen={paletteOpen} onClose={() => setPaletteOpen(false)} />
       <ShortcutsHelpDialog isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
-      <ProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
+      {settingsOpen && (
+        <Suspense fallback={null}>
+          <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
+        </Suspense>
+      )}
+      {profileOpen && (
+        <Suspense fallback={null}>
+          <ProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} />
+        </Suspense>
+      )}
       <BackToTop />
     </div>
   );
