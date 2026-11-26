@@ -153,6 +153,8 @@ export class CalibrationService {
       rawCases = await this.prisma.assessmentCase.findMany({
         where: {
           AND: [
+            // The 9-box covers closed cases only, so its totals match the Overview "Closed" count.
+            { stage: 'CLOSED' },
             { status: { notIn: ['DRAFT', 'CANCELLED'] } },
             { candidateType: { not: 'NEW_CANDIDATE' } },
             caseScopeWhere(actor) as Prisma.AssessmentCaseWhereInput,
