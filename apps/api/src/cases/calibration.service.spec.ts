@@ -26,6 +26,7 @@ function makeCase(
     finalized?: boolean;
     reopened?: boolean;
     storedSummary?: Record<string, unknown>;
+    stage?: string;
   } = {},
 ) {
   const finalized = opts.finalized ?? true;
@@ -39,7 +40,7 @@ function makeCase(
     targetRoleSnapshot: 'Lead',
     targetLevelSnapshot: 'L5',
     status: 'RESULT_FINALIZED',
-    stage: 'RESULT',
+    stage: opts.stage ?? 'CLOSED',
     plan: null,
     scorecards: opts.scores ? [{ ratings: ratings(...opts.scores) }] : [],
     resultRevisions: [
@@ -60,7 +61,10 @@ function serviceWith(cases: ReturnType<typeof makeCase>[]) {
     assessmentCase: {
       findMany: async ({ where }: { where: { AND: Array<Record<string, unknown>> } }) => {
         const dept = where.AND.find((part) => 'departmentSnapshot' in part)?.departmentSnapshot;
-        return cases.filter((c) => !dept || c.departmentSnapshot === dept);
+        const stage = where.AND.find((part) => 'stage' in part)?.stage;
+        return cases.filter(
+          (c) => (!dept || c.departmentSnapshot === dept) && (!stage || c.stage === stage),
+        );
       },
     },
   };
@@ -106,6 +110,26 @@ describe('CalibrationService', () => {
     expect(a.tenureMonths).toBeNull();
     expect(matrix.placedCandidates).toBe(3);
     expect(matrix.axes?.highFrom).toBe(4);
+  });
+
+  it('counts closed cases only, so the 9-box matches the Overview Closed count', async () => {
+    const matrix = await serviceWith([
+      makeCase('closed-a', 'Engineering', { scores: [4, 4] }),
+      makeCase('closed-b', 'Engineering', { scores: [2, 2] }),
+      makeCase('closed-no-scores', 'Engineering', { resultCode: 'READY_NOW' }),
+      makeCase('in-result', 'Engineering', { scores: [4, 4], stage: 'RESULT' }),
+      makeCase('in-assessment', 'Engineering', { scores: [4, 4], stage: 'ASSESSMENT' }),
+    ]).getMatrix();
+
+    expect(matrix.totalCandidates).toBe(3);
+    expect(matrix.placedCandidates).toBe(2);
+    expect(matrix.unplaced?.map((c) => c.caseId)).toEqual(['closed-no-scores']);
+    const ids = [
+      ...matrix.grid.flatMap((cell) => cell.candidates),
+      ...(matrix.unplaced ?? []),
+    ].map((c) => c.caseId);
+    expect(ids).not.toContain('in-result');
+    expect(ids).not.toContain('in-assessment');
   });
 
   it('lists unscored, unfinalized and reopened cases as unplaced instead of box 5', async () => {
