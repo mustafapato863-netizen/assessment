@@ -1,4 +1,9 @@
 import { useEffect, useState } from 'react';
+import {
+  canAddManualAssessor,
+  manualAssessorProblem,
+  manualAssessorProblemMessage,
+} from './assessor-input';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   CalendarDays,
@@ -233,6 +238,16 @@ export function EventsPanel({
   });
   const assessorOptions = assessorOptionsQuery.data ?? [];
   const allAssessorOptions = [...assessorOptions, ...manualAssessors];
+  const manualAssessorInput = {
+    name: manualAssessorName,
+    email: manualAssessorEmail,
+    existingEmails: allAssessorOptions.map((assessor) => assessor.email),
+    total: allAssessorOptions.length,
+  };
+  const manualAssessorCanAdd = canAddManualAssessor(manualAssessorInput);
+  const manualAssessorHint = manualAssessorProblemMessage(
+    manualAssessorProblem(manualAssessorInput),
+  );
 
   const { data: events } = useQuery({
     queryKey: queryKeys.caseEvents(caseDetail.id),
@@ -352,7 +367,7 @@ export function EventsPanel({
                     />
                   </label>
                   <label className="field">
-                    <span>Company email</span>
+                    <span>Email</span>
                     <input
                       type="email"
                       value={manualAssessorEmail}
@@ -364,16 +379,7 @@ export function EventsPanel({
                   <button
                     className="secondary-button"
                     type="button"
-                    disabled={
-                      scheduleEvent.isPending ||
-                      manualAssessorName.trim().length < 2 ||
-                      !/^[^\s@]+@saudigerman\.com$/i.test(manualAssessorEmail.trim()) ||
-                      allAssessorOptions.length >= 20 ||
-                      allAssessorOptions.some(
-                        (assessor) =>
-                          assessor.email.toLowerCase() === manualAssessorEmail.trim().toLowerCase(),
-                      )
-                    }
+                    disabled={scheduleEvent.isPending || !manualAssessorCanAdd}
                     onClick={() => {
                       const email = manualAssessorEmail.trim().toLowerCase();
                       const addedAssessor: AssessorAccountOption = {
@@ -391,6 +397,11 @@ export function EventsPanel({
                     <Plus size={15} /> Add person
                   </button>
                 </div>
+                {manualAssessorHint && (
+                  <p className="assessor-picker-note" role="status">
+                    {manualAssessorHint}
+                  </p>
+                )}
                 <p className="assessor-picker-note">
                   Manual names are saved with this session. To sign in and submit scores, each
                   person needs an active AssessFlow Assessor account matching that email.
