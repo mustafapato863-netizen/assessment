@@ -1,4 +1,4 @@
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const EMAIL_PATTERN = /^[^\s@]+@saudigerman\.com$/i;
 
 export type ManualAssessorProblem = 'name' | 'email' | 'duplicate' | 'limit' | null;
 
@@ -26,7 +26,7 @@ export function manualAssessorProblemMessage(problem: ManualAssessorProblem): st
     case 'name':
       return 'Enter the person name (at least 2 characters).';
     case 'email':
-      return 'Enter a valid email address, for example name@company.com.';
+      return 'Use a company email ending in @saudigerman.com.';
     case 'duplicate':
       return 'This person is already in the list.';
     case 'limit':
