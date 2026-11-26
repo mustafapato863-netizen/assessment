@@ -789,7 +789,7 @@ button:disabled {
 .link-button:hover,
 .back-button:hover {
   color: #ffffff;
-  background: linear-gradient(135deg, #0084ce 0%, #00a859 100%);
+  background: linear-gradient(135deg, #0072b8 0%, #00763f 100%);
   border-color: transparent;
   box-shadow: 0 4px 10px rgba(0, 132, 206, 0.22);
   transform: translateY(-1px);
@@ -5513,7 +5513,7 @@ td span + small {
   position: relative;
   width: 100%;
   height: 48px;
-  background: linear-gradient(135deg, #0084ce 0%, #00a3e0 42%, #00a859 100%);
+  background: linear-gradient(135deg, #0072b8 0%, #00748f 42%, #00763f 100%);
   background-size: 160% 100%;
   color: #ffffff !important;
   font-family: var(--font-heading);
@@ -7401,7 +7401,7 @@ td span + small {
 }
 .sc2-link:hover {
   color: #ffffff;
-  background: linear-gradient(135deg, #0084ce 0%, #00a859 100%);
+  background: linear-gradient(135deg, #0072b8 0%, #00763f 100%);
   border-color: transparent;
   box-shadow: 0 4px 10px rgba(0, 132, 206, 0.22);
   transform: translateY(-1px);
@@ -8500,4 +8500,10 @@ td span + small {
   .metric-card.skeleton-card {
     min-height: 143px;
   }
+}
+
+/* Contrast: keep hover text white on the brand gradient inside panel headers */
+.panel-header .link-button:hover,
+.panel-header .back-button:hover {
+  color: #ffffff;
 }
