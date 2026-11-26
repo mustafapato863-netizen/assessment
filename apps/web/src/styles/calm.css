@@ -554,3 +554,10 @@ body,
     transition: none;
   }
 }
+
+/* The glass header and stepper each create a stacking context (backdrop-filter).
+   Lift the header so its "More options" dropdown paints above the stepper below it. */
+.case-header {
+  position: relative;
+  z-index: 30;
+}
