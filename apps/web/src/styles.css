@@ -3018,9 +3018,10 @@ td span + small {
   font-size: 12px;
 }
 .drawer-form {
+  --drawer-pad: 28px;
   display: grid;
   gap: 25px;
-  padding: 24px 28px 100px;
+  padding: 24px var(--drawer-pad) 0;
 }
 .form-section {
   display: grid;
@@ -3106,18 +3107,20 @@ td span + small {
   color: var(--danger);
   font-size: 11px;
 }
+/* Sticky, not fixed: the drawer is a scroll container with its own backdrop-filter,
+   which turns a fixed footer into one that scrolls away with the form. */
 .drawer-footer {
-  position: fixed;
-  right: 0;
+  position: sticky;
   bottom: 0;
+  z-index: 2;
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  width: min(600px, 100%);
-  padding: 15px 28px;
-  background: rgba(255, 255, 255, 0.96);
+  margin: 0 calc(var(--drawer-pad, 28px) * -1);
+  padding: 15px var(--drawer-pad, 28px);
+  background: #fff;
   border-top: 1px solid var(--border);
-  backdrop-filter: blur(12px);
+  box-shadow: 0 -8px 20px rgba(15, 23, 42, 0.06);
 }
 .toast {
   position: fixed;
@@ -3591,11 +3594,8 @@ td span + small {
     padding: 22px 18px 17px;
   }
   .drawer-form {
-    padding: 20px 18px 100px;
-  }
-  .drawer-footer {
-    width: 100%;
-    padding-inline: 18px;
+    --drawer-pad: 18px;
+    padding: 20px var(--drawer-pad) 0;
   }
   .drawer-footer button {
     flex: 1;

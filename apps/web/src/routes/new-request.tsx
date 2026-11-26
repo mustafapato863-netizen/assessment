@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LoaderCircle, Send, UserSearch, X } from 'lucide-react';
+import { LoaderCircle, Save, UserSearch, X } from 'lucide-react';
 import {
   createCaseSchema,
   type AssessmentCaseDetail,
@@ -385,6 +385,7 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
             ? {
                 position: 'static',
                 width: '100%',
+                margin: 0,
                 padding: '20px 0 0',
                 boxShadow: 'none',
                 background: 'transparent',
@@ -397,7 +398,7 @@ function NewRequestForm({ t: _t, onClose, onCreated, isStandalone }: NewRequestF
           Cancel
         </button>
         <button type="submit" className="primary-button" disabled={mutation.isPending}>
-          {mutation.isPending ? <LoaderCircle className="spin" size={16} /> : <Send size={16} />}
+          {mutation.isPending ? <LoaderCircle className="spin" size={16} /> : <Save size={16} />}
           {mutation.isPending ? 'Creating…' : 'Save draft'}
         </button>
       </div>
