@@ -265,3 +265,13 @@ export const STAGE_SELECTOR_MAP: Record<string, string> = {
   Decision: '.recommendation-panel, .approval-panel, .decision-panel',
   'Follow-up': '.development-panel, .close-panel',
 };
+
+/** Append an AI synthesis to the evidence summary once; applying it again is a no-op. */
+export function appendSynthesis(current: string, synthesis: string): string {
+  const base = current.trim();
+  const addition = synthesis.trim();
+  if (!addition) return current;
+  if (!base) return addition;
+  if (base.includes(addition)) return current;
+  return `${base}\n\n${addition}`;
+}
