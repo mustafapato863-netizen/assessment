@@ -32,6 +32,7 @@ RUN pnpm --filter @assessflow/web build
 # Step 3: Production web server
 FROM nginx:alpine AS runner
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
+COPY apps/web/security-headers.conf /etc/nginx/snippets/security-headers.conf
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 80
