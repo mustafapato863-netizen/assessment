@@ -124,10 +124,9 @@ describe('CalibrationService', () => {
     expect(matrix.totalCandidates).toBe(3);
     expect(matrix.placedCandidates).toBe(2);
     expect(matrix.unplaced?.map((c) => c.caseId)).toEqual(['closed-no-scores']);
-    const ids = [
-      ...matrix.grid.flatMap((cell) => cell.candidates),
-      ...(matrix.unplaced ?? []),
-    ].map((c) => c.caseId);
+    const ids = [...matrix.grid.flatMap((cell) => cell.candidates), ...(matrix.unplaced ?? [])].map(
+      (c) => c.caseId,
+    );
     expect(ids).not.toContain('in-result');
     expect(ids).not.toContain('in-assessment');
   });
