@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import type {
   AssessmentCaseDetail,
-  AssessorRecommendationCode,
   FinalizeResultInput,
   ReopenResultInput,
 } from '@assessflow/contracts';
@@ -26,6 +25,7 @@ import {
   resultCodeLabel,
 } from './scorecard-panel';
 import { AiCopilotCard } from './ai-copilot-card';
+import { appendSynthesis } from './case-utils';
 import {
   getAvailableAction,
   PAST_RESULT_STATUSES,
@@ -284,11 +284,7 @@ export function ResultPanel({
         caseId={caseDetail.id}
         defaultTab="synthesis"
         onApplySynthesis={(synthesis) => {
-          setEvidenceSummary((prev) =>
-            prev.trim()
-              ? `${prev.trim()}\n\n${synthesis.executiveSummary}`
-              : synthesis.executiveSummary,
-          );
+          setEvidenceSummary((prev) => appendSynthesis(prev, synthesis.executiveSummary));
           onToast('Copilot synthesis added to result summary.');
         }}
       />
@@ -392,9 +388,9 @@ export function ResultPanel({
           onClick={() =>
             finalizeResult.mutate({
               resultCode: scorecardConfigured ? automaticResultCode : manualResultCode,
-              assessorRecommendation: (assessorRecommendation ??
-                (summaryData ? defaultAssessorRecommendation(summaryData) : undefined)) as
-                AssessorRecommendationCode | undefined,
+              assessorRecommendation:
+                assessorRecommendation ??
+                (summaryData ? defaultAssessorRecommendation(summaryData) : undefined),
               evidenceSummary: evidenceSummary.trim() || undefined,
               expectedVersion: caseDetail.version,
             })

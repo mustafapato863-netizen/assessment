@@ -269,7 +269,10 @@ export type AssessorRecommendationCode = (typeof assessorRecommendationCodes)[nu
 
 export const finalizeResultSchema = z.object({
   resultCode: z.enum(resultCodes).optional(),
-  assessorRecommendation: z.enum(assessorRecommendationCodes).optional(),
+  // The result screen sends the selected band label (Strong / Appointable with
+  // development / Not appointable) or the assessor's own wording, not only the
+  // legacy enum codes, so accept either as trimmed text.
+  assessorRecommendation: z.string().trim().min(1).max(200).optional(),
   evidenceSummary: z.string().max(4000).optional(),
   strengths: z.string().max(4000).optional(),
   gaps: z.string().max(4000).optional(),

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createCaseSchema, eligibilityDecisionSchema } from './index';
+import { createCaseSchema, eligibilityDecisionSchema, finalizeResultSchema } from './index';
 
 const internalRequest = {
   employeeId: 'emp-001',
@@ -43,5 +43,32 @@ describe('AssessFlow contracts', () => {
 
   it('requires an expected version for decisions', () => {
     expect(eligibilityDecisionSchema.safeParse({ decision: 'ELIGIBLE' }).success).toBe(false);
+  });
+});
+
+describe('finalizeResultSchema', () => {
+  it.each(['Strong', 'Appointable with development', 'Not appointable', 'Strong – ready now'])(
+    'accepts the recommendation label %s',
+    (assessorRecommendation) => {
+      const parsed = finalizeResultSchema.safeParse({
+        resultCode: 'READY_NOW',
+        assessorRecommendation,
+        evidenceSummary: 'ok',
+        expectedVersion: 3,
+      });
+      expect(parsed.success).toBe(true);
+    },
+  );
+  it('still accepts legacy codes and omitted recommendation, rejects empty text', () => {
+    expect(
+      finalizeResultSchema.safeParse({
+        assessorRecommendation: 'READY_FOR_PROMOTION',
+        expectedVersion: 1,
+      }).success,
+    ).toBe(true);
+    expect(finalizeResultSchema.safeParse({ expectedVersion: 1 }).success).toBe(true);
+    expect(
+      finalizeResultSchema.safeParse({ assessorRecommendation: '   ', expectedVersion: 1 }).success,
+    ).toBe(false);
   });
 });
