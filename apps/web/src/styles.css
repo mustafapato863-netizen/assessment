@@ -8507,3 +8507,45 @@ td span + small {
 .panel-header .back-button:hover {
   color: #ffffff;
 }
+
+/* Sidebar on short screens (laptops, 125%/150% display scaling): the Cycle progress card
+   used to shrink below its content and get cut off. It keeps its size, the nav scrolls
+   instead, and the card gets more compact as the viewport gets shorter. */
+.sidebar .nav-groups {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  align-content: start;
+  scrollbar-width: thin;
+}
+.sidebar .sidebar-cycle,
+.sidebar .sidebar-user {
+  flex: 0 0 auto;
+}
+@media (max-height: 880px) {
+  .sidebar .sidebar-cycle {
+    gap: 6px;
+    padding: 10px 12px;
+  }
+  .sidebar .cycle-stages {
+    display: none;
+  }
+  .sidebar .cycle-headline b {
+    font-size: 18px;
+  }
+  .sidebar .cycle-footer {
+    padding-top: 6px;
+  }
+  .sidebar .cycle-view {
+    padding: 3px 8px;
+  }
+}
+@media (max-height: 740px) {
+  .sidebar {
+    gap: 10px;
+    padding-block: 12px;
+  }
+  .sidebar .cycle-footer {
+    display: none;
+  }
+}
