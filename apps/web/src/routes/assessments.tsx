@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import './assessments.css';
 import { initials } from '../lib/format';
 import { formatCaseId } from './workQueue';
@@ -7,7 +7,7 @@ import {
   TABS,
   STAGE_LABELS,
   readFilters,
-  writeFilters,
+  filtersToQuery,
   filterCases,
   tabCounts,
   stageChip,
@@ -26,22 +26,18 @@ export default function Assessments({
   onExport?: (cases: AssessmentListCase[]) => void;
   onNew?: () => void;
 }) {
-  const [filters, setFilters] = useState<AssessmentFilters>(() => readFilters());
+  const [searchParams, setSearchParams] = useSearchParams();
+  const search = searchParams.toString();
+  const filters = useMemo<AssessmentFilters>(() => readFilters(search), [search]);
   const [page, setPage] = useState(1);
 
+  // A new filter (card click, tab, back button) always starts on page 1.
   useEffect(() => {
-    const sync = () => {
-      setFilters(readFilters());
-      setPage(1);
-    };
-    window.addEventListener('hashchange', sync);
-    return () => window.removeEventListener('hashchange', sync);
-  }, []);
+    setPage(1);
+  }, [search]);
 
   const update = (patch: Partial<AssessmentFilters>) => {
-    const next = { ...filters, ...patch };
-    setFilters(next);
-    writeFilters(next);
+    setSearchParams(filtersToQuery({ ...filters, ...patch }));
   };
 
   const counts = useMemo(() => tabCounts(cases), [cases]);

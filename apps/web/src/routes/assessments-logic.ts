@@ -70,9 +70,10 @@ const legacyStageMap: Record<string, AssessmentStage> = {
   CLOSED: 'closed',
 };
 
-// Read the HashRouter query, e.g. #/assessments?stage=result&tab=in_assessment.
-export function readFilters(hash = window.location.hash): AssessmentFilters {
-  const query = hash.includes('?') ? hash.slice(hash.indexOf('?') + 1) : '';
+// Parse filters from a URL query, e.g. "?stage=result&tab=in_assessment".
+// The app uses BrowserRouter, so the query lives in location.search (not the hash).
+export function readFilters(search = window.location.search): AssessmentFilters {
+  const query = search.includes('?') ? search.slice(search.indexOf('?') + 1) : search;
   const params = new URLSearchParams(query);
   const tabValue = params.get('tab') as AssessmentTab | null;
   const rawStage = params.get('stage') || '';
@@ -87,15 +88,13 @@ export function readFilters(hash = window.location.hash): AssessmentFilters {
   };
 }
 
-export function writeFilters(next: AssessmentFilters): void {
-  // Keep whichever HashRouter page is active, whether reached through /assessments or /cases.
-  const base = window.location.hash.split('?')[0] || '#/assessments';
+// Serialize filters back to a query string (without the leading "?").
+export function filtersToQuery(next: AssessmentFilters): string {
   const params = new URLSearchParams();
   Object.entries(next).forEach(([key, value]) => {
     if (value && value !== 'all') params.set(key, value);
   });
-  const query = params.toString();
-  window.location.hash = query ? `${base}?${query}` : base;
+  return params.toString();
 }
 
 export function filterCases(
