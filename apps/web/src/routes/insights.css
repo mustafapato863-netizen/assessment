@@ -158,7 +158,7 @@
   transition: all 150ms var(--ease-spring);
 }
 .in-clear:hover {
-  background: linear-gradient(135deg, #0084ce 0%, #00a859 100%);
+  background: linear-gradient(135deg, #0072b8 0%, #00763f 100%);
   color: #ffffff;
   border-color: transparent;
   box-shadow: 0 4px 10px rgba(0, 132, 206, 0.22);
@@ -364,7 +364,7 @@
 }
 
 .in-link:hover {
-  background: linear-gradient(135deg, #0084ce 0%, #00a859 100%);
+  background: linear-gradient(135deg, #0072b8 0%, #00763f 100%);
   color: #ffffff;
   border-color: transparent;
   box-shadow: 0 4px 10px rgba(0, 132, 206, 0.22);

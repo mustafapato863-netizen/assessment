@@ -228,7 +228,7 @@
   transition: all var(--motion-fast) var(--ease-spring);
 }
 .em-open:hover {
-  background: linear-gradient(135deg, #0084ce 0%, #00a859 100%);
+  background: linear-gradient(135deg, #0072b8 0%, #00763f 100%);
   color: #ffffff;
   border-color: transparent;
   box-shadow: 0 4px 10px rgba(0, 132, 206, 0.22);
@@ -509,7 +509,7 @@
 }
 .em-tl a:hover {
   color: #ffffff;
-  background: linear-gradient(135deg, #0084ce 0%, #00a859 100%);
+  background: linear-gradient(135deg, #0072b8 0%, #00763f 100%);
   border-color: transparent;
   box-shadow: 0 4px 10px rgba(0, 132, 206, 0.22);
   transform: translateY(-1px);
