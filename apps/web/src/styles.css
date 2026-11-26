@@ -8475,3 +8475,29 @@ td span + small {
 .nav-count {
   font-size: max(11.5px, 0.72rem);
 }
+
+/* Reserve roughly the loaded height of the priority queue to prevent layout shift. */
+.overview-page .action-queue-section.action-queue-placeholder {
+  min-height: 520px;
+  padding: 16px;
+}
+@media (max-width: 900px) {
+  .overview-page .action-queue-section.action-queue-placeholder {
+    min-height: 680px;
+  }
+}
+
+/* Match the loaded metric card height so the KPI row does not jump when data arrives. */
+.metric-card.skeleton-card {
+  min-height: 160px;
+}
+@media (max-width: 900px) {
+  .metric-card.skeleton-card {
+    min-height: 148px;
+  }
+}
+@media (max-width: 640px) {
+  .metric-card.skeleton-card {
+    min-height: 143px;
+  }
+}
