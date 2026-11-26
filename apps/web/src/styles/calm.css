@@ -147,7 +147,7 @@ body,
   box-shadow: 0 18px 50px rgba(20, 70, 120, 0.12);
 }
 .sgh-auth-grid {
-  background: #ffffff;
+  background: #ffffff !important;
 }
 .sgh-brand-pane {
   background: linear-gradient(155deg, rgba(0, 163, 224, 0.1) 0%, rgba(0, 168, 89, 0.07) 100%);
@@ -189,12 +189,12 @@ body,
   color: #4f6175;
 }
 .sgh-point-index {
-  background: #ffffff;
+  background: #ffffff !important;
   border: 1px solid #9fd3ee;
   color: #0069b4;
 }
 .sgh-clearance-pill {
-  background: #ffffff;
+  background: #ffffff !important;
   border: 1px solid #c9d6e3;
   color: #0069b4;
 }
@@ -202,7 +202,7 @@ body,
   border-top-color: #d5e0ea;
 }
 .sgh-form-pane {
-  background: #ffffff;
+  background: #ffffff !important;
 }
 .sgh-field-label {
   color: #334155;
@@ -217,7 +217,7 @@ body,
   color: #8593a3;
 }
 .sgh-input-control:focus {
-  background: #ffffff;
+  background: #ffffff !important;
   border-color: #0084ce;
   box-shadow: 0 0 0 3px rgba(0, 132, 206, 0.18);
 }
@@ -553,4 +553,14 @@ body,
   .back-to-top {
     transition: none;
   }
+}
+
+/* The glass header and stepper each create a stacking context (backdrop-filter).
+   Lift the header so its "More options" dropdown paints above the stepper below it. */
+.case-header {
+  position: relative;
+  z-index: 30;
+}
+.case-header .user-dropdown-menu {
+  background: #ffffff !important;
 }
