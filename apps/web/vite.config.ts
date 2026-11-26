@@ -17,10 +17,18 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'query-vendor': ['@tanstack/react-query'],
-          'icons-vendor': ['lucide-react'],
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined;
+          if (
+            /node_modules\/(\.pnpm\/)?(react|react-dom|scheduler|react-router|react-router-dom)[@/]/.test(
+              id,
+            )
+          ) {
+            return 'react-vendor';
+          }
+          if (id.includes('@tanstack')) return 'query-vendor';
+          if (id.includes('lucide-react')) return 'icons-vendor';
+          return undefined;
         },
       },
     },

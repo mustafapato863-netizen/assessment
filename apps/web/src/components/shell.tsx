@@ -28,11 +28,17 @@ import { SghHeartSvg } from '../design-system/brand/sgh-heart-svg';
 import { copy, type Copy, type View } from '../lib/labels';
 import { PILOT_FLAGS } from '../lib/flags';
 import { useToast, ToastContext, type ToastContextValue } from '../hooks/use-toast';
-import { CommandPalette, ShortcutsHelpDialog, useKeyboardShortcuts } from './command-palette';
+import { useKeyboardShortcuts } from './use-keyboard-shortcuts';
 import { BackToTop } from './back-to-top';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 
+const CommandPalette = lazy(() =>
+  import('./command-palette').then((m) => ({ default: m.CommandPalette })),
+);
+const ShortcutsHelpDialog = lazy(() =>
+  import('./command-palette').then((m) => ({ default: m.ShortcutsHelpDialog })),
+);
 const SettingsModal = lazy(() =>
   import('./settings-modal').then((m) => ({ default: m.SettingsModal })),
 );
@@ -739,8 +745,16 @@ export function AppShell({
         />
         <main className="page-content">{children ?? <Outlet />}</main>
       </div>
-      <CommandPalette isOpen={paletteOpen} onClose={() => setPaletteOpen(false)} />
-      <ShortcutsHelpDialog isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      {paletteOpen && (
+        <Suspense fallback={null}>
+          <CommandPalette isOpen={paletteOpen} onClose={() => setPaletteOpen(false)} />
+        </Suspense>
+      )}
+      {shortcutsOpen && (
+        <Suspense fallback={null}>
+          <ShortcutsHelpDialog isOpen={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+        </Suspense>
+      )}
       {settingsOpen && (
         <Suspense fallback={null}>
           <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
