@@ -385,7 +385,7 @@ body,
 .settings-dialog-card,
 .admin-modal,
 .profile-modal-card {
-  background: rgba(255, 255, 255, 0.86) !important;
+  background: rgba(255, 255, 255, 0.97) !important;
   backdrop-filter: blur(30px) saturate(1.7);
   -webkit-backdrop-filter: blur(30px) saturate(1.7);
   border: 1px solid var(--glass-line) !important;
@@ -404,7 +404,6 @@ body,
   border-radius: 22px !important;
 }
 .drawer-header,
-.drawer-footer,
 .settings-dialog-header,
 .settings-dialog-footer {
   background: transparent !important;
@@ -461,7 +460,8 @@ body,
     padding: 22px 18px 17px;
   }
   .drawer-form {
-    padding: 20px 18px 100px;
+    --drawer-pad: 18px;
+    padding: 20px var(--drawer-pad) 0;
   }
   /* forms read better stacked below tablet width */
   .form-grid {
